@@ -3,9 +3,8 @@ use std::{
     io::{BufReader, BufWriter, Write},
 };
 
-use once_cell::sync::Lazy;
 use reqwest::header;
-use scraper::{Html, Selector};
+use scraper::Html;
 use serde::{Deserialize, Serialize};
 
 #[tokio::main]
@@ -29,16 +28,6 @@ async fn main() -> anyhow::Result<()> {
 
     BufWriter::new(File::create("ignore/test.html")?)
         .write_all(document.root_element().html().as_bytes())?;
-
-    // static CELL: Lazy<Selector> =
-    //     Lazy::new(|| Selector::parse(".playlog_achievement_txt").unwrap());
-    // println!(
-    //     "{:?}",
-    //     document
-    //         .select(&*CELL)
-    //         .next()
-    //         .map(|e| e.text().collect::<Vec<_>>().join(""))
-    // );
 
     Ok(())
 }
