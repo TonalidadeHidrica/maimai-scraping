@@ -2,8 +2,11 @@
 use chrono::naive::NaiveDateTime;
 use std::convert::TryFrom;
 use url::Url;
+use derive_more::Constructor;
+use typed_builder::TypedBuilder;
 
-struct PlayRecord {
+#[derive(Debug)]
+pub struct PlayRecord {
     played_at: PlayedAt,
     song_metadata: SongMetadata,
     score_metadata: ScoreMetadata,
@@ -18,13 +21,15 @@ struct PlayRecord {
     judge_result: JudgeResult,
 }
 
-struct PlayedAt {
+#[derive(Debug, TypedBuilder)]
+pub struct PlayedAt {
     time: NaiveDateTime,
     place: String,
     track: TrackIndex,
 }
 
-struct TrackIndex(u8);
+#[derive(Debug)]
+pub struct TrackIndex(u8);
 
 impl TryFrom<u8> for TrackIndex {
     type Error = u8;
@@ -36,22 +41,26 @@ impl TryFrom<u8> for TrackIndex {
     }
 }
 
-struct SongMetadata {
+#[derive(Debug)]
+pub struct SongMetadata {
     name: String,
     cover_art: Url,
 }
 
-struct ScoreMetadata {
+#[derive(Debug)]
+pub struct ScoreMetadata {
     generation: ScoreGeneration,
     difficulty: ScoreDifficulty,
 }
 
-enum ScoreGeneration {
+#[derive(Debug)]
+pub enum ScoreGeneration {
     Standard,
     Deluxe,
 }
 
-enum ScoreDifficulty {
+#[derive(Debug)]
+pub enum ScoreDifficulty {
     Basic,
     Advanced,
     Expert,
@@ -59,13 +68,15 @@ enum ScoreDifficulty {
     MasterPlus,
 }
 
-struct AchievementResult {
+#[derive(Debug)]
+pub struct AchievementResult {
     value: AchievementValue,
     new_record: bool,
     rank: AchievementRank,
 }
 
-struct AchievementValue(u32);
+#[derive(Debug)]
+pub struct AchievementValue(u32);
 
 impl TryFrom<u32> for AchievementValue {
     type Error = u32;
@@ -78,7 +89,8 @@ impl TryFrom<u32> for AchievementValue {
     }
 }
 
-enum AchievementRank {
+#[derive(Debug)]
+pub enum AchievementRank {
     SSSPlus,
     SSS,
     SSPlus,
@@ -95,13 +107,15 @@ enum AchievementRank {
     D,
 }
 
-struct DeluxscoreResult {
+#[derive(Debug)]
+pub struct DeluxscoreResult {
     score: ValueWithMax<u32>,
     rank: DeluxscoreRank,
     new_record: bool,
 }
 
-struct DeluxscoreRank(u8);
+#[derive(Debug)]
+pub struct DeluxscoreRank(u8);
 
 impl TryFrom<u8> for DeluxscoreRank {
     type Error = u8;
@@ -112,12 +126,14 @@ impl TryFrom<u8> for DeluxscoreRank {
         }
     }
 }
-struct FullComboResult {
+#[derive(Debug)]
+pub struct FullComboResult {
     kind: FullComboKind,
     combo: ValueWithMax<u32>,
 }
 
-enum FullComboKind {
+#[derive(Debug)]
+pub enum FullComboKind {
     Nothing,
     FullCombo,
     FullComboPlus,
@@ -125,12 +141,14 @@ enum FullComboKind {
     AllPerfectPlus,
 }
 
-struct PerfectChallengeResult {
+#[derive(Debug)]
+pub struct PerfectChallengeResult {
     life: u32,
     total_life: u32,
 }
 
-struct RatingResult {
+#[derive(Debug)]
+pub struct RatingResult {
     rating: u16,
     delta: i16,
     delta_sign: RatingDeltaSign,
@@ -138,14 +156,16 @@ struct RatingResult {
     grade_icon: Url,
 }
 
-enum RatingDeltaSign {
+#[derive(Debug)]
+pub enum RatingDeltaSign {
     Up,
     Keep,
     Down,
 }
 
 // ["normal", "blue", "green", "orange", "red", "purple", "bronze", "silver", "gold", "rainbow"]
-enum RatingBorderColor {
+#[derive(Debug)]
+pub enum RatingBorderColor {
     Normal,
     Blue,
     Green,
@@ -158,7 +178,8 @@ enum RatingBorderColor {
     Rainbow,
 }
 
-struct TourMemberList(Vec<TourMember>);
+#[derive(Debug)]
+pub struct TourMemberList(Vec<TourMember>);
 
 impl TryFrom<Vec<TourMember>> for TourMemberList {
     type Error = Vec<TourMember>;
@@ -170,13 +191,15 @@ impl TryFrom<Vec<TourMember>> for TourMemberList {
     }
 }
 
-struct TourMember {
+#[derive(Debug)]
+pub struct TourMember {
     star: u32,
     icon: Url,
     level: u32,
 }
 
-struct ValueWithMax<T: PartialOrd> {
+#[derive(Debug)]
+pub struct ValueWithMax<T: PartialOrd> {
     value: T,
     max: T,
 }
@@ -191,7 +214,8 @@ impl<T: PartialOrd> ValueWithMax<T> {
     }
 }
 
-struct JudgeResult {
+#[derive(Debug)]
+pub struct JudgeResult {
     fast: u32,
     late: u32,
     tap: JudgeCount,
@@ -201,32 +225,37 @@ struct JudgeResult {
     break_: JudgeCountWithCP,
 }
 
-enum JudgeCount {
+#[derive(Debug)]
+pub enum JudgeCount {
     Nothing,
     JudgeCountWithoutCP(JudgeCountWithoutCP),
     JudgeCountWithCP(JudgeCountWithCP),
 }
 
-struct JudgeCountWithCP {
+#[derive(Debug)]
+pub struct JudgeCountWithCP {
     critical_perfect: u32,
     others: JudgeCountWithoutCP,
 }
 
-struct JudgeCountWithoutCP {
+#[derive(Debug)]
+pub struct JudgeCountWithoutCP {
     perfect: u32,
     great: u32,
     good: u32,
     miss: u32,
 }
 
-struct MatchingResult {
+#[derive(Debug)]
+pub struct MatchingResult {
     kind: FullSyncKind,
     sync: ValueWithMax<u32>,
     other_players: Vec<OtherPlayer>,
     rank: MatchingRank,
 }
 
-enum FullSyncKind {
+#[derive(Debug)]
+pub enum FullSyncKind {
     Nothing,
     FullSync,
     FullSyncPlus,
@@ -234,12 +263,14 @@ enum FullSyncKind {
     FullSyncDxPlus,
 }
 
-struct OtherPlayer {
+#[derive(Debug)]
+pub struct OtherPlayer {
     difficulty: ScoreDifficulty,
     user_name: String,
 }
 
-struct MatchingRank(u8);
+#[derive(Debug)]
+pub struct MatchingRank(u8);
 
 impl TryFrom<u8> for MatchingRank {
     type Error = u8;
