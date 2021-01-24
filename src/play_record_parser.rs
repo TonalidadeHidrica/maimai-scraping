@@ -37,6 +37,15 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .ok_or_else(|| anyhow!("Next sibling was not found."))?;
     parse_playlog_main_container(playlog_main_container)?;
 
+    let gray_block = playlog_main_container
+        .parent()
+        .ok_or_else(|| anyhow!("No parent found for playlog main container"))?
+        .next_siblings()
+        .filter_map(ElementRef::wrap)
+        .next()
+        .ok_or_else(|| anyhow!("No next container was found"))?;
+    parse_center_gray_block(gray_block)?;
+
     unimplemented!()
 }
 
@@ -391,4 +400,285 @@ fn parse_playlog_life_block(
     let res =
         ValueWithMax::new(a, b).map_err(|res| anyhow!("Value is larger than full: {:?}", res))?;
     Ok(res.into())
+}
+
+fn parse_center_gray_block(gray_block: ElementRef) -> anyhow::Result<()> {
+    let tour_members: TourMemberList = gray_block
+        .select(selector!("div.playlog_chara_container"))
+        .map(parse_chara_container)
+        .filter_map(Result::transpose)
+        .collect::<Result<Vec<_>, _>>()?
+        .try_into()
+        .map_err(|e| anyhow!("Unexpected number of members: {:?}", e))?;
+
+    let (fast, late) = parse_fl_block(
+        gray_block
+            .select(selector!("div.playlog_fl_block"))
+            .next()
+            .ok_or_else(|| anyhow!("Fast-Late block was not found"))?,
+    )?;
+
+    let mut trs = gray_block
+        .select(selector!("table.playlog_notes_detail"))
+        .next()
+        .ok_or_else(|| anyhow!("Notes detail table was not found"))?
+        .select(selector!("tr:not(:first-child)"));
+    let mut get_count = |label: &str| {
+        let tr = trs
+            .next()
+            .ok_or_else(|| anyhow!("Table row for {} was not found", label))?;
+        parse_judge_count_row(tr)
+    };
+    let tap = get_count("tap")?;
+    let hold = get_count("hold")?;
+    let slide = get_count("slide")?;
+    let touch = get_count("touch")?;
+    let break_ = match get_count("break")? {
+        JudgeCount::JudgeCountWithCP(count) => count,
+        e => Err(anyhow!(
+            "Count for break does not have critical perfect count: {:?}",
+            e
+        ))?,
+    };
+
+    let judge_count = JudgeResult::builder()
+        .fast(fast)
+        .late(late)
+        .tap(tap)
+        .hold(hold)
+        .slide(slide)
+        .touch(touch)
+        .break_(break_)
+        .build();
+
+    let rating_result = parse_rating_deatil_block(
+        gray_block
+            .select(selector!(".playlog_rating_detail_block"))
+            .next()
+            .ok_or_else(|| anyhow!("Rating detail block was not found"))?,
+    );
+
+    dbg!(&tour_members);
+    dbg!(&judge_count);
+    dbg!(&rating_result);
+
+    Ok(())
+}
+
+fn parse_chara_container(chara_container: ElementRef) -> anyhow::Result<Option<TourMember>> {
+    let img_url = match chara_container
+        .select(selector!("img.chara_cycle_img"))
+        .next()
+    {
+        None => return Ok(None),
+        Some(img) => img
+            .value()
+            .attr("src")
+            .ok_or_else(|| anyhow!("Chara img does not have src")),
+    }?;
+    let img_url = img_url
+        .parse()
+        .map_err(|e| anyhow!("Invalid chara img url: {:?}", e))?;
+
+    let star = parse_chara_star_block(
+        chara_container
+            .select(selector!("div.playlog_chara_star_block"))
+            .next()
+            .ok_or_else(|| anyhow!("No chara star block found"))?,
+    )?;
+
+    let level = parse_chara_lv_block(
+        chara_container
+            .select(selector!("div.playlog_chara_lv_block"))
+            .next()
+            .ok_or_else(|| anyhow!("No chara lv block found"))?,
+    )?;
+
+    let res = TourMember::builder()
+        .icon(img_url)
+        .star(star)
+        .level(level)
+        .build();
+
+    Ok(Some(res))
+}
+
+fn parse_chara_star_block(chara_star_block: ElementRef) -> anyhow::Result<u32> {
+    let text = chara_star_block.text().collect::<String>();
+    regex!(r"^×([0-9]+)$")
+        .captures(&text)
+        .ok_or_else(|| anyhow!("Unexpected format of chara stars"))?
+        .get(1)
+        .expect("Group 1 always exists")
+        .as_str()
+        .parse()
+        .map_err(|e| anyhow!("Value out of bounds: {}", e))
+}
+
+fn parse_chara_lv_block(chara_lv_block: ElementRef) -> anyhow::Result<u32> {
+    let text = chara_lv_block.text().collect::<String>();
+    regex!(r"^Lv([0-9]+)$")
+        .captures(&text)
+        .ok_or_else(|| anyhow!("Unexpected format of chara level"))?
+        .get(1)
+        .expect("Group 1 always exists")
+        .as_str()
+        .parse()
+        .map_err(|e| anyhow!("Value out of bounds: {}", e))
+}
+
+fn parse_fl_block(fl_block: ElementRef) -> anyhow::Result<(u32, u32)> {
+    let mut divs = fl_block.children().filter_map(ElementRef::wrap);
+    let mut parse_div = |kind| {
+        divs.next()
+            .ok_or_else(|| anyhow!("{} div not found", kind))?
+            .text()
+            .collect::<String>()
+            .parse()
+            .map_err(|e| anyhow!("Unexpected {} count: {}", kind, e))
+    };
+    let fast = parse_div("Fast")?;
+    let late = parse_div("Late")?;
+    Ok((fast, late))
+}
+
+fn parse_judge_count_row(row: ElementRef) -> anyhow::Result<JudgeCount> {
+    let parse = |e: ElementRef| match e.text().collect::<String>().as_ref() {
+        "" | "　" => Ok(None),
+        s => s
+            .parse::<u32>()
+            .map(Some)
+            .map_err(|x| anyhow!("Failed to parse: {:?} ({})", s, x)),
+    };
+    let values = row
+        .select(selector!("td"))
+        .map(parse)
+        .collect::<Result<Vec<_>, _>>()?;
+    let res = match &values[..] {
+        [None, None, None, None, None] => JudgeCount::Nothing,
+        [a, Some(b), Some(c), Some(d), Some(e)] => {
+            let counts = JudgeCountWithoutCP::builder()
+                .perfect(*b)
+                .great(*c)
+                .good(*d)
+                .miss(*e)
+                .build();
+            match a {
+                &Some(a) => JudgeCount::JudgeCountWithCP(
+                    JudgeCountWithCP::builder()
+                        .critical_perfect(a)
+                        .others(counts)
+                        .build(),
+                ),
+                None => JudgeCount::JudgeCountWithoutCP(counts),
+            }
+        }
+        e => Err(anyhow!("Unexpected row: {:?}", e))?,
+    };
+    Ok(res)
+}
+
+fn parse_rating_deatil_block(rating_detail_block: ElementRef) -> anyhow::Result<RatingResult> {
+    let rating_block = rating_detail_block
+        .select(selector!("div.rating_block"))
+        .next()
+        .ok_or_else(|| anyhow!("Rating block not found"))?;
+    let rating = rating_block.text().collect::<String>().parse()?;
+
+    let rating_color = parse_rating_color(
+        rating_block
+            .prev_siblings()
+            .filter_map(ElementRef::wrap)
+            .next()
+            .ok_or_else(|| anyhow!("No rating image was found before rating value"))?,
+    )?;
+
+    let mut next_elements = rating_block
+        .parent()
+        .ok_or_else(|| anyhow!("No parent elmenets for rating detail block"))?
+        .next_siblings()
+        .filter_map(ElementRef::wrap);
+
+    let delta_sign = parse_delta_sign(
+        next_elements
+            .next()
+            .ok_or_else(|| anyhow!("No element was found next to rating block"))?,
+    )?;
+
+    let next_div = next_elements
+        .next()
+        .ok_or_else(|| anyhow!("No element was found next to rating delta sign"))?;
+
+    let delta = parse_rating_delta(
+        next_div
+            .select(selector!("span"))
+            .next()
+            .ok_or_else(|| anyhow!("No rating delta span was found"))?,
+    )?;
+    let grade_icon = next_div
+        .select(selector!("img"))
+        .next()
+        .ok_or_else(|| anyhow!("No rating grade icon was found"))?
+        .value()
+        .attr("src")
+        .ok_or_else(|| anyhow!("Grade icon does not have src"))?
+        .parse()
+        .map_err(|e| anyhow!("Grade icon src was not a url: {}", e))?;
+
+    let rating_result = RatingResult::builder()
+        .rating(rating)
+        .border_color(rating_color)
+        .delta_sign(delta_sign)
+        .delta(delta)
+        .grade_icon(grade_icon)
+        .build();
+    Ok(rating_result)
+}
+
+fn parse_rating_color(img: ElementRef) -> anyhow::Result<RatingBorderColor> {
+    use RatingBorderColor::*;
+    let res = match img
+        .value()
+        .attr("src")
+        .ok_or_else(|| anyhow!("Rating border image does not have src"))?
+    {
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_normal.png" => Normal,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_blue.png" => Blue,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_green.png" => Green,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_orange.png" => Orange,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_red.png" => Red,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_purple.png" => Purple,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_bronze.png" => Bronze,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_silver.png" => Silver,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_gold.png" => Gold,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow.png" => Rainbow,
+        src => Err(anyhow!("Unexpected border color: {}", src))?,
+    };
+    Ok(res)
+}
+
+fn parse_delta_sign(img: ElementRef) -> anyhow::Result<RatingDeltaSign> {
+    use RatingDeltaSign::*;
+    let res = match img
+        .value()
+        .attr("src")
+        .ok_or_else(|| anyhow!("Rating border image does not have src"))?
+    {
+        "https://maimaidx.jp/maimai-mobile/img/playlog/rating_up.png" => Up,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/rating_keep.png" => Keep,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/rating_down.png" => Down,
+        src => Err(anyhow!("Unexpected border color: {}", src))?,
+    };
+    Ok(res)
+}
+
+fn parse_rating_delta(span: ElementRef) -> anyhow::Result<i16> {
+    regex!(r"^\(([+-][0-9]+)\)$")
+        .captures(&span.text().collect::<String>())
+        .ok_or_else(|| anyhow!("Rating delta text does not match the pattern"))?
+        .get(1)
+        .expect("Group 1 always exists")
+        .as_str()
+        .parse()
+        .map_err(|e| anyhow!("Given integer was out of bounds: {}", e))
 }

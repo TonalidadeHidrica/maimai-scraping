@@ -144,7 +144,7 @@ pub enum FullComboKind {
 #[derive(Debug, derive_more::From)]
 pub struct PerfectChallengeResult(ValueWithMax<u32>);
 
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct RatingResult {
     rating: u16,
     delta: i16,
@@ -188,7 +188,7 @@ impl TryFrom<Vec<TourMember>> for TourMemberList {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct TourMember {
     star: u32,
     icon: Url,
@@ -211,7 +211,7 @@ impl<T: PartialOrd> ValueWithMax<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct JudgeResult {
     fast: u32,
     late: u32,
@@ -229,13 +229,13 @@ pub enum JudgeCount {
     JudgeCountWithCP(JudgeCountWithCP),
 }
 
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct JudgeCountWithCP {
     critical_perfect: u32,
     others: JudgeCountWithoutCP,
 }
 
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct JudgeCountWithoutCP {
     perfect: u32,
     great: u32,
