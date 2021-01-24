@@ -65,7 +65,7 @@ pub enum ScoreDifficulty {
     Advanced,
     Expert,
     Master,
-    MasterPlus,
+    ReMaster,
 }
 
 #[derive(Debug)]
