@@ -1,6 +1,6 @@
-use std::{io::Read, fs::File, io::BufReader};
-use scraper::Html;
 use clap::{App, Arg};
+use scraper::Html;
+use std::{fs::File, io::BufReader, io::Read};
 
 fn main() -> anyhow::Result<()> {
     let matches = App::new("hoge")

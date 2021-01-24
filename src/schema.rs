@@ -1,9 +1,9 @@
 #![allow(unused)]
 use chrono::naive::NaiveDateTime;
-use std::convert::TryFrom;
-use url::Url;
 use derive_more::Constructor;
+use std::convert::TryFrom;
 use typed_builder::TypedBuilder;
+use url::Url;
 
 #[derive(Debug)]
 pub struct PlayRecord {
@@ -13,7 +13,7 @@ pub struct PlayRecord {
     cleared: bool,
     achievement_result: AchievementResult,
     deluxscore_result: DeluxscoreResult,
-    full_combo_result: FullComboResult,
+    full_combo_result: ComboResult,
     matching_result: Option<MatchingResult>,
     perfect_challenge_result: Option<PerfectChallengeResult>,
     tour_members: TourMemberList,
@@ -68,7 +68,7 @@ pub enum ScoreDifficulty {
     ReMaster,
 }
 
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct AchievementResult {
     value: AchievementValue,
     new_record: bool,
@@ -107,7 +107,7 @@ pub enum AchievementRank {
     D,
 }
 
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct DeluxscoreResult {
     score: ValueWithMax<u32>,
     rank: DeluxscoreRank,
@@ -121,13 +121,13 @@ impl TryFrom<u8> for DeluxscoreRank {
     type Error = u8;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            1..=4 => Ok(Self(value)),
+            1..=5 => Ok(Self(value)),
             _ => Err(value),
         }
     }
 }
 #[derive(Debug)]
-pub struct FullComboResult {
+pub struct ComboResult {
     kind: FullComboKind,
     combo: ValueWithMax<u32>,
 }
@@ -141,11 +141,8 @@ pub enum FullComboKind {
     AllPerfectPlus,
 }
 
-#[derive(Debug)]
-pub struct PerfectChallengeResult {
-    life: u32,
-    total_life: u32,
-}
+#[derive(Debug, derive_more::From)]
+pub struct PerfectChallengeResult(ValueWithMax<u32>);
 
 #[derive(Debug)]
 pub struct RatingResult {
@@ -205,7 +202,7 @@ pub struct ValueWithMax<T: PartialOrd> {
 }
 
 impl<T: PartialOrd> ValueWithMax<T> {
-    fn new(value: T, max: T) -> Result<Self, (T, T)> {
+    pub fn new(value: T, max: T) -> Result<Self, (T, T)> {
         if value <= max {
             Ok(Self { value, max })
         } else {
