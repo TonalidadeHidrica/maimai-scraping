@@ -260,7 +260,7 @@ pub enum FullSyncKind {
     FullSyncDxPlus,
 }
 
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct OtherPlayer {
     difficulty: ScoreDifficulty,
     user_name: String,

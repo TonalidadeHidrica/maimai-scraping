@@ -44,6 +44,22 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .ok_or_else(|| anyhow!("No next container was found"))?;
     parse_center_gray_block(gray_block)?;
 
+    let place_name = html
+        .select(selector!("#placeName > span"))
+        .next()
+        .ok_or_else(|| anyhow!("Place name div not found"))?
+        .text()
+        .collect::<String>();
+
+    let matching_result = html
+        .select(selector!("#matching"))
+        .next()
+        .map(parse_matching_div)
+        .transpose()?;
+
+    dbg!(&place_name);
+    dbg!(&matching_result);
+
     unimplemented!()
 }
 
@@ -710,4 +726,37 @@ fn parse_max_combo_sync_div(div: ElementRef) -> anyhow::Result<Option<ValueWithM
         "―" => Ok(None),
         s => parse_value_with_max(s).map(Some),
     }
+}
+
+fn parse_matching_div(matching_div: ElementRef) -> anyhow::Result<Vec<OtherPlayer>> {
+    use ScoreDifficulty::*;
+    matching_div
+        .select(selector!(":scope > span"))
+        .filter_map(|e| {
+            let difficulty = match e.value().classes().find_map(|c| {
+                let d = match c {
+                    "playlog_basic_container" => Basic,
+                    "playlog_advanced_container" => Advanced,
+                    "playlog_expert_container" => Expert,
+                    "playlog_master_container" => Master,
+                    "playlog_remaster_container" => ReMaster,
+                    "gray_block" => return Some(None),
+                    _ => return None,
+                };
+                Some(Some(d))
+            }) {
+                Some(Some(d)) => d,
+                Some(None) => return None,
+                None => return Some(Err(anyhow!("No valid class was found for matching div"))),
+            };
+            let user_name = match e.select(selector!("div")).next() {
+                Some(e) => e.text().collect(),
+                None => return Some(Err(anyhow!("User name div was not found for matching div"))),
+            };
+            Some(Ok(OtherPlayer::builder()
+                .difficulty(difficulty)
+                .user_name(user_name)
+                .build()))
+        })
+        .collect()
 }
