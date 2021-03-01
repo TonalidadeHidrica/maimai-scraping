@@ -1,6 +1,4 @@
-#![allow(unused)]
 use chrono::naive::NaiveDateTime;
-use derive_more::Constructor;
 use std::convert::TryFrom;
 use typed_builder::TypedBuilder;
 use url::Url;
