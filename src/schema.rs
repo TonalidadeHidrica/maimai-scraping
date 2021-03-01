@@ -1,9 +1,10 @@
 use chrono::naive::NaiveDateTime;
+use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use typed_builder::TypedBuilder;
 use url::Url;
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct PlayRecord {
     played_at: PlayedAt,
     song_metadata: SongMetadata,
@@ -19,14 +20,14 @@ pub struct PlayRecord {
     judge_result: JudgeResult,
 }
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct PlayedAt {
     time: NaiveDateTime,
     place: String,
     track: TrackIndex,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct TrackIndex(u8);
 
 impl TryFrom<u8> for TrackIndex {
@@ -39,25 +40,25 @@ impl TryFrom<u8> for TrackIndex {
     }
 }
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct SongMetadata {
     name: String,
     cover_art: Url,
 }
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct ScoreMetadata {
     generation: ScoreGeneration,
     difficulty: ScoreDifficulty,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum ScoreGeneration {
     Standard,
     Deluxe,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum ScoreDifficulty {
     Basic,
     Advanced,
@@ -66,14 +67,14 @@ pub enum ScoreDifficulty {
     ReMaster,
 }
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct AchievementResult {
     value: AchievementValue,
     new_record: bool,
     rank: AchievementRank,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct AchievementValue(u32);
 
 impl TryFrom<u32> for AchievementValue {
@@ -87,7 +88,7 @@ impl TryFrom<u32> for AchievementValue {
     }
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum AchievementRank {
     SSSPlus,
     SSS,
@@ -105,14 +106,14 @@ pub enum AchievementRank {
     D,
 }
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct DeluxscoreResult {
     score: ValueWithMax<u32>,
     rank: DeluxscoreRank,
     new_record: bool,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct DeluxscoreRank(u8);
 
 impl TryFrom<u8> for DeluxscoreRank {
@@ -124,13 +125,13 @@ impl TryFrom<u8> for DeluxscoreRank {
         }
     }
 }
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct ComboResult {
     full_combo_kind: FullComboKind,
     combo: ValueWithMax<u32>,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum FullComboKind {
     Nothing,
     FullCombo,
@@ -139,10 +140,10 @@ pub enum FullComboKind {
     AllPerfectPlus,
 }
 
-#[derive(Debug, derive_more::From)]
+#[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
 pub struct PerfectChallengeResult(ValueWithMax<u32>);
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct RatingResult {
     rating: u16,
     delta: i16,
@@ -151,7 +152,7 @@ pub struct RatingResult {
     grade_icon: Url,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum RatingDeltaSign {
     Up,
     Keep,
@@ -159,7 +160,7 @@ pub enum RatingDeltaSign {
 }
 
 // ["normal", "blue", "green", "orange", "red", "purple", "bronze", "silver", "gold", "rainbow"]
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum RatingBorderColor {
     Normal,
     Blue,
@@ -173,7 +174,7 @@ pub enum RatingBorderColor {
     Rainbow,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct TourMemberList(Vec<TourMember>);
 
 impl TryFrom<Vec<TourMember>> for TourMemberList {
@@ -186,14 +187,14 @@ impl TryFrom<Vec<TourMember>> for TourMemberList {
     }
 }
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct TourMember {
     star: u32,
     icon: Url,
     level: u32,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct ValueWithMax<T: PartialOrd> {
     value: T,
     max: T,
@@ -209,7 +210,7 @@ impl<T: PartialOrd> ValueWithMax<T> {
     }
 }
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct JudgeResult {
     fast: u32,
     late: u32,
@@ -220,20 +221,25 @@ pub struct JudgeResult {
     break_: JudgeCountWithCP,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum JudgeCount {
     Nothing,
-    JudgeCountWithoutCP(JudgeCountWithoutCP),
     JudgeCountWithCP(JudgeCountWithCP),
+    // The order of variants is important for correct deserializing.
+    // Due to the flattening, if the following variant is wrote first,
+    // critical_perfect will be ignored and lost.
+    JudgeCountWithoutCP(JudgeCountWithoutCP),
 }
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct JudgeCountWithCP {
     critical_perfect: u32,
+    #[serde(flatten)]
     others: JudgeCountWithoutCP,
 }
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct JudgeCountWithoutCP {
     perfect: u32,
     great: u32,
@@ -241,7 +247,7 @@ pub struct JudgeCountWithoutCP {
     miss: u32,
 }
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct MatchingResult {
     full_sync_kind: FullSyncKind,
     max_sync: ValueWithMax<u32>,
@@ -249,7 +255,7 @@ pub struct MatchingResult {
     rank: MatchingRank,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum FullSyncKind {
     Nothing,
     FullSync,
@@ -258,7 +264,7 @@ pub enum FullSyncKind {
     FullSyncDxPlus,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct OtherPlayersList(Vec<OtherPlayer>);
 
 impl TryFrom<Vec<OtherPlayer>> for OtherPlayersList {
@@ -271,13 +277,13 @@ impl TryFrom<Vec<OtherPlayer>> for OtherPlayersList {
     }
 }
 
-#[derive(Debug, TypedBuilder)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct OtherPlayer {
     difficulty: ScoreDifficulty,
     user_name: String,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct MatchingRank(u8);
 
 impl TryFrom<u8> for MatchingRank {
