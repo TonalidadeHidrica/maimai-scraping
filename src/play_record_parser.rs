@@ -190,11 +190,13 @@ fn parse_playlog_result_block(playlog_result_block: ElementRef) -> anyhow::Resul
             .ok_or_else(|| anyhow!("playlog result innerblock was not found"))?,
     )?;
 
-    let perfect_challenge_result = playlog_result_block
+    let perfect_challenge_result: Option<PerfectChallengeResult>;
+    perfect_challenge_result = playlog_result_block
         .select(selector!("div.playlog_life_block"))
         .next()
-        .map(parse_playlog_life_block)
-        .transpose()?;
+        .map(|e| parse_value_with_max(&e.text().collect::<String>().as_str()))
+        .transpose()?
+        .map(From::from);
 
     dbg!(&achievement_result);
     dbg!(&perfect_challenge_result);
@@ -386,18 +388,24 @@ fn parse_matching_rank_img(matching_rank_img: ElementRef) -> anyhow::Result<Matc
     Ok(res.try_into().expect("Value is always in the bounds"))
 }
 
-fn parse_playlog_life_block(
-    playlog_life_block: ElementRef,
-) -> anyhow::Result<PerfectChallengeResult> {
-    let text = playlog_life_block.text().collect::<String>();
+fn parse_value_with_max<T>(text: &str) -> anyhow::Result<ValueWithMax<T>>
+where
+    T: PartialOrd + std::fmt::Debug + FromStr,
+    <T as FromStr>::Err: Send + Sync + std::error::Error + 'static,
+{
     let captures = regex!(r"^([0-9,]+)/([0-9,]+)$")
         .captures(&text)
-        .ok_or_else(|| anyhow!("Invalid deluxscore format: {:?}", text))?;
+        .ok_or_else(|| {
+            anyhow!(
+                "Invalid life block / max combo / max sync format: {:?}",
+                text
+            )
+        })?;
     let a = parse_integer_with_camma(captures.get(1).expect("Group 1 exists").as_str())?;
     let b = parse_integer_with_camma(captures.get(2).expect("Group 2 exists").as_str())?;
     let res =
         ValueWithMax::new(a, b).map_err(|res| anyhow!("Value is larger than full: {:?}", res))?;
-    Ok(res.into())
+    Ok(res)
 }
 
 fn parse_center_gray_block(gray_block: ElementRef) -> anyhow::Result<()> {
@@ -456,9 +464,22 @@ fn parse_center_gray_block(gray_block: ElementRef) -> anyhow::Result<()> {
             .ok_or_else(|| anyhow!("Rating detail block was not found"))?,
     );
 
+    let mut playlog_score_blocks = gray_block.select(selector!("div.playlog_score_block"));
+    let max_combo_div = playlog_score_blocks
+        .next()
+        .ok_or_else(|| anyhow!("Max combo block was not found"))?;
+    let max_combo = parse_max_combo_sync_div(max_combo_div)?
+        .ok_or_else(|| anyhow!("Max combo was not found, hyphen found instead"));
+    let max_sync_div = playlog_score_blocks
+        .next()
+        .ok_or_else(|| anyhow!("Max sync block was not found"))?;
+    let max_sync = parse_max_combo_sync_div(max_sync_div)?;
+
     dbg!(&tour_members);
     dbg!(&judge_count);
     dbg!(&rating_result);
+    dbg!(&max_combo);
+    dbg!(&max_sync);
 
     Ok(())
 }
@@ -678,4 +699,15 @@ fn parse_rating_delta(span: ElementRef) -> anyhow::Result<i16> {
         .as_str()
         .parse()
         .map_err(|e| anyhow!("Given integer was out of bounds: {}", e))
+}
+
+fn parse_max_combo_sync_div(div: ElementRef) -> anyhow::Result<Option<ValueWithMax<u32>>> {
+    let inner_div = div
+        .select(selector!("div"))
+        .next()
+        .ok_or_else(|| anyhow!("No inner div was found in max combo"))?;
+    match inner_div.text().collect::<String>().as_str() {
+        "―" => Ok(None),
+        s => parse_value_with_max(s).map(Some),
+    }
 }
