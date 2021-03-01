@@ -28,13 +28,23 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .select(selector!(".playlog_top_container"))
         .next()
         .ok_or_else(|| anyhow!("Playlog top container was not found."))?;
-    parse_playlog_top_conatiner(playlog_top_container)?;
+    let (difficulty, track_index, play_date) = parse_playlog_top_conatiner(playlog_top_container)?;
 
     let playlog_main_container = playlog_top_container
         .next_siblings()
         .find_map(ElementRef::wrap)
         .ok_or_else(|| anyhow!("Next sibling was not found."))?;
-    parse_playlog_main_container(playlog_main_container)?;
+    let (
+        song_metadata,
+        cleared,
+        generation,
+        achievement_result,
+        deluxscore_result,
+        full_combo_kind,
+        full_sync_kind,
+        matching_rank,
+        perfect_challenge_result,
+    ) = parse_playlog_main_container(playlog_main_container)?;
 
     let gray_block = playlog_main_container
         .parent()
@@ -42,7 +52,8 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .next_siblings()
         .find_map(ElementRef::wrap)
         .ok_or_else(|| anyhow!("No next container was found"))?;
-    parse_center_gray_block(gray_block)?;
+    let (tour_members, judge_count, rating_result, max_combo, max_sync) =
+        parse_center_gray_block(gray_block)?;
 
     let place_name = html
         .select(selector!("#placeName > span"))
@@ -51,16 +62,55 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .text()
         .collect::<String>();
 
-    let matching_result = html
+    let other_players = html
         .select(selector!("#matching"))
         .next()
         .map(parse_matching_div)
         .transpose()?;
 
-    dbg!(&place_name);
-    dbg!(&matching_result);
+    let played_at = PlayedAt::builder()
+        .time(play_date)
+        .place(place_name)
+        .track(track_index)
+        .build();
+    let score_metadata = ScoreMetadata::builder()
+        .generation(generation)
+        .difficulty(difficulty)
+        .build();
+    let combo_result = ComboResult::builder()
+        .full_combo_kind(full_combo_kind)
+        .combo(max_combo)
+        .build();
 
-    unimplemented!()
+    let matching_result = match (full_sync_kind, max_sync, other_players, matching_rank) {
+        (FullSyncKind::Nothing, None, None, None) => None,
+        (full_sync_kind, Some(max_sync), Some(other_players), Some(rank)) => {
+            MatchingResult::builder()
+                .full_sync_kind(full_sync_kind)
+                .max_sync(max_sync)
+                .other_players(other_players)
+                .rank(rank)
+                .build()
+                .into()
+        }
+        otherwise => Err(anyhow!("Inconsistent matching result: {:?}", otherwise))?,
+    };
+
+    let res = PlayRecord::builder()
+        .played_at(played_at)
+        .song_metadata(song_metadata)
+        .score_metadata(score_metadata)
+        .cleared(cleared)
+        .achievement_result(achievement_result)
+        .deluxscore_result(deluxscore_result)
+        .combo_result(combo_result)
+        .matching_result(matching_result)
+        .perfect_challenge_result(perfect_challenge_result)
+        .tour_members(tour_members)
+        .rating_result(rating_result)
+        .judge_result(judge_count)
+        .build();
+    Ok(res)
 }
 
 fn parse_playlog_top_conatiner(
@@ -119,7 +169,19 @@ fn parse_play_date(span: ElementRef) -> anyhow::Result<NaiveDateTime> {
     )?)
 }
 
-fn parse_playlog_main_container(playlog_main_container: ElementRef) -> anyhow::Result<()> {
+fn parse_playlog_main_container(
+    playlog_main_container: ElementRef,
+) -> anyhow::Result<(
+    SongMetadata,
+    bool,
+    ScoreGeneration,
+    AchievementResult,
+    DeluxscoreResult,
+    FullComboKind,
+    FullSyncKind,
+    Option<MatchingRank>,
+    Option<PerfectChallengeResult>,
+)> {
     let basic_block = playlog_main_container
         .select(selector!(".basic_block"))
         .next()
@@ -160,22 +222,47 @@ fn parse_playlog_main_container(playlog_main_container: ElementRef) -> anyhow::R
         ))?,
     };
 
-    dbg!(&song_title);
-    dbg!(&cleared);
-    dbg!(&music_img_src);
-    dbg!(&generation);
-
     let playlog_result_block = playlog_main_container
         .select(selector!(".playlog_result_block"))
         .next()
         .ok_or_else(|| anyhow!("playlog result block was not found"))?;
+    let (
+        achievement_result,
+        deluxscore_result,
+        full_combo_kind,
+        full_sync_kind,
+        matching_rank,
+        perfect_challenge_result,
+    ) = parse_playlog_result_block(playlog_result_block)?;
 
-    parse_playlog_result_block(playlog_result_block)?;
+    let song_metadata = SongMetadata::builder()
+        .name(song_title)
+        .cover_art(music_img_src.parse()?)
+        .build();
 
-    Ok(())
+    Ok((
+        song_metadata,
+        cleared,
+        generation,
+        achievement_result,
+        deluxscore_result,
+        full_combo_kind,
+        full_sync_kind,
+        matching_rank,
+        perfect_challenge_result,
+    ))
 }
 
-fn parse_playlog_result_block(playlog_result_block: ElementRef) -> anyhow::Result<()> {
+fn parse_playlog_result_block(
+    playlog_result_block: ElementRef,
+) -> anyhow::Result<(
+    AchievementResult,
+    DeluxscoreResult,
+    FullComboKind,
+    FullSyncKind,
+    Option<MatchingRank>,
+    Option<PerfectChallengeResult>,
+)> {
     let achievement_is_new_record = playlog_result_block
         .select(selector!("img.playlog_achievement_newrecord"))
         .next()
@@ -199,12 +286,13 @@ fn parse_playlog_result_block(playlog_result_block: ElementRef) -> anyhow::Resul
         .rank(achievement_rank)
         .build();
 
-    parse_playlog_result_innerblock(
-        playlog_result_block
-            .select(selector!("div.playlog_result_innerblock"))
-            .next()
-            .ok_or_else(|| anyhow!("playlog result innerblock was not found"))?,
-    )?;
+    let (deluxscore_result, full_combo_kind, full_sync_kind, matching_rank) =
+        parse_playlog_result_innerblock(
+            playlog_result_block
+                .select(selector!("div.playlog_result_innerblock"))
+                .next()
+                .ok_or_else(|| anyhow!("playlog result innerblock was not found"))?,
+        )?;
 
     let perfect_challenge_result: Option<PerfectChallengeResult>;
     perfect_challenge_result = playlog_result_block
@@ -214,10 +302,14 @@ fn parse_playlog_result_block(playlog_result_block: ElementRef) -> anyhow::Resul
         .transpose()?
         .map(From::from);
 
-    dbg!(&achievement_result);
-    dbg!(&perfect_challenge_result);
-
-    Ok(())
+    Ok((
+        achievement_result,
+        deluxscore_result,
+        full_combo_kind,
+        full_sync_kind,
+        matching_rank,
+        perfect_challenge_result,
+    ))
 }
 
 fn parse_achievement_txt(achievement_txt: ElementRef) -> anyhow::Result<AchievementValue> {
@@ -268,7 +360,14 @@ fn parse_achievement_rank(achievement_rank: ElementRef) -> anyhow::Result<Achiev
     Ok(res)
 }
 
-fn parse_playlog_result_innerblock(playlog_result_innerblock: ElementRef) -> anyhow::Result<()> {
+fn parse_playlog_result_innerblock(
+    playlog_result_innerblock: ElementRef,
+) -> anyhow::Result<(
+    DeluxscoreResult,
+    FullComboKind,
+    FullSyncKind,
+    Option<MatchingRank>,
+)> {
     let playlog_score_block = playlog_result_innerblock
         .select(selector!(".playlog_score_block"))
         .next()
@@ -317,12 +416,12 @@ fn parse_playlog_result_innerblock(playlog_result_innerblock: ElementRef) -> any
 
     let matching_rank = imgs.next().map(parse_matching_rank_img).transpose()?;
 
-    dbg!(&deluxscore_result);
-    dbg!(&full_combo_kind);
-    dbg!(&full_sync_kind);
-    dbg!(&matching_rank);
-
-    Ok(())
+    Ok((
+        deluxscore_result,
+        full_combo_kind,
+        full_sync_kind,
+        matching_rank,
+    ))
 }
 
 fn parse_deluxscore(deluxe_score_div: ElementRef) -> anyhow::Result<ValueWithMax<u32>> {
@@ -424,7 +523,15 @@ where
     Ok(res)
 }
 
-fn parse_center_gray_block(gray_block: ElementRef) -> anyhow::Result<()> {
+fn parse_center_gray_block(
+    gray_block: ElementRef,
+) -> anyhow::Result<(
+    TourMemberList,
+    JudgeResult,
+    RatingResult,
+    ValueWithMax<u32>,
+    Option<ValueWithMax<u32>>,
+)> {
     let tour_members: TourMemberList = gray_block
         .select(selector!("div.playlog_chara_container"))
         .map(parse_chara_container)
@@ -478,26 +585,26 @@ fn parse_center_gray_block(gray_block: ElementRef) -> anyhow::Result<()> {
             .select(selector!(".playlog_rating_detail_block"))
             .next()
             .ok_or_else(|| anyhow!("Rating detail block was not found"))?,
-    );
+    )?;
 
     let mut playlog_score_blocks = gray_block.select(selector!("div.playlog_score_block"));
     let max_combo_div = playlog_score_blocks
         .next()
         .ok_or_else(|| anyhow!("Max combo block was not found"))?;
     let max_combo = parse_max_combo_sync_div(max_combo_div)?
-        .ok_or_else(|| anyhow!("Max combo was not found, hyphen found instead"));
+        .ok_or_else(|| anyhow!("Max combo was not found, hyphen found instead"))?;
     let max_sync_div = playlog_score_blocks
         .next()
         .ok_or_else(|| anyhow!("Max sync block was not found"))?;
     let max_sync = parse_max_combo_sync_div(max_sync_div)?;
 
-    dbg!(&tour_members);
-    dbg!(&judge_count);
-    dbg!(&rating_result);
-    dbg!(&max_combo);
-    dbg!(&max_sync);
-
-    Ok(())
+    Ok((
+        tour_members,
+        judge_count,
+        rating_result,
+        max_combo,
+        max_sync,
+    ))
 }
 
 fn parse_chara_container(chara_container: ElementRef) -> anyhow::Result<Option<TourMember>> {
@@ -728,7 +835,7 @@ fn parse_max_combo_sync_div(div: ElementRef) -> anyhow::Result<Option<ValueWithM
     }
 }
 
-fn parse_matching_div(matching_div: ElementRef) -> anyhow::Result<Vec<OtherPlayer>> {
+fn parse_matching_div(matching_div: ElementRef) -> anyhow::Result<OtherPlayersList> {
     use ScoreDifficulty::*;
     matching_div
         .select(selector!(":scope > span"))
@@ -758,5 +865,9 @@ fn parse_matching_div(matching_div: ElementRef) -> anyhow::Result<Vec<OtherPlaye
                 .user_name(user_name)
                 .build()))
         })
-        .collect()
+        .collect::<anyhow::Result<Vec<_>>>()
+        .and_then(|e| {
+            e.try_into()
+                .map_err(|e| anyhow!("Other players of unexpected length: {:?}", e))
+        })
 }

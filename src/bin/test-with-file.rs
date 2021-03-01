@@ -12,7 +12,8 @@ fn main() -> anyhow::Result<()> {
         file.read_to_string(&mut html)?;
         Html::parse_document(&html)
     };
-    let _result = maimai_scraping::play_record_parser::parse(html)?;
+    let result = maimai_scraping::play_record_parser::parse(html)?;
+    dbg!(&result);
 
     Ok(())
 }

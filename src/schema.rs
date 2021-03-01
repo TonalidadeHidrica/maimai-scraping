@@ -5,7 +5,7 @@ use std::convert::TryFrom;
 use typed_builder::TypedBuilder;
 use url::Url;
 
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct PlayRecord {
     played_at: PlayedAt,
     song_metadata: SongMetadata,
@@ -13,7 +13,7 @@ pub struct PlayRecord {
     cleared: bool,
     achievement_result: AchievementResult,
     deluxscore_result: DeluxscoreResult,
-    full_combo_result: ComboResult,
+    combo_result: ComboResult,
     matching_result: Option<MatchingResult>,
     perfect_challenge_result: Option<PerfectChallengeResult>,
     tour_members: TourMemberList,
@@ -41,13 +41,13 @@ impl TryFrom<u8> for TrackIndex {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct SongMetadata {
     name: String,
     cover_art: Url,
 }
 
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct ScoreMetadata {
     generation: ScoreGeneration,
     difficulty: ScoreDifficulty,
@@ -126,9 +126,9 @@ impl TryFrom<u8> for DeluxscoreRank {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct ComboResult {
-    kind: FullComboKind,
+    full_combo_kind: FullComboKind,
     combo: ValueWithMax<u32>,
 }
 
@@ -243,11 +243,11 @@ pub struct JudgeCountWithoutCP {
     miss: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, TypedBuilder)]
 pub struct MatchingResult {
-    kind: FullSyncKind,
-    sync: ValueWithMax<u32>,
-    other_players: Vec<OtherPlayer>,
+    full_sync_kind: FullSyncKind,
+    max_sync: ValueWithMax<u32>,
+    other_players: OtherPlayersList,
     rank: MatchingRank,
 }
 
@@ -258,6 +258,19 @@ pub enum FullSyncKind {
     FullSyncPlus,
     FullSyncDx,
     FullSyncDxPlus,
+}
+
+#[derive(Debug)]
+pub struct OtherPlayersList(Vec<OtherPlayer>);
+
+impl TryFrom<Vec<OtherPlayer>> for OtherPlayersList {
+    type Error = Vec<OtherPlayer>;
+    fn try_from(value: Vec<OtherPlayer>) -> Result<Self, Self::Error> {
+        match value.len() {
+            1..=3 => Ok(Self(value)),
+            _ => Err(value),
+        }
+    }
 }
 
 #[derive(Debug, TypedBuilder)]
