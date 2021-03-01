@@ -32,8 +32,7 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
 
     let playlog_main_container = playlog_top_container
         .next_siblings()
-        .filter_map(ElementRef::wrap)
-        .next()
+        .find_map(ElementRef::wrap)
         .ok_or_else(|| anyhow!("Next sibling was not found."))?;
     parse_playlog_main_container(playlog_main_container)?;
 
@@ -41,8 +40,7 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .parent()
         .ok_or_else(|| anyhow!("No parent found for playlog main container"))?
         .next_siblings()
-        .filter_map(ElementRef::wrap)
-        .next()
+        .find_map(ElementRef::wrap)
         .ok_or_else(|| anyhow!("No next container was found"))?;
     parse_center_gray_block(gray_block)?;
 
@@ -588,8 +586,7 @@ fn parse_rating_deatil_block(rating_detail_block: ElementRef) -> anyhow::Result<
     let rating_color = parse_rating_color(
         rating_block
             .prev_siblings()
-            .filter_map(ElementRef::wrap)
-            .next()
+            .find_map(ElementRef::wrap)
             .ok_or_else(|| anyhow!("No rating image was found before rating value"))?,
     )?;
 
