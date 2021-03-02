@@ -21,6 +21,8 @@ typed-builder = "0.8.0"
 regex = "1.4.3"
 thiserror = "1.0.24"
 pretty_env_logger = "0.4.0"
+derive-getters = "0.2.0"
+itertools = "0.10.0"
 
 [[bin]]
 name = "test-with-file"
