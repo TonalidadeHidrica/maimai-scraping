@@ -120,7 +120,7 @@ impl TryFrom<u8> for DeluxscoreRank {
     type Error = u8;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            1..=5 => Ok(Self(value)),
+            0..=5 => Ok(Self(value)),
             _ => Err(value),
         }
     }
