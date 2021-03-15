@@ -46,21 +46,20 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         perfect_challenge_result,
     ) = parse_playlog_main_container(playlog_main_container)?;
 
-    let gray_block = playlog_main_container
-        .parent()
-        .ok_or_else(|| anyhow!("No parent found for playlog main container"))?
-        .next_siblings()
-        .find_map(ElementRef::wrap)
-        .ok_or_else(|| anyhow!("No next container was found"))?;
-    let (tour_members, judge_count, rating_result, max_combo, max_sync) =
-        parse_center_gray_block(gray_block)?;
-
-    let place_name = html
+    let place_name_div = html
         .select(selector!("#placeName > span"))
         .next()
-        .ok_or_else(|| anyhow!("Place name div not found"))?
-        .text()
-        .collect::<String>();
+        .ok_or_else(|| anyhow!("Place name div not found"))?;
+    let place_name = place_name_div.text().collect::<String>();
+
+    let gray_block = place_name_div
+        .parent()
+        .ok_or_else(|| anyhow!("No parent found for place name div"))?
+        .prev_siblings()
+        .find_map(ElementRef::wrap)
+        .ok_or_else(|| anyhow!("Gray block was not found"))?;
+    let (tour_members, judge_count, rating_result, max_combo, max_sync) =
+        parse_center_gray_block(gray_block)?;
 
     let other_players = html
         .select(selector!("#matching"))
