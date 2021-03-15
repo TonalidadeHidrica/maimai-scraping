@@ -8,6 +8,7 @@ use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
 };
+use url::Url;
 
 macro_rules! selector {
     ($e: expr) => {{
@@ -28,7 +29,8 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .select(selector!(".playlog_top_container"))
         .next()
         .ok_or_else(|| anyhow!("Playlog top container was not found."))?;
-    let (difficulty, track_index, play_date) = parse_playlog_top_conatiner(playlog_top_container)?;
+    let (difficulty, battle_win_or_lose, track_index, play_date) =
+        parse_playlog_top_conatiner(playlog_top_container)?;
 
     let playlog_main_container = playlog_top_container
         .next_siblings()
@@ -45,6 +47,8 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         matching_rank,
         perfect_challenge_result,
     ) = parse_playlog_main_container(playlog_main_container)?;
+
+    // TODO parse vs user
 
     let place_name_div = html
         .select(selector!("#placeName > span"))
@@ -81,6 +85,10 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .combo(max_combo)
         .build();
 
+    let battle_result = match (battle_win_or_lose,) {
+        otherwise => Err(anyhow!("Inconsistent battle result: {:?}", otherwise))?,
+    };
+
     let matching_result = match (full_sync_kind, max_sync, other_players, matching_rank) {
         (FullSyncKind::Nothing, None, None, None) => None,
         (full_sync_kind, Some(max_sync), Some(other_players), Some(rank)) => {
@@ -103,6 +111,7 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .achievement_result(achievement_result)
         .deluxscore_result(deluxscore_result)
         .combo_result(combo_result)
+        .battle_result(battle_result)
         .matching_result(matching_result)
         .perfect_challenge_result(perfect_challenge_result)
         .tour_members(tour_members)
@@ -114,12 +123,23 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
 
 fn parse_playlog_top_conatiner(
     div: ElementRef,
-) -> anyhow::Result<(ScoreDifficulty, TrackIndex, NaiveDateTime)> {
+) -> anyhow::Result<(
+    ScoreDifficulty,
+    Option<BattleWinOrLose>,
+    TrackIndex,
+    NaiveDateTime,
+)> {
     let difficulty = parse_playlog_diff(
         div.select(selector!("img.playlog_diff"))
             .next()
             .ok_or_else(|| anyhow!("Difficulty image was not found."))?,
     )?;
+
+    let battle_win_or_lose = div
+        .select(selector!("img.playlog_vs_result"))
+        .next()
+        .map(parse_playlog_vs_result)
+        .transpose()?;
 
     let mut spans = div.select(selector!("div.sub_title > span"));
 
@@ -133,7 +153,7 @@ fn parse_playlog_top_conatiner(
             .next()
             .ok_or_else(|| anyhow!("Play date span was not found."))?,
     )?;
-    Ok((difficulty, track_index, play_date))
+    Ok((difficulty, battle_win_or_lose, track_index, play_date))
 }
 
 fn parse_playlog_diff(img: ElementRef) -> anyhow::Result<ScoreDifficulty> {
@@ -724,7 +744,11 @@ fn parse_rating_deatil_block(rating_detail_block: ElementRef) -> anyhow::Result<
         .select(selector!("div.rating_block"))
         .next()
         .ok_or_else(|| anyhow!("Rating block not found"))?;
-    let rating = rating_block.text().collect::<String>().parse()?;
+    let rating = rating_block
+        .text()
+        .collect::<String>()
+        .parse::<u16>()?
+        .into();
 
     let rating_color = parse_rating_color(
         rating_block
@@ -762,8 +786,9 @@ fn parse_rating_deatil_block(rating_detail_block: ElementRef) -> anyhow::Result<
         .value()
         .attr("src")
         .ok_or_else(|| anyhow!("Grade icon does not have src"))?
-        .parse()
-        .map_err(|e| anyhow!("Grade icon src was not a url: {}", e))?;
+        .parse::<Url>()
+        .map_err(|e| anyhow!("Grade icon src was not a url: {}", e))?
+        .into();
 
     let rating_result = RatingResult::builder()
         .rating(rating)
@@ -869,4 +894,16 @@ fn parse_matching_div(matching_div: ElementRef) -> anyhow::Result<OtherPlayersLi
             e.try_into()
                 .map_err(|e| anyhow!("Other players of unexpected length: {:?}", e))
         })
+}
+
+pub fn parse_playlog_vs_result(img: ElementRef) -> anyhow::Result<BattleWinOrLose> {
+    use BattleWinOrLose::*;
+    match img.value().attr("src") {
+        Some("https://maimaidx.jp/maimai-mobile/img/playlog/win.png") => Ok(Win),
+        Some("https://maimaidx.jp/maimai-mobile/img/playlog/lose.png") => Ok(Lose),
+        url => Err(anyhow!(
+            "Unexpected playlog vs result image image: {:?}",
+            url
+        )),
+    }
 }

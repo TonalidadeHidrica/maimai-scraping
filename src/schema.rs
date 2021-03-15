@@ -14,6 +14,7 @@ pub struct PlayRecord {
     achievement_result: AchievementResult,
     deluxscore_result: DeluxscoreResult,
     combo_result: ComboResult,
+    battle_result: Option<BattleResult>,
     matching_result: Option<MatchingResult>,
     perfect_challenge_result: Option<PerfectChallengeResult>,
     tour_members: TourMemberList,
@@ -146,12 +147,18 @@ pub struct PerfectChallengeResult(ValueWithMax<u32>);
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
 pub struct RatingResult {
-    rating: u16,
+    rating: RatingValue,
     delta: i16,
     delta_sign: RatingDeltaSign,
     border_color: RatingBorderColor,
-    grade_icon: Url,
+    grade_icon: GradeIcon,
 }
+
+#[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
+pub struct RatingValue(u16);
+
+#[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
+pub struct GradeIcon(Url);
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum RatingDeltaSign {
@@ -295,4 +302,24 @@ impl TryFrom<u8> for MatchingRank {
             _ => Err(value),
         }
     }
+}
+
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
+pub struct BattleResult {
+    win_or_lose: BattleWinOrLose,
+    opponent: BattleOpponent,
+}
+
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum BattleWinOrLose {
+    Win,
+    Lose,
+}
+
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
+pub struct BattleOpponent {
+    user_name: String,
+    achievement_value: AchievementValue,
+    rating: RatingValue,
+    grade_icon: GradeIcon,
 }
