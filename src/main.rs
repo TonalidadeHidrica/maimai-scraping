@@ -53,11 +53,15 @@ fn load_from_file<P>(path: P) -> anyhow::Result<BTreeMap<NaiveDateTime, PlayReco
 where
     P: AsRef<Path> + std::fmt::Debug,
 {
-    match File::open(path) {
+    match File::open(&path) {
         Ok(file) => {
             let reader = BufReader::new(file);
-            println!("Successfully loaded data from {:?}.", path);
-            Ok(serde_json::from_reader(reader)?)
+            println!("Successfully loaded data from {:?}.", &path);
+            let records: Vec<PlayRecord> = serde_json::from_reader(reader)?;
+            Ok(records
+                .into_iter()
+                .map(|record| (*record.played_at().time(), record))
+                .collect())
         }
         Err(e) => match e.kind() {
             io::ErrorKind::NotFound => {
