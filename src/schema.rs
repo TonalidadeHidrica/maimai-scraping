@@ -306,8 +306,15 @@ impl TryFrom<u8> for MatchingRank {
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct BattleResult {
+    kind: BattleKind,
     win_or_lose: BattleWinOrLose,
     opponent: BattleOpponent,
+}
+
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum BattleKind {
+    VsFriend,
+    Promotion,
 }
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -321,5 +328,6 @@ pub struct BattleOpponent {
     user_name: String,
     achievement_value: AchievementValue,
     rating: RatingValue,
+    border_color: RatingBorderColor,
     grade_icon: GradeIcon,
 }

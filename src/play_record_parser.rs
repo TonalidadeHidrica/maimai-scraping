@@ -4,6 +4,7 @@ use chrono::NaiveDateTime;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use scraper::{ElementRef, Html, Selector};
+use std::ops::Deref;
 use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
@@ -29,7 +30,7 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .select(selector!(".playlog_top_container"))
         .next()
         .ok_or_else(|| anyhow!("Playlog top container was not found."))?;
-    let (difficulty, battle_win_or_lose, track_index, play_date) =
+    let (difficulty, battle_kind, battle_win_or_lose, track_index, play_date) =
         parse_playlog_top_conatiner(playlog_top_container)?;
 
     let playlog_main_container = playlog_top_container
@@ -48,7 +49,11 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         perfect_challenge_result,
     ) = parse_playlog_main_container(playlog_main_container)?;
 
-    // TODO parse vs user
+    let battle_opponent = html
+        .select(selector!("#vsUser"))
+        .next()
+        .map(parse_vs_user)
+        .transpose()?;
 
     let place_name_div = html
         .select(selector!("#placeName > span"))
@@ -85,7 +90,16 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .combo(max_combo)
         .build();
 
-    let battle_result = match (battle_win_or_lose,) {
+    let battle_result = match (battle_kind, battle_win_or_lose, battle_opponent) {
+        (Some(kind), Some(win_or_lose), Some((kind2, opponent))) if kind == kind2 => {
+            BattleResult::builder()
+                .kind(kind)
+                .win_or_lose(win_or_lose)
+                .opponent(opponent)
+                .build()
+                .into()
+        }
+        (None, None, None) => None,
         otherwise => Err(anyhow!("Inconsistent battle result: {:?}", otherwise))?,
     };
 
@@ -125,6 +139,7 @@ fn parse_playlog_top_conatiner(
     div: ElementRef,
 ) -> anyhow::Result<(
     ScoreDifficulty,
+    Option<BattleKind>,
     Option<BattleWinOrLose>,
     TrackIndex,
     NaiveDateTime,
@@ -134,6 +149,12 @@ fn parse_playlog_top_conatiner(
             .next()
             .ok_or_else(|| anyhow!("Difficulty image was not found."))?,
     )?;
+
+    let battle_kind = div
+        .select(selector!("img.playlog_vs"))
+        .next()
+        .map(parse_battle_kind_img)
+        .transpose()?;
 
     let battle_win_or_lose = div
         .select(selector!("img.playlog_vs_result"))
@@ -153,7 +174,14 @@ fn parse_playlog_top_conatiner(
             .next()
             .ok_or_else(|| anyhow!("Play date span was not found."))?,
     )?;
-    Ok((difficulty, battle_win_or_lose, track_index, play_date))
+
+    Ok((
+        difficulty,
+        battle_kind,
+        battle_win_or_lose,
+        track_index,
+        play_date,
+    ))
 }
 
 fn parse_playlog_diff(img: ElementRef) -> anyhow::Result<ScoreDifficulty> {
@@ -740,22 +768,7 @@ fn parse_judge_count_row(row: ElementRef) -> anyhow::Result<JudgeCount> {
 }
 
 fn parse_rating_deatil_block(rating_detail_block: ElementRef) -> anyhow::Result<RatingResult> {
-    let rating_block = rating_detail_block
-        .select(selector!("div.rating_block"))
-        .next()
-        .ok_or_else(|| anyhow!("Rating block not found"))?;
-    let rating = rating_block
-        .text()
-        .collect::<String>()
-        .parse::<u16>()?
-        .into();
-
-    let rating_color = parse_rating_color(
-        rating_block
-            .prev_siblings()
-            .find_map(ElementRef::wrap)
-            .ok_or_else(|| anyhow!("No rating image was found before rating value"))?,
-    )?;
+    let (rating_block, rating, rating_color) = parse_rating_block_and_color(rating_detail_block)?;
 
     let mut next_elements = rating_block
         .parent()
@@ -779,16 +792,12 @@ fn parse_rating_deatil_block(rating_detail_block: ElementRef) -> anyhow::Result<
             .next()
             .ok_or_else(|| anyhow!("No rating delta span was found"))?,
     )?;
-    let grade_icon = next_div
-        .select(selector!("img"))
-        .next()
-        .ok_or_else(|| anyhow!("No rating grade icon was found"))?
-        .value()
-        .attr("src")
-        .ok_or_else(|| anyhow!("Grade icon does not have src"))?
-        .parse::<Url>()
-        .map_err(|e| anyhow!("Grade icon src was not a url: {}", e))?
-        .into();
+    let grade_icon = parse_rating_grade(
+        next_div
+            .select(selector!("img"))
+            .next()
+            .ok_or_else(|| anyhow!("No rating grade icon was found"))?,
+    )?;
 
     let rating_result = RatingResult::builder()
         .rating(rating)
@@ -798,6 +807,30 @@ fn parse_rating_deatil_block(rating_detail_block: ElementRef) -> anyhow::Result<
         .grade_icon(grade_icon)
         .build();
     Ok(rating_result)
+}
+
+fn parse_rating_block_and_color(
+    parent_block: ElementRef,
+) -> anyhow::Result<(ElementRef, RatingValue, RatingBorderColor)> {
+    let rating_block = parent_block
+        .select(selector!("div.rating_block"))
+        .next()
+        .ok_or_else(|| anyhow!("Rating block not found"))?;
+
+    let rating = rating_block
+        .text()
+        .collect::<String>()
+        .parse::<u16>()?
+        .into();
+
+    let rating_color = parse_rating_color(
+        rating_block
+            .prev_siblings()
+            .find_map(ElementRef::wrap)
+            .ok_or_else(|| anyhow!("No rating image was found before rating value"))?,
+    )?;
+
+    Ok((rating_block, rating, rating_color))
 }
 
 fn parse_rating_color(img: ElementRef) -> anyhow::Result<RatingBorderColor> {
@@ -846,6 +879,16 @@ fn parse_rating_delta(span: ElementRef) -> anyhow::Result<i16> {
         .as_str()
         .parse()
         .map_err(|e| anyhow!("Given integer was out of bounds: {}", e))
+}
+
+fn parse_rating_grade(img: ElementRef) -> anyhow::Result<GradeIcon> {
+    Ok(img
+        .value()
+        .attr("src")
+        .ok_or_else(|| anyhow!("Grade icon does not have src"))?
+        .parse::<Url>()
+        .map_err(|e| anyhow!("Grade icon src was not a url: {}", e))?
+        .into())
 }
 
 fn parse_max_combo_sync_div(div: ElementRef) -> anyhow::Result<Option<ValueWithMax<u32>>> {
@@ -906,4 +949,91 @@ pub fn parse_playlog_vs_result(img: ElementRef) -> anyhow::Result<BattleWinOrLos
             url
         )),
     }
+}
+
+pub fn parse_vs_user(div: ElementRef) -> anyhow::Result<(BattleKind, BattleOpponent)> {
+    let outer_span = div
+        .select(selector!(":scope > span"))
+        .next()
+        .ok_or_else(|| anyhow!("Outer span was not found"))?;
+
+    let (battle_kind, user_name, achievement_value) = parse_vs_user_left_span(
+        outer_span
+            .select(selector!(":scope > span.p_t_5.d_ib.f_l"))
+            .next()
+            .ok_or_else(|| anyhow!("Left span was not found"))?,
+    )?;
+
+    let (rating, rating_color, grade_icon) = parse_vs_user_right_div(
+        outer_span
+            .select(selector!(":scope > div.p_3.f_l"))
+            .next()
+            .ok_or_else(|| anyhow!("Right div was not found"))?,
+    )?;
+
+    Ok((
+        battle_kind,
+        BattleOpponent::builder()
+            .user_name(user_name)
+            .achievement_value(achievement_value)
+            .rating(rating)
+            .border_color(rating_color)
+            .grade_icon(grade_icon)
+            .build(),
+    ))
+}
+
+pub fn parse_vs_user_left_span(
+    span: ElementRef,
+) -> anyhow::Result<(BattleKind, String, AchievementValue)> {
+    let battle_kind = parse_battle_kind_img(
+        span.select(selector!(":scope > img"))
+            .next()
+            .ok_or_else(|| anyhow!("Battle kind img not found"))?,
+    )?;
+
+    let wrapping_div = span
+        .select(selector!(":scope > div"))
+        .next()
+        .ok_or_else(|| anyhow!("Opponent div was not found in battle left span"))?;
+
+    let user_name = wrapping_div
+        .children()
+        .find_map(|e| match e.value() {
+            scraper::Node::Text(text) => Some(text.deref().to_owned()),
+            _ => None,
+        })
+        .ok_or_else(|| anyhow!("Opponent user name not found"))?;
+
+    let achievement_value = parse_achievement_txt(
+        wrapping_div
+            .select(selector!(":scope > span"))
+            .next()
+            .ok_or_else(|| anyhow!("Opponent achievement value span was not found"))?,
+    )?;
+
+    Ok((battle_kind, user_name, achievement_value))
+}
+
+pub fn parse_battle_kind_img(img: ElementRef) -> anyhow::Result<BattleKind> {
+    use BattleKind::*;
+    match img.value().attr("src") {
+        Some("https://maimaidx.jp/maimai-mobile/img/playlog/vs.png") => Ok(VsFriend),
+        Some("https://maimaidx.jp/maimai-mobile/img/playlog/boss.png") => Ok(Promotion),
+        src => Err(anyhow!("Unknown src for battle kind img: {:?}", src)),
+    }
+}
+
+pub fn parse_vs_user_right_div(
+    div: ElementRef,
+) -> anyhow::Result<(RatingValue, RatingBorderColor, GradeIcon)> {
+    let (_, rating, rating_color) = parse_rating_block_and_color(div)?;
+
+    let grade_icon = parse_rating_grade(
+        div.select(selector!(":scope > img"))
+            .next()
+            .ok_or_else(|| anyhow!("No rating grade icon was found"))?,
+    )?;
+
+    Ok((rating, rating_color, grade_icon))
 }
