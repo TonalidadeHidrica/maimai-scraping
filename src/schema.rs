@@ -151,7 +151,8 @@ pub struct RatingResult {
     delta: i16,
     delta_sign: RatingDeltaSign,
     border_color: RatingBorderColor,
-    grade_icon: GradeIcon,
+    // Abolished
+    // grade_icon: GradeIcon,
 }
 
 #[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]

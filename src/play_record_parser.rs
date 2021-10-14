@@ -849,19 +849,21 @@ fn parse_rating_deatil_block(rating_detail_block: ElementRef) -> anyhow::Result<
             .next()
             .ok_or_else(|| anyhow!("No rating delta span was found"))?,
     )?;
-    let grade_icon = parse_rating_grade(
-        next_div
-            .select(selector!("img"))
-            .next()
-            .ok_or_else(|| anyhow!("No rating grade icon was found"))?,
-    )?;
+    // Abolished
+    // let grade_icon = parse_rating_grade(
+    //     next_div
+    //         .select(selector!("img"))
+    //         .next()
+    //         .ok_or_else(|| anyhow!("No rating grade icon was found"))?,
+    // )?;
 
     let rating_result = RatingResult::builder()
         .rating(rating)
         .border_color(rating_color)
         .delta_sign(delta_sign)
         .delta(delta)
-        .grade_icon(grade_icon)
+        // Abolished
+        // .grade_icon(grade_icon)
         .build();
     Ok(rating_result)
 }
