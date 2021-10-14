@@ -151,15 +151,15 @@ pub struct RatingResult {
     delta: i16,
     delta_sign: RatingDeltaSign,
     border_color: RatingBorderColor,
-    // Abolished
+    // Abolished as of DELUXE Splash PLUS, started on 2021/3/18
     // grade_icon: GradeIcon,
 }
 
 #[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
 pub struct RatingValue(u16);
 
-#[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
-pub struct GradeIcon(Url);
+// #[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
+// pub struct GradeIcon(Url);
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum RatingDeltaSign {
@@ -180,6 +180,8 @@ pub enum RatingBorderColor {
     Bronze,
     Silver,
     Gold,
+    /// Added as of DELUXE Splash PLUS, started on 2021/3/18
+    Platinum,
     Rainbow,
 }
 
@@ -330,5 +332,6 @@ pub struct BattleOpponent {
     achievement_value: AchievementValue,
     rating: RatingValue,
     border_color: RatingBorderColor,
-    grade_icon: GradeIcon,
+    // Abolished as of DELUXE Splash PLUS, started on 2021/3/18
+    // grade_icon: GradeIcon,
 }

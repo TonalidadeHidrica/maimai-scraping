@@ -9,7 +9,6 @@ use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
 };
-use url::Url;
 
 macro_rules! selector {
     ($e: expr) => {{
@@ -849,7 +848,7 @@ fn parse_rating_deatil_block(rating_detail_block: ElementRef) -> anyhow::Result<
             .next()
             .ok_or_else(|| anyhow!("No rating delta span was found"))?,
     )?;
-    // Abolished
+    // Abolished as of DELUXE Splash PLUS, started on 2021/3/18
     // let grade_icon = parse_rating_grade(
     //     next_div
     //         .select(selector!("img"))
@@ -862,7 +861,7 @@ fn parse_rating_deatil_block(rating_detail_block: ElementRef) -> anyhow::Result<
         .border_color(rating_color)
         .delta_sign(delta_sign)
         .delta(delta)
-        // Abolished
+        // Abolished as of DELUXE Splash PLUS, started on 2021/3/18
         // .grade_icon(grade_icon)
         .build();
     Ok(rating_result)
@@ -919,6 +918,7 @@ fn parse_rating_color(img: ElementRef) -> anyhow::Result<RatingBorderColor> {
         "https://maimaidx.jp/maimai-mobile/img/rating_base_bronze.png?ver=1.17" => Bronze,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_silver.png?ver=1.17" => Silver,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_gold.png?ver=1.17" => Gold,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_platinum.png?ver=1.17" => Platinum,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow.png?ver=1.17" => Rainbow,
         // Ver 1.20
         "https://maimaidx.jp/maimai-mobile/img/rating_base_normal.png?ver=1.20" => Normal,
@@ -930,6 +930,7 @@ fn parse_rating_color(img: ElementRef) -> anyhow::Result<RatingBorderColor> {
         "https://maimaidx.jp/maimai-mobile/img/rating_base_bronze.png?ver=1.20" => Bronze,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_silver.png?ver=1.20" => Silver,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_gold.png?ver=1.20" => Gold,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_platinum.png?ver=1.20" => Platinum,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow.png?ver=1.20" => Rainbow,
         src => Err(anyhow!("Unexpected border color: {}", src))?,
     };
@@ -962,15 +963,15 @@ fn parse_rating_delta(span: ElementRef) -> anyhow::Result<i16> {
         .map_err(|e| anyhow!("Given integer was out of bounds: {}", e))
 }
 
-fn parse_rating_grade(img: ElementRef) -> anyhow::Result<GradeIcon> {
-    Ok(img
-        .value()
-        .attr("src")
-        .ok_or_else(|| anyhow!("Grade icon does not have src"))?
-        .parse::<Url>()
-        .map_err(|e| anyhow!("Grade icon src was not a url: {}", e))?
-        .into())
-}
+// fn parse_rating_grade(img: ElementRef) -> anyhow::Result<GradeIcon> {
+//     Ok(img
+//         .value()
+//         .attr("src")
+//         .ok_or_else(|| anyhow!("Grade icon does not have src"))?
+//         .parse::<Url>()
+//         .map_err(|e| anyhow!("Grade icon src was not a url: {}", e))?
+//         .into())
+// }
 
 fn parse_max_combo_sync_div(div: ElementRef) -> anyhow::Result<Option<ValueWithMax<u32>>> {
     let inner_div = div
@@ -1045,7 +1046,7 @@ pub fn parse_vs_user(div: ElementRef) -> anyhow::Result<(BattleKind, BattleOppon
             .ok_or_else(|| anyhow!("Left span was not found"))?,
     )?;
 
-    let (rating, rating_color, grade_icon) = parse_vs_user_right_div(
+    let (rating, rating_color /*, grade_icon*/) = parse_vs_user_right_div(
         outer_span
             .select(selector!(":scope > div.p_3.f_l"))
             .next()
@@ -1059,7 +1060,7 @@ pub fn parse_vs_user(div: ElementRef) -> anyhow::Result<(BattleKind, BattleOppon
             .achievement_value(achievement_value)
             .rating(rating)
             .border_color(rating_color)
-            .grade_icon(grade_icon)
+            // .grade_icon(grade_icon)
             .build(),
     ))
 }
@@ -1107,14 +1108,14 @@ pub fn parse_battle_kind_img(img: ElementRef) -> anyhow::Result<BattleKind> {
 
 pub fn parse_vs_user_right_div(
     div: ElementRef,
-) -> anyhow::Result<(RatingValue, RatingBorderColor, GradeIcon)> {
+) -> anyhow::Result<(RatingValue, RatingBorderColor /*, GradeIcon*/)> {
     let (_, rating, rating_color) = parse_rating_block_and_color(div)?;
 
-    let grade_icon = parse_rating_grade(
-        div.select(selector!(":scope > img"))
-            .next()
-            .ok_or_else(|| anyhow!("No rating grade icon was found"))?,
-    )?;
+    // let grade_icon = parse_rating_grade(
+    //     div.select(selector!(":scope > img"))
+    //         .next()
+    //         .ok_or_else(|| anyhow!("No rating grade icon was found"))?,
+    // )?;
 
-    Ok((rating, rating_color, grade_icon))
+    Ok((rating, rating_color /*, grade_icon*/))
 }
