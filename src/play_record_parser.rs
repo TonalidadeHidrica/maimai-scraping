@@ -1,6 +1,7 @@
 use crate::schema::*;
 use anyhow::anyhow;
 use chrono::NaiveDateTime;
+use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use scraper::{ElementRef, Html, Selector};
@@ -45,7 +46,7 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         full_combo_kind,
         full_sync_kind,
         matching_rank,
-        perfect_challenge_result,
+        life_result,
     ) = parse_playlog_main_container(playlog_main_container)?;
 
     let battle_opponent = html
@@ -126,10 +127,10 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .combo_result(combo_result)
         .battle_result(battle_result)
         .matching_result(matching_result)
-        .perfect_challenge_result(perfect_challenge_result)
         .tour_members(tour_members)
         .rating_result(rating_result)
         .judge_result(judge_count)
+        .life_result(life_result)
         .build();
     Ok(res)
 }
@@ -226,7 +227,7 @@ fn parse_playlog_main_container(
     FullComboKind,
     FullSyncKind,
     Option<MatchingRank>,
-    Option<PerfectChallengeResult>,
+    LifeResult,
 )> {
     let basic_block = playlog_main_container
         .select(selector!(".basic_block"))
@@ -278,7 +279,7 @@ fn parse_playlog_main_container(
         full_combo_kind,
         full_sync_kind,
         matching_rank,
-        perfect_challenge_result,
+        life_result,
     ) = parse_playlog_result_block(playlog_result_block)?;
 
     let song_metadata = SongMetadata::builder()
@@ -295,7 +296,7 @@ fn parse_playlog_main_container(
         full_combo_kind,
         full_sync_kind,
         matching_rank,
-        perfect_challenge_result,
+        life_result,
     ))
 }
 
@@ -307,7 +308,7 @@ fn parse_playlog_result_block(
     FullComboKind,
     FullSyncKind,
     Option<MatchingRank>,
-    Option<PerfectChallengeResult>,
+    LifeResult,
 )> {
     let achievement_is_new_record = playlog_result_block
         .select(selector!("img.playlog_achievement_newrecord"))
@@ -340,13 +341,13 @@ fn parse_playlog_result_block(
                 .ok_or_else(|| anyhow!("playlog result innerblock was not found"))?,
         )?;
 
-    let perfect_challenge_result: Option<PerfectChallengeResult>;
-    perfect_challenge_result = playlog_result_block
+    let life_result = match playlog_result_block
         .select(selector!("div.playlog_life_block"))
         .next()
-        .map(|e| parse_value_with_max(&e.text().collect::<String>().as_str()))
-        .transpose()?
-        .map(From::from);
+    {
+        Some(element) => parse_life_block(element)?,
+        None => LifeResult::Nothing,
+    };
 
     Ok((
         achievement_result,
@@ -354,7 +355,7 @@ fn parse_playlog_result_block(
         full_combo_kind,
         full_sync_kind,
         matching_rank,
-        perfect_challenge_result,
+        life_result,
     ))
 }
 
@@ -1118,4 +1119,26 @@ pub fn parse_vs_user_right_div(
     // )?;
 
     Ok((rating, rating_color /*, grade_icon*/))
+}
+
+fn parse_life_block(div: ElementRef) -> anyhow::Result<LifeResult> {
+    use LifeResult::*;
+    let life_value = parse_value_with_max(&div.text().collect::<String>().as_str())?;
+    match &div
+        .prev_siblings()
+        .filter_map(ElementRef::wrap)
+        .map(|e| e.value().attr("src"))
+        .collect_vec()[..]
+    {
+        [Some("https://maimaidx.jp/maimai-mobile/img/icon_life.png"), Some("https://maimaidx.jp/maimai-mobile/img/icon_perfectchallenge.png")] => {
+            Ok(PerfectChallengeResult(life_value))
+        }
+        [Some("https://maimaidx.jp/maimai-mobile/img/course/icon_course_life.png"), Some("https://maimaidx.jp/maimai-mobile/img/course/icon_course.png")] => {
+            Ok(CourseResult(life_value))
+        }
+        elements => Err(anyhow!(
+            "Unknown previous elements for life block: {:?}",
+            elements
+        )),
+    }
 }

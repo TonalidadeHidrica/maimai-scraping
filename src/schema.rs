@@ -16,7 +16,7 @@ pub struct PlayRecord {
     combo_result: ComboResult,
     battle_result: Option<BattleResult>,
     matching_result: Option<MatchingResult>,
-    perfect_challenge_result: Option<PerfectChallengeResult>,
+    life_result: LifeResult,
     tour_members: TourMemberList,
     rating_result: RatingResult,
     judge_result: JudgeResult,
@@ -141,9 +141,6 @@ pub enum FullComboKind {
     AllPerfect,
     AllPerfectPlus,
 }
-
-#[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
-pub struct PerfectChallengeResult(ValueWithMax<u32>);
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
 pub struct RatingResult {
@@ -334,4 +331,11 @@ pub struct BattleOpponent {
     border_color: RatingBorderColor,
     // Abolished as of DELUXE Splash PLUS, started on 2021/3/18
     // grade_icon: GradeIcon,
+}
+
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum LifeResult {
+    Nothing,
+    PerfectChallengeResult(ValueWithMax<u32>),
+    CourseResult(ValueWithMax<u32>),
 }
