@@ -30,6 +30,8 @@ async fn main() -> anyhow::Result<()> {
 
     let mut records = load_from_file(&path)?;
 
+    // TODO: the order of loading should match to that of
+    // https://maimaidx.jp/maimai-mobile/record/
     for i in (0..50).rev() {
         println!("Downloading idx={}...", i);
         if let Some(record) = download_page(&client, &mut cookie_store, i).await? {
