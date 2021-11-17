@@ -135,6 +135,7 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
     Ok(res)
 }
 
+#[allow(clippy::type_complexity)]
 fn parse_playlog_top_conatiner(
     div: ElementRef,
 ) -> anyhow::Result<(
@@ -216,6 +217,7 @@ fn parse_play_date(span: ElementRef) -> anyhow::Result<NaiveDateTime> {
     )?)
 }
 
+#[allow(clippy::type_complexity)]
 fn parse_playlog_main_container(
     playlog_main_container: ElementRef,
 ) -> anyhow::Result<(
@@ -627,6 +629,7 @@ where
     Ok(res)
 }
 
+#[allow(clippy::type_complexity)]
 fn parse_center_gray_block(
     gray_block: ElementRef,
 ) -> anyhow::Result<(
@@ -788,6 +791,7 @@ fn parse_fl_block(fl_block: ElementRef) -> anyhow::Result<(u32, u32)> {
     Ok((fast, late))
 }
 
+#[allow(clippy::many_single_char_names)]
 fn parse_judge_count_row(row: ElementRef) -> anyhow::Result<JudgeCount> {
     let parse = |e: ElementRef| match e.text().collect::<String>().as_ref() {
         "" | "　" => Ok(None),

@@ -8,7 +8,7 @@ pub struct CookieStore {
     pub user_id: String,
 }
 
-const COOKIE_STORE_PATH: &'static str = "./ignore/cookies.json";
+const COOKIE_STORE_PATH: &str = "./ignore/cookies.json";
 
 impl CookieStore {
     pub fn load() -> anyhow::Result<Self> {
