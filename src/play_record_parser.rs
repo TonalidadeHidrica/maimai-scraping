@@ -100,7 +100,7 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
                 .into()
         }
         (None, None, None) => None,
-        otherwise => Err(anyhow!("Inconsistent battle result: {:?}", otherwise))?,
+        otherwise => return Err(anyhow!("Inconsistent battle result: {:?}", otherwise)),
     };
 
     let matching_result = match (full_sync_kind, max_sync, other_players, matching_rank) {
@@ -114,7 +114,7 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
                 .build()
                 .into()
         }
-        otherwise => Err(anyhow!("Inconsistent matching result: {:?}", otherwise))?,
+        otherwise => return Err(anyhow!("Inconsistent matching result: {:?}", otherwise)),
     };
 
     let res = PlayRecord::builder()
@@ -243,7 +243,7 @@ fn parse_playlog_main_container(
         .map(|e| e.value().attr("src"))
     {
         Some(Some("https://maimaidx.jp/maimai-mobile/img/playlog/clear.png")) => true,
-        Some(src) => Err(anyhow!("Unexpected image source for cleared: {:?}", src))?,
+        Some(src) => return Err(anyhow!("Unexpected image source for cleared: {:?}", src)),
         _ => false,
     };
 
@@ -265,10 +265,12 @@ fn parse_playlog_main_container(
     {
         "https://maimaidx.jp/maimai-mobile/img/music_dx.png" => ScoreGeneration::Deluxe,
         "https://maimaidx.jp/maimai-mobile/img/music_standard.png" => ScoreGeneration::Standard,
-        src => Err(anyhow!(
-            "Unexpected image source for music generation: {}",
-            src
-        ))?,
+        src => {
+            return Err(anyhow!(
+                "Unexpected image source for music generation: {}",
+                src
+            ))
+        }
     };
 
     let playlog_result_block = playlog_main_container
@@ -435,7 +437,7 @@ fn parse_achievement_rank(achievement_rank: ElementRef) -> anyhow::Result<Achiev
         "https://maimaidx.jp/maimai-mobile/img/playlog/b.png?ver=1.20" => B,
         "https://maimaidx.jp/maimai-mobile/img/playlog/c.png?ver=1.20" => C,
         "https://maimaidx.jp/maimai-mobile/img/playlog/d.png?ver=1.20" => D,
-        src => Err(anyhow!("Unknown url: {}", src))?,
+        src => return Err(anyhow!("Unknown url: {}", src)),
     };
     Ok(res)
 }
@@ -529,7 +531,7 @@ fn parse_dxstar(dxstar_img: ElementRef) -> anyhow::Result<DeluxscoreRank> {
         "https://maimaidx.jp/maimai-mobile/img/playlog/dxstar_3.png" => 3,
         "https://maimaidx.jp/maimai-mobile/img/playlog/dxstar_4.png" => 4,
         "https://maimaidx.jp/maimai-mobile/img/playlog/dxstar_5.png" => 5,
-        src => Err(anyhow!("Unknown src for dxstar: {}", src))?,
+        src => return Err(anyhow!("Unknown src for dxstar: {}", src)),
     };
     Ok(res.try_into().expect("value is always valid"))
 }
@@ -559,7 +561,7 @@ fn parse_full_combo_img(full_combo_img: ElementRef) -> anyhow::Result<FullComboK
         "https://maimaidx.jp/maimai-mobile/img/playlog/fcplus.png?ver=1.20" => FullComboPlus,
         "https://maimaidx.jp/maimai-mobile/img/playlog/ap.png?ver=1.20" => AllPerfect,
         "https://maimaidx.jp/maimai-mobile/img/playlog/applus.png?ver=1.20" => AllPerfectPlus,
-        src => Err(anyhow!("Unknown src for full combo img: {}", src))?,
+        src => return Err(anyhow!("Unknown src for full combo img: {}", src)),
     };
     Ok(res)
 }
@@ -589,7 +591,7 @@ fn parse_full_sync_img(full_sync_img: ElementRef) -> anyhow::Result<FullSyncKind
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsplus.png?ver=1.20" => FullSyncPlus,
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsd.png?ver=1.20" => FullSyncDx,
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsdplus.png?ver=1.20" => FullSyncDxPlus,
-        src => Err(anyhow!("Unknown src for full sync img: {}", src))?,
+        src => return Err(anyhow!("Unknown src for full sync img: {}", src)),
     };
     Ok(res)
 }
@@ -604,7 +606,7 @@ fn parse_matching_rank_img(matching_rank_img: ElementRef) -> anyhow::Result<Matc
         "https://maimaidx.jp/maimai-mobile/img/playlog/2nd.png" => 2,
         "https://maimaidx.jp/maimai-mobile/img/playlog/3rd.png" => 3,
         "https://maimaidx.jp/maimai-mobile/img/playlog/4th.png" => 4,
-        src => Err(anyhow!("Unknown src for matching rank img: {}", src))?,
+        src => return Err(anyhow!("Unknown src for matching rank img: {}", src)),
     };
     Ok(res.try_into().expect("Value is always in the bounds"))
 }
@@ -615,7 +617,7 @@ where
     <T as FromStr>::Err: Send + Sync + std::error::Error + 'static,
 {
     let captures = regex!(r"^([0-9,]+)/([0-9,]+)$")
-        .captures(&text)
+        .captures(text)
         .ok_or_else(|| {
             anyhow!(
                 "Invalid life block / max combo / max sync format: {:?}",
@@ -671,10 +673,12 @@ fn parse_center_gray_block(
     let touch = get_count("touch")?;
     let break_ = match get_count("break")? {
         JudgeCount::JudgeCountWithCP(count) => count,
-        e => Err(anyhow!(
-            "Count for break does not have critical perfect count: {:?}",
-            e
-        ))?,
+        e => {
+            return Err(anyhow!(
+                "Count for break does not have critical perfect count: {:?}",
+                e
+            ))
+        }
     };
 
     let judge_count = JudgeResult::builder()
@@ -823,7 +827,7 @@ fn parse_judge_count_row(row: ElementRef) -> anyhow::Result<JudgeCount> {
                 None => JudgeCount::JudgeCountWithoutCP(counts),
             }
         }
-        e => Err(anyhow!("Unexpected row: {:?}", e))?,
+        e => return Err(anyhow!("Unexpected row: {:?}", e)),
     };
     Ok(res)
 }
@@ -937,7 +941,7 @@ fn parse_rating_color(img: ElementRef) -> anyhow::Result<RatingBorderColor> {
         "https://maimaidx.jp/maimai-mobile/img/rating_base_gold.png?ver=1.20" => Gold,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_platinum.png?ver=1.20" => Platinum,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow.png?ver=1.20" => Rainbow,
-        src => Err(anyhow!("Unexpected border color: {}", src))?,
+        src => return Err(anyhow!("Unexpected border color: {}", src)),
     };
     Ok(res)
 }
@@ -952,7 +956,7 @@ fn parse_delta_sign(img: ElementRef) -> anyhow::Result<RatingDeltaSign> {
         "https://maimaidx.jp/maimai-mobile/img/playlog/rating_up.png" => Up,
         "https://maimaidx.jp/maimai-mobile/img/playlog/rating_keep.png" => Keep,
         "https://maimaidx.jp/maimai-mobile/img/playlog/rating_down.png" => Down,
-        src => Err(anyhow!("Unexpected border color: {}", src))?,
+        src => return Err(anyhow!("Unexpected border color: {}", src)),
     };
     Ok(res)
 }
@@ -1127,7 +1131,7 @@ pub fn parse_vs_user_right_div(
 
 fn parse_life_block(div: ElementRef) -> anyhow::Result<LifeResult> {
     use LifeResult::*;
-    let life_value = parse_value_with_max(&div.text().collect::<String>().as_str())?;
+    let life_value = parse_value_with_max(div.text().collect::<String>().as_str())?;
     match &div
         .prev_siblings()
         .filter_map(ElementRef::wrap)
