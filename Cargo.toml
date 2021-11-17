@@ -2,7 +2,7 @@
 name = "maimai-scraping"
 version = "0.1.0"
 authors = ["TonalidadeHidrica <47710717+TonalidadeHidrica@users.noreply.github.com>"]
-edition = "2018"
+edition = "2021"
 default-run = "maimai-scraping"
 
 [dependencies]
