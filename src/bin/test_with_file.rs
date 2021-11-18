@@ -1,14 +1,17 @@
-use clap::{App, Arg};
+use clap::Parser;
 use maimai_scraping::schema::PlayRecord;
 use scraper::Html;
-use std::{fs::File, io::BufReader, io::Read};
+use std::{fs::File, io::BufReader, io::Read, path::PathBuf};
+
+#[derive(Parser)]
+struct Opts {
+    input_file: PathBuf
+}
 
 fn main() -> anyhow::Result<()> {
-    let matches = App::new("hoge")
-        .arg(Arg::with_name("file").required(true))
-        .get_matches();
+    let opts = Opts::parse();
     let html = {
-        let mut file = BufReader::new(File::open(matches.value_of("file").unwrap())?);
+        let mut file = BufReader::new(File::open(&opts.input_file)?);
         let mut html = String::new();
         file.read_to_string(&mut html)?;
         Html::parse_document(&html)

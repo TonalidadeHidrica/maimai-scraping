@@ -9,26 +9,29 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use chrono::NaiveDateTime;
-use clap::App;
-use clap::Arg;
+use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::api::download_page;
 use maimai_scraping::api::reqwest_client;
 use maimai_scraping::cookie_store::CookieStore;
 use maimai_scraping::schema::PlayRecord;
 
+#[derive(Parser)]
+struct Opts {
+    json_file: PathBuf
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
-    let args = App::new("maimai-scraping")
-        .arg(Arg::with_name("file").required(true))
-        .get_matches();
-    let path = PathBuf::from(args.value_of("file").expect("It is required"));
+
+    let opts = Opts::parse();
+    let path = &opts.json_file;
 
     let mut cookie_store = CookieStore::load()?;
     let client = reqwest_client()?;
 
-    let mut records = load_from_file(&path)?;
+    let mut records = load_from_file(path)?;
 
     // TODO: the order of loading should match to that of
     // https://maimaidx.jp/maimai-mobile/record/
@@ -44,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
         std::thread::sleep(Duration::from_secs(2));
     }
 
-    let file = BufWriter::new(File::create(&path)?);
+    let file = BufWriter::new(File::create(path)?);
     serde_json::to_writer(file, &records.values().collect_vec())?;
     println!("Successfully saved data to {:?}.", path);
 
