@@ -1,15 +1,14 @@
 use std::collections::BTreeMap;
-use std::fs::File;
 use std::io;
 use std::io::BufReader;
 use std::io::BufWriter;
-use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::anyhow;
 use chrono::NaiveDateTime;
 use clap::Parser;
+use fs_err::File;
 use itertools::Itertools;
 use maimai_scraping::api::download_page;
 use maimai_scraping::api::reqwest_client;
@@ -18,7 +17,7 @@ use maimai_scraping::schema::PlayRecord;
 
 #[derive(Parser)]
 struct Opts {
-    json_file: PathBuf
+    json_file: PathBuf,
 }
 
 #[tokio::main]
@@ -56,8 +55,9 @@ async fn main() -> anyhow::Result<()> {
 
 fn load_from_file<P>(path: P) -> anyhow::Result<BTreeMap<NaiveDateTime, PlayRecord>>
 where
-    P: AsRef<Path> + std::fmt::Debug,
+    P: Into<PathBuf> + std::fmt::Debug,
 {
+    let path = path.into();
     match File::open(&path) {
         Ok(file) => {
             let reader = BufReader::new(file);

@@ -1,11 +1,13 @@
+use std::{io::BufReader, io::Read, path::PathBuf};
+
 use clap::Parser;
+use fs_err::File;
 use maimai_scraping::schema::PlayRecord;
 use scraper::Html;
-use std::{fs::File, io::BufReader, io::Read, path::PathBuf};
 
 #[derive(Parser)]
 struct Opts {
-    input_file: PathBuf
+    input_file: PathBuf,
 }
 
 fn main() -> anyhow::Result<()> {

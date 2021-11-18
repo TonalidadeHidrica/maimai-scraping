@@ -1,6 +1,6 @@
-use std::fs::File;
 use std::io::{BufReader, BufWriter};
 
+use fs_err::File;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
