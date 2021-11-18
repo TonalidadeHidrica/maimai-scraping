@@ -13,6 +13,7 @@ use itertools::Itertools;
 use maimai_scraping::api::download_page;
 use maimai_scraping::api::reqwest_client;
 use maimai_scraping::cookie_store::CookieStore;
+use maimai_scraping::schema::Idx;
 use maimai_scraping::schema::PlayRecord;
 
 #[derive(Parser)]
@@ -34,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
 
     // TODO: the order of loading should match to that of
     // https://maimaidx.jp/maimai-mobile/record/
-    for i in (0..50).rev() {
+    for i in (0..50).rev().map(|i| Idx::try_from(i).unwrap()) {
         println!("Downloading idx={}...", i);
         if let Some(record) = download_page(&client, &mut cookie_store, i).await? {
             println!("  Downloaded record {:?}", record.played_at());

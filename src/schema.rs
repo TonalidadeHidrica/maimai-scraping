@@ -24,9 +24,24 @@ pub struct PlayRecord {
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
 pub struct PlayedAt {
+    idx: Idx,
     time: NaiveDateTime,
     place: String,
     track: TrackIndex,
+}
+
+// Default is used for Idx(0), which is valid
+#[derive(Default, PartialEq, Eq, Debug, derive_more::Display, Serialize, Deserialize)]
+pub struct Idx(u8);
+
+impl TryFrom<u8> for Idx {
+    type Error = u8;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0..=49 => Ok(Self(value)),
+            _ => Err(value),
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]

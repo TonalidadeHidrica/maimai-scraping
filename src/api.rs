@@ -1,5 +1,6 @@
 use crate::cookie_store::CookieStore;
 use crate::play_record_parser::parse;
+use crate::schema::Idx;
 use crate::schema::PlayRecord;
 use anyhow::anyhow;
 use reqwest::header;
@@ -15,14 +16,11 @@ pub fn reqwest_client() -> reqwest::Result<reqwest::Client> {
         .build()
 }
 
-/// # Panics
-/// - If idx >= 50.
 pub async fn download_page(
     client: &reqwest::Client,
     cookie_store: &mut CookieStore,
-    idx: u8,
+    idx: Idx,
 ) -> anyhow::Result<Option<PlayRecord>> {
-    assert!(idx < 50);
     let url = format!(
         "https://maimaidx.jp/maimai-mobile/record/playlogDetail/?idx={}",
         idx
@@ -51,5 +49,5 @@ pub async fn download_page(
         };
     }
     let document = Html::parse_document(&response.text().await?);
-    parse(document).map(Some)
+    parse(document, idx).map(Some)
 }

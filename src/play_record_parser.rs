@@ -25,9 +25,37 @@ macro_rules! regex {
     }};
 }
 
-pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
-    let playlog_top_container = html
-        .select(selector!(".playlog_top_container"))
+pub fn parse_record_index(html: Html) -> anyhow::Result<Vec<(NaiveDateTime, Idx)>> {
+    let mut res = vec![];
+    for playlog_top_container in iterate_playlot_top_containers(&html) {
+        let playlog_main_container = playlog_top_container
+            .next_siblings()
+            .find_map(ElementRef::wrap)
+            .ok_or_else(|| anyhow!("Next sibling was not found."))?;
+
+        let play_date = parse_playlog_top_conatiner(playlog_top_container)?.4;
+        let idx = parse_idx_from_playlog_main_container(playlog_main_container)?;
+        res.push((play_date, idx));
+    }
+    Ok(res)
+}
+
+fn parse_idx_from_playlog_main_container(playlog_top_container: ElementRef) -> anyhow::Result<Idx> {
+    playlog_top_container
+        .select(selector!("input[name='idx']"))
+        .next()
+        .ok_or_else(|| anyhow!("idx not found"))?
+        .value()
+        .attr("value")
+        .ok_or_else(|| anyhow!("idx does not have 'value' attr"))?
+        .parse::<u8>()
+        .map_err(|e| anyhow!("Expected integer for idx but found: {}", e))?
+        .try_into()
+        .map_err(|e| anyhow!("Idx out of bounds: {}", e))
+}
+
+pub fn parse(html: Html, idx: Idx) -> anyhow::Result<PlayRecord> {
+    let playlog_top_container = iterate_playlot_top_containers(&html)
         .next()
         .ok_or_else(|| anyhow!("Playlog top container was not found."))?;
     let (difficulty, battle_kind, battle_win_or_lose, track_index, play_date) =
@@ -80,6 +108,7 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .time(play_date)
         .place(place_name)
         .track(track_index)
+        .idx(idx)
         .build();
     let score_metadata = ScoreMetadata::builder()
         .generation(generation)
@@ -133,6 +162,10 @@ pub fn parse(html: Html) -> anyhow::Result<PlayRecord> {
         .life_result(life_result)
         .build();
     Ok(res)
+}
+
+fn iterate_playlot_top_containers(html: &Html) -> impl Iterator<Item = ElementRef> {
+    html.select(selector!(".playlog_top_container"))
 }
 
 #[allow(clippy::type_complexity)]
