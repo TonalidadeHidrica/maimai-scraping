@@ -1,7 +1,7 @@
 use chrono::naive::NaiveDateTime;
 use derive_getters::Getters;
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, fmt::Display};
+use std::convert::TryFrom;
 use typed_builder::TypedBuilder;
 use url::Url;
 
@@ -93,27 +93,7 @@ pub struct AchievementResult {
     rank: AchievementRank,
 }
 
-#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
-pub struct AchievementValue(u32);
-
-impl TryFrom<u32> for AchievementValue {
-    type Error = u32;
-
-    fn try_from(v: u32) -> Result<Self, u32> {
-        match v {
-            0..=101_0000 => Ok(Self(v)),
-            _ => Err(v),
-        }
-    }
-}
-
-impl Display for AchievementValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let x = self.0 / 10000;
-        let y = self.0 % 10000;
-        write!(f, "{}.{:04}%", x, y)
-    }
-}
+pub use super::ver_20210316_2338::AchievementValue;
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum AchievementRank {
@@ -177,8 +157,7 @@ pub struct RatingResult {
     // grade_icon: GradeIcon,
 }
 
-#[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
-pub struct RatingValue(u16);
+pub use super::ver_20210316_2338::RatingValue;
 
 // #[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
 // pub struct GradeIcon(Url);

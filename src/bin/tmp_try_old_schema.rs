@@ -17,7 +17,13 @@ fn main() -> anyhow::Result<()> {
     for record in records {
         let achievement = record.achievement_result();
         let rating = record.rating_result();
-        println!("{}\t{}\t{:?}\t{:?}", record.song_metadata().name(), achievement.value(), achievement.rank(), rating.rating());
+        println!(
+            "{}\t{}\t{:?}\t{}",
+            record.song_metadata().name(),
+            achievement.value(),
+            achievement.rank(),
+            rating.rating()
+        );
     }
 
     Ok(())

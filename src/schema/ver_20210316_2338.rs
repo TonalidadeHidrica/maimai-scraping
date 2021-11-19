@@ -76,7 +76,7 @@ pub struct AchievementResult {
     rank: AchievementRank,
 }
 
-#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct AchievementValue(u32);
 
 impl TryFrom<u32> for AchievementValue {
@@ -95,6 +95,12 @@ impl Display for AchievementValue {
         let x = self.0 / 10000;
         let y = self.0 % 10000;
         write!(f, "{}.{:04}%", x, y)
+    }
+}
+
+impl AchievementValue {
+    pub fn get(&self) -> u32 {
+        self.0
     }
 }
 
@@ -162,8 +168,24 @@ pub struct RatingResult {
     grade_icon: GradeIcon,
 }
 
-#[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Debug,
+    derive_more::From,
+    derive_more::Display,
+    Serialize,
+    Deserialize,
+)]
 pub struct RatingValue(u16);
+
+impl RatingValue {
+    pub fn get(&self) -> u16 {
+        self.0
+    }
+}
 
 #[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
 pub struct GradeIcon(Url);
