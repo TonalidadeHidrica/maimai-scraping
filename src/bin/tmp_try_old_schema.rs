@@ -14,7 +14,11 @@ fn main() -> anyhow::Result<()> {
 
     let records: Vec<PlayRecord> =
         serde_json::from_reader(BufReader::new(File::open(&opts.input_file)?))?;
-    dbg!(&records);
+    for record in records {
+        let achievement = record.achievement_result();
+        let rating = record.rating_result();
+        println!("{}\t{}\t{:?}\t{:?}", record.song_metadata().name(), achievement.value(), achievement.rank(), rating.rating());
+    }
 
     Ok(())
 }

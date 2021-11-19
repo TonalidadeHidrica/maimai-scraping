@@ -1,7 +1,7 @@
 use chrono::naive::NaiveDateTime;
 use derive_getters::Getters;
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
+use std::{convert::TryFrom, fmt::Display};
 use typed_builder::TypedBuilder;
 use url::Url;
 
@@ -104,6 +104,14 @@ impl TryFrom<u32> for AchievementValue {
             0..=101_0000 => Ok(Self(v)),
             _ => Err(v),
         }
+    }
+}
+
+impl Display for AchievementValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let x = self.0 / 10000;
+        let y = self.0 % 10000;
+        write!(f, "{}.{:04}%", x, y)
     }
 }
 
