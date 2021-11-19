@@ -2,7 +2,7 @@ use std::{io::BufReader, io::Read, path::PathBuf};
 
 use clap::Parser;
 use fs_err::File;
-use maimai_scraping::schema::{Idx, PlayRecord};
+use maimai_scraping::schema::latest::{Idx, PlayRecord};
 use scraper::Html;
 
 #[derive(Parser)]

@@ -15,7 +15,7 @@ use maimai_scraping::api::download_record;
 use maimai_scraping::api::download_record_index;
 use maimai_scraping::api::reqwest_client;
 use maimai_scraping::cookie_store::CookieStore;
-use maimai_scraping::schema::PlayRecord;
+use maimai_scraping::schema::latest::PlayRecord;
 
 #[derive(Parser)]
 struct Opts {

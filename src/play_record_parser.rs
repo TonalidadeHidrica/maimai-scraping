@@ -1,4 +1,4 @@
-use crate::schema::*;
+use crate::schema::latest::*;
 use anyhow::anyhow;
 use chrono::NaiveDateTime;
 use itertools::Itertools;
