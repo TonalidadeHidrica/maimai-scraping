@@ -25,7 +25,9 @@ macro_rules! regex {
     }};
 }
 
-pub fn parse_record_index(html: Html) -> anyhow::Result<Vec<(NaiveDateTime, Idx)>> {
+pub type RecordIndexData = (NaiveDateTime, Idx);
+
+pub fn parse_record_index(html: Html) -> anyhow::Result<Vec<RecordIndexData>> {
     let mut res = vec![];
     for playlog_top_container in iterate_playlot_top_containers(&html) {
         let playlog_main_container = playlog_top_container

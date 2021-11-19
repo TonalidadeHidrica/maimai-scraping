@@ -31,7 +31,9 @@ pub struct PlayedAt {
 }
 
 // Default is used for Idx(0), which is valid
-#[derive(Default, PartialEq, Eq, Debug, derive_more::Display, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Default, PartialEq, Eq, Debug, derive_more::Display, Serialize, Deserialize,
+)]
 pub struct Idx(u8);
 
 impl TryFrom<u8> for Idx {

@@ -1,3 +1,4 @@
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::io;
 use std::io::BufReader;
@@ -10,10 +11,10 @@ use chrono::NaiveDateTime;
 use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
-use maimai_scraping::api::download_page;
+use maimai_scraping::api::download_record;
+use maimai_scraping::api::download_record_index;
 use maimai_scraping::api::reqwest_client;
 use maimai_scraping::cookie_store::CookieStore;
-use maimai_scraping::schema::Idx;
 use maimai_scraping::schema::PlayRecord;
 
 #[derive(Parser)]
@@ -33,18 +34,42 @@ async fn main() -> anyhow::Result<()> {
 
     let mut records = load_from_file(path)?;
 
-    // TODO: the order of loading should match to that of
-    // https://maimaidx.jp/maimai-mobile/record/
-    for i in (0..50).rev().map(|i| Idx::try_from(i).unwrap()) {
-        println!("Downloading idx={}...", i);
-        if let Some(record) = download_page(&client, &mut cookie_store, i).await? {
-            println!("  Downloaded record {:?}", record.played_at());
-            if records.insert(*record.played_at().time(), record).is_some() {
-                println!("The record above was already found in previous data; stopping.");
-                break;
+    let index = download_record_index(&client, &mut cookie_store).await?;
+    // In `index`, newer result is stored first.
+    // Since we want to fetch older result as fast as possible,
+    // we inspect them in the reverse order.
+    for (played_at, idx) in index.into_iter().rev() {
+        println!("Checking idx={}...", idx);
+        match records.entry(played_at) {
+            Entry::Vacant(entry) => {
+                let record = download_record(&client, &mut cookie_store, idx)
+                    .await?
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "  Once found record has been disappeared: played_at={}, idx={}",
+                            played_at,
+                            idx
+                        )
+                    })?;
+                println!("  Downloaded record {:?}", record.played_at());
+                if &played_at != record.played_at().time() {
+                    println!(
+                        "  Record has been updated at idx={}.  Probably there was a data loss.  Expected: {}, found: {}", 
+                        idx, played_at, record.played_at().time());
+                }
+                entry.insert(record);
+                std::thread::sleep(Duration::from_secs(2));
+            }
+            Entry::Occupied(entry) => {
+                if *entry.get().played_at().idx() != idx {
+                    println!(
+                        "  The currently obtained idx is different from recorded: got {}",
+                        idx,
+                    );
+                    println!("  Played at: {:?}", entry.get().played_at());
+                }
             }
         }
-        std::thread::sleep(Duration::from_secs(2));
     }
 
     let file = BufWriter::new(File::create(path)?);
@@ -72,7 +97,7 @@ where
         Err(e) => match e.kind() {
             io::ErrorKind::NotFound => {
                 println!("The file was not found.");
-                println!("We weill create a new file for you and save the data there.");
+                println!("We will create a new file for you and save the data there.");
                 Ok(BTreeMap::new())
             }
             _ => Err(anyhow!("Unexpected I/O Error: {:?}", e)),
