@@ -2,7 +2,6 @@ use std::{io::BufReader, iter::once, path::PathBuf};
 
 use clap::Parser;
 use fs_err::File;
-use itertools::zip;
 use maimai_scraping::schema::{
     latest::PlayRecord as NewPlayRecord, ver_20210316_2338::PlayRecord as OldPlayRecord,
 };
@@ -17,7 +16,7 @@ fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let old_records: Vec<OldPlayRecord> =
         serde_json::from_reader(BufReader::new(File::open(&opts.old_file)?))?;
-    let (old_record_lost, old_record_overlapping) = old_records.split_at(12);
+    let (old_record_lost, _old_record_overlapping) = old_records.split_at(12);
     let new_records: Vec<NewPlayRecord> =
         serde_json::from_reader(BufReader::new(File::open(&opts.new_file)?))?;
 
@@ -33,28 +32,26 @@ fn main() -> anyhow::Result<()> {
         );
     }
 
-    for (old, new) in zip(old_record_overlapping, new_records.iter()) {
-        assert_eq!(old.played_at().time(), new.played_at().time());
-        let old_r = old.rating_result();
-        let new_r = new.rating_result();
-        println!(
-            "{}\t{:<12} {}({:+})\t{}({:+})",
-            old.played_at().time(),
-            format!("{:?}", old.score_metadata().generation()),
-            old_r.rating(),
-            old_r.delta(),
-            new_r.rating(),
-            new_r.delta()
-        );
-    }
-
-    let ratings = new_records
-        .iter()
-        .map(|x| x.rating_result().rating().get() as i16);
-    let deltas = new_records.iter().map(|x| *x.rating_result().delta());
-    for ((bef, aft), delta) in once(0).chain(ratings.clone()).zip(ratings).zip(deltas) {
+    for (old, new) in once(None)
+        .chain(new_records.iter().map(Some))
+        .zip(&new_records)
+    {
+        let bef = old.map_or(0, |x| x.rating_result().rating().get() as i16);
+        let aft = new.rating_result().rating().get() as i16;
+        let delta = new.rating_result().delta();
+        let bef_date = match old {
+            Some(old) => format!("{}", old.played_at().time()),
+            _ => "Initial".into(),
+        };
         if bef + delta != aft {
-            println!("{} {:+} {}", bef, delta, aft);
+            println!(
+                "{}({}) {:+} {}({})",
+                bef,
+                bef_date,
+                delta,
+                aft,
+                new.played_at().time()
+            );
         }
     }
 
