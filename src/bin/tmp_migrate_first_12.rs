@@ -24,7 +24,13 @@ fn main() -> anyhow::Result<()> {
 
     let mut result = vec![];
 
-    for (i, obj) in value.as_array_mut().unwrap().iter_mut().enumerate().take(12) {
+    for (i, obj) in value
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .enumerate()
+        .take(12)
+    {
         let obj = obj.as_object_mut().unwrap();
 
         // insert idx
