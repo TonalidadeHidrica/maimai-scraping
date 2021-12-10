@@ -3,7 +3,7 @@ use std::io::{self, BufReader, BufWriter};
 use fs_err::File;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct CookieStore {
     pub user_id: UserId,
 }
@@ -12,9 +12,10 @@ pub struct CookieStore {
 pub struct Credentials {
     pub user_name: UserName,
     pub password: Password,
+    pub aime_idx: Option<AimeIdx>,
 }
 
-#[derive(Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
+#[derive(Default, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
 pub struct UserId(String);
 
 #[derive(Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
@@ -22,6 +23,11 @@ pub struct UserName(String);
 
 #[derive(Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
 pub struct Password(String);
+
+#[derive(
+    Clone, Copy, Default, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize,
+)]
+pub struct AimeIdx(u8);
 
 const COOKIE_STORE_PATH: &str = "./ignore/cookie_store.json";
 

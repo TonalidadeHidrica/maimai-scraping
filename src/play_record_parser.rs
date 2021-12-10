@@ -2,28 +2,12 @@ use crate::schema::latest::*;
 use anyhow::anyhow;
 use chrono::NaiveDateTime;
 use itertools::Itertools;
-use once_cell::sync::Lazy;
-use regex::Regex;
-use scraper::{ElementRef, Html, Selector};
+use scraper::{ElementRef, Html};
 use std::ops::Deref;
 use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
 };
-
-macro_rules! selector {
-    ($e: expr) => {{
-        static SELECTOR: Lazy<Selector> = Lazy::new(|| Selector::parse($e).unwrap());
-        &*SELECTOR
-    }};
-}
-
-macro_rules! regex {
-    ($e: expr) => {{
-        static PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new($e).unwrap());
-        &*PATTERN
-    }};
-}
 
 pub type RecordIndexData = (NaiveDateTime, Idx);
 

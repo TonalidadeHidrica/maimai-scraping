@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Err(CookieStoreLoadError::NotFound) => {
             println!("Cookie store was not found.  Trying to log in.");
-            let cookie_store = try_login().await?;
+            let cookie_store = try_login(&client).await?;
             (cookie_store, Err(None))
         }
         Err(e) => return Err(anyhow::Error::from(e)),
@@ -55,10 +55,12 @@ async fn main() -> anyhow::Result<()> {
                 println!("The stored session seems to be expired.  Trying to log in.");
                 println!("    Detail: {:?}", err);
             }
-            cookie_store = try_login().await?;
+            cookie_store = try_login(&client).await?;
+            // return Ok(());
             download_record_index(&client, &mut cookie_store).await?
         }
     };
+    println!("Successfully logged in.");
 
     // In `index`, newer result is stored first.
     // Since we want to fetch older result as fast as possible,
