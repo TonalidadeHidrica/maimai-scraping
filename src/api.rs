@@ -1,5 +1,5 @@
-use crate::cookie_store::CredentialStore;
-use crate::cookie_store::MaybeCredential;
+use crate::cookie_store::CookieStore;
+use crate::cookie_store::Credentials;
 use crate::play_record_parser::parse;
 use crate::play_record_parser::parse_record_index;
 use crate::play_record_parser::RecordIndexData;
@@ -22,7 +22,7 @@ pub fn reqwest_client() -> reqwest::Result<reqwest::Client> {
 
 pub async fn download_record_index(
     client: &reqwest::Client,
-    cookie_store: &mut CredentialStore,
+    cookie_store: &mut CookieStore,
 ) -> anyhow::Result<Vec<RecordIndexData>> {
     let url = "https://maimaidx.jp/maimai-mobile/record/";
     let response = fetch_authenticated(client, url, cookie_store).await?.0;
@@ -32,7 +32,7 @@ pub async fn download_record_index(
 
 pub async fn download_record(
     client: &reqwest::Client,
-    cookie_store: &mut CredentialStore,
+    cookie_store: &mut CookieStore,
     idx: Idx,
 ) -> anyhow::Result<Option<PlayRecord>> {
     let url = format!(
@@ -53,7 +53,7 @@ pub async fn download_record(
 async fn fetch_authenticated(
     client: &reqwest::Client,
     url: impl IntoUrl,
-    cookie_store: &mut CredentialStore,
+    cookie_store: &mut CookieStore,
 ) -> anyhow::Result<(reqwest::Response, Option<Url>)> {
     let response = client
         .get(url)
@@ -76,8 +76,7 @@ async fn fetch_authenticated(
     Ok((response, location))
 }
 
-pub async fn try_login(creds: MaybeCredential) -> anyhow::Result<CredentialStore> {
-    let (user_name, password) = (|| Some((creds.user_name?, creds.password?)))()
-        .ok_or_else(|| anyhow!("User ID or password is missing; cannot log in."))?;
-    todo!();
+pub async fn try_login() -> anyhow::Result<CookieStore> {
+    let _credentials = Credentials::load()?;
+    Err(anyhow!("Logging in not implemented yet!"))
 }

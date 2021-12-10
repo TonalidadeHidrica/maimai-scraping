@@ -15,7 +15,8 @@ use maimai_scraping::api::download_record;
 use maimai_scraping::api::download_record_index;
 use maimai_scraping::api::reqwest_client;
 use maimai_scraping::api::try_login;
-use maimai_scraping::cookie_store::CredentialStore;
+use maimai_scraping::cookie_store::CookieStore;
+use maimai_scraping::cookie_store::CookieStoreLoadError;
 use maimai_scraping::schema::latest::PlayRecord;
 
 #[derive(Parser)]
@@ -34,25 +35,28 @@ async fn main() -> anyhow::Result<()> {
 
     let client = reqwest_client()?;
 
-    let credentials = CredentialStore::load()?;
-    let (mut credentials, index) = match credentials.transpose() {
-        Ok(mut credentials) => {
-            let index = download_record_index(&client, &mut credentials).await;
-            (credentials, index.map_err(Some))
+    let cookie_store = CookieStore::load();
+    let (mut cookie_store, index) = match cookie_store {
+        Ok(mut cookie_store) => {
+            let index = download_record_index(&client, &mut cookie_store).await;
+            (cookie_store, index.map_err(Some))
         }
-        Err(credentials) => {
-            let credentials = try_login(credentials).await?;
-            (credentials, Err(None))
+        Err(CookieStoreLoadError::NotFound) => {
+            println!("Cookie store was not found.  Trying to log in.");
+            let cookie_store = try_login().await?;
+            (cookie_store, Err(None))
         }
+        Err(e) => return Err(anyhow::Error::from(e)),
     };
     let index = match index {
         Ok(index) => index, // TODO: a bit redundant
         Err(err) => {
             if let Some(err) = err {
                 println!("The stored session seems to be expired.  Trying to log in.");
-                println!("Detail: {:?}", err);
+                println!("    Detail: {:?}", err);
             }
-            download_record_index(&client, &mut credentials).await?
+            cookie_store = try_login().await?;
+            download_record_index(&client, &mut cookie_store).await?
         }
     };
 
@@ -63,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
         println!("Checking idx={}...", idx);
         match records.entry(played_at) {
             Entry::Vacant(entry) => {
-                let record = download_record(&client, &mut credentials, idx)
+                let record = download_record(&client, &mut cookie_store, idx)
                     .await?
                     .ok_or_else(|| {
                         anyhow!(
