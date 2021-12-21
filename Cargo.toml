@@ -26,3 +26,4 @@ itertools = "0.10.0"
 fs-err = "2.6.0"
 deranged = { version = "0.2.0", features = ["serde"] }
 getset = "0.1.2"
+arrayvec = "0.7.2"

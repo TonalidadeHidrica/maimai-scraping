@@ -157,7 +157,9 @@ pub struct ComboResult {
     full_combo_kind: FullComboKind,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Display, Serialize, Deserialize,
+)]
 pub struct ComboCount(u32);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -167,7 +169,7 @@ pub enum FullComboKind {
     AllBreak,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, TypedBuilder, CopyGetters, Serialize, Deserialize)]
 #[getset(get_copy = "pub")]
 pub struct BellResult {
     count: BellCount,
@@ -175,7 +177,9 @@ pub struct BellResult {
     full_bell_kind: FullBellKind,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Display, Serialize, Deserialize,
+)]
 pub struct BellCount(u32);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -184,7 +188,7 @@ pub enum FullBellKind {
     FullBell,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct JudgeResult {
     critical_break: JudgeCount,
     break_: JudgeCount,
@@ -192,13 +196,17 @@ pub struct JudgeResult {
     miss: JudgeCount,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Display, Serialize, Deserialize,
+)]
 pub struct JudgeCount(u32);
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Display, Serialize, Deserialize,
+)]
 pub struct DamageCount(u32);
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, TypedBuilder, CopyGetters, Serialize, Deserialize)]
 #[getset(get_copy = "pub")]
 pub struct AchievementPerNoteKindResult {
     tap: Option<AchievementPerNoteKind>,
@@ -208,7 +216,9 @@ pub struct AchievementPerNoteKindResult {
     slide_hold: Option<AchievementPerNoteKind>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Display, Serialize, Deserialize,
+)]
 pub struct AchievementPerNoteKind(u32);
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]

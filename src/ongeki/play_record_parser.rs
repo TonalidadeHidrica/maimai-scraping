@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use anyhow::{anyhow, bail, Context};
+use arrayvec::ArrayVec;
 use chrono::NaiveDateTime;
 use once_cell::sync::Lazy;
 use scraper::{ElementRef, Html, Selector};
@@ -23,6 +24,13 @@ pub fn parse(html: &Html) -> anyhow::Result<()> {
         .context("Clearfix element not found")?;
     let _ = parse_vs_container(root_div_children.next().context("Vs container not found")?)
         .context("Failed to parse vs container");
+
+    let _ = parse_score_details(
+        root_div_children
+            .next()
+            .context("Score details block not found")?,
+    )
+    .context("Failed to parse score details block")?;
 
     Ok(())
 }
@@ -337,4 +345,80 @@ fn parse_card_block(div: ElementRef) -> anyhow::Result<DeckCard> {
         .power(power)
         .card_image(url)
         .build())
+}
+
+#[allow(clippy::type_complexity)]
+fn parse_score_details(
+    div: ElementRef,
+) -> anyhow::Result<(
+    ComboCount,
+    JudgeResult,
+    (BellCount, BellCount),
+    DamageCount,
+    AchievementPerNoteKindResult,
+)> {
+    let tds: ArrayVec<_, 12> = div.select(selector!("td")).take(12).collect();
+    if tds.len() < 12 {
+        bail!(
+            "Not enough number of td elements was found: {:?}",
+            tds.iter().map(|x| x.html()).collect::<Vec<_>>()
+        );
+    }
+
+    let max_combo = parse_text(tds[0]).context("Failed to parse max combo")?;
+    let judge_result = JudgeResult::builder()
+        .critical_break(parse_text(tds[1]).context("Failed to parse critical break")?)
+        .break_(parse_text(tds[2]).context("Failed to parse break")?)
+        .hit(parse_text(tds[3]).context("Failed to parse hit")?)
+        .miss(parse_text(tds[4]).context("Failed to parse miss")?)
+        .build();
+    let bell_count = parse_bell_count(tds[5]).context("Failed to parse bell count")?;
+    let damage = parse_text(tds[6]).context("Failed to parse damage")?;
+
+    let mut percentages = tds[7..12].iter().map(parse_percentage);
+    let per_note = AchievementPerNoteKindResult::builder()
+        .tap(percentages.next().unwrap()?)
+        .hold(percentages.next().unwrap()?)
+        .flick(percentages.next().unwrap()?)
+        .slide_tap(percentages.next().unwrap()?)
+        .slide_hold(percentages.next().unwrap()?)
+        .build();
+
+    Ok((max_combo, judge_result, bell_count, damage, per_note))
+}
+
+fn parse_text<T>(element: ElementRef) -> anyhow::Result<T>
+where
+    T: FromStr,
+    anyhow::Error: From<T::Err>,
+{
+    Ok(element.text().collect::<String>().parse()?)
+}
+
+fn parse_bell_count(element: ElementRef) -> anyhow::Result<(BellCount, BellCount)> {
+    let text: String = element.text().collect();
+    let (value, max) = text
+        .split_once("/")
+        .with_context(|| format!("Unexpected bell count format: {:?}", text))?;
+    let value = value
+        .parse()
+        .with_context(|| format!("Failed to parse bell count value: {:?}", value))?;
+    let max = max
+        .parse()
+        .with_context(|| format!("Failed to parse bell count max: {:?}", value))?;
+    Ok((value, max))
+}
+
+fn parse_percentage(element: &ElementRef) -> anyhow::Result<Option<AchievementPerNoteKind>> {
+    let text = element.text().collect::<String>();
+    if text == "--%" {
+        Ok(None)
+    } else if let Some(percentage) = text.strip_prefix('%') {
+        let ret = percentage
+            .parse()
+            .with_context(|| format!("Unexpected percentage format: {:?}", text))?;
+        Ok(Some(ret))
+    } else {
+        bail!("Unexpected percentage format: {:?}", text);
+    }
 }
