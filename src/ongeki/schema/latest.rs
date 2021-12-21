@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 use deranged::U8;
-use derive_more::{AsRef, Display, From, Into};
+use derive_more::{AsRef, Display, From, Into, FromStr};
 use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
@@ -49,15 +49,15 @@ pub struct PlayPlace(String);
 #[getset(get = "pub")]
 pub struct SongMetadata {
     name: SongName,
-    cover_art: SongUrl,
+    cover_art: SongCoverArtUrl,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, From, AsRef, Display, Serialize, Deserialize)]
 #[as_ref(forward)]
 pub struct SongName(String);
 
-#[derive(Clone, PartialEq, Eq, Debug, From, AsRef, Display, Serialize, Deserialize)]
-pub struct SongUrl(Url);
+#[derive(Clone, PartialEq, Eq, Debug, From, FromStr, AsRef, Display, Serialize, Deserialize)]
+pub struct SongCoverArtUrl(Url);
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, CopyGetters, Serialize, Deserialize)]
 #[getset(get_copy = "pub")]
@@ -88,9 +88,9 @@ pub enum BattleRank {
     // /// 不可
     // Bad,
     /// 可 (gray, uncleared)
-    FairUncleared,
+    FairLose,
     /// 可 (blue, cleared)
-    Cleared,
+    FairCleared,
     /// 良
     Good,
     /// 優
