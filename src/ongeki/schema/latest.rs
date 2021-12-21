@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 use deranged::U8;
-use derive_more::{AsRef, Display, From, Into, FromStr};
+use derive_more::{AsRef, Display, From, FromStr, Into};
 use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
@@ -234,9 +234,9 @@ pub struct BattleOpponentName(String);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum BattleOpponentColor {
-    Red,
-    Green,
-    Blue,
+    Fire,
+    Leaf,
+    Aqua,
 }
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, CopyGetters, Serialize, Deserialize)]
@@ -249,13 +249,17 @@ pub struct DeckCard {
     card_image: DeckCardUrl,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Display, Serialize, Deserialize,
+)]
 pub struct BattleParticipantLevel(u32);
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Display, Serialize, Deserialize,
+)]
 pub struct DeckCardPower(u32);
 
-#[derive(Clone, PartialEq, Eq, Debug, From, AsRef, Display, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, From, FromStr, AsRef, Display, Serialize, Deserialize)]
 pub struct DeckCardUrl(Url);
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, CopyGetters, Serialize, Deserialize)]

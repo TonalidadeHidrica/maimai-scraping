@@ -2,7 +2,8 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, bail, Context};
 use chrono::NaiveDateTime;
-use scraper::{ElementRef, Html};
+use once_cell::sync::Lazy;
+use scraper::{ElementRef, Html, Selector};
 
 use crate::ongeki::schema::latest::*;
 
@@ -11,19 +12,24 @@ pub fn parse(html: &Html) -> anyhow::Result<()> {
         .select(selector!("."))
         .next()
         .context("Top level div not found")?;
-    let mut root_div_children = root_div.children().filter_map(ElementRef::wrap);
+    let mut root_div_children = root_div.children().filter_map(ElementRef::wrap).skip(1);
 
-    let not_found = "Element not found";
-    root_div_children.next().context(not_found)?;
-
-    let first_div = root_div_children.next().context(not_found)?;
-    let _ = parse_first_div(first_div).context("Failed to parse first div")?;
+    let _ = parse_first_div(root_div_children.next().context("First div not found")?)
+        .context("Failed to parse first div")?;
     // (battle_result, technical_result, full_bell_kind, full_combo_kind)
+
+    root_div_children
+        .next()
+        .context("Clearfix element not found")?;
+    let _ = parse_vs_container(root_div_children.next().context("Vs container not found")?)
+        .context("Failed to parse vs container");
 
     Ok(())
 }
 
-fn parse_first_div(div: ElementRef) -> anyhow::Result<(PlayTime, SongMetadata, ScoreMetadata, PlaylogScoreBlockData)> {
+fn parse_first_div(
+    div: ElementRef,
+) -> anyhow::Result<(PlayTime, SongMetadata, ScoreMetadata, PlaylogScoreBlockData)> {
     let mut children = div.children().filter_map(ElementRef::wrap);
     let difficulty = parse_difficulty_img(children.next().context("Difficulty img not found")?)
         .context("Failed to parse difficulty")?;
@@ -57,7 +63,12 @@ fn parse_first_div(div: ElementRef) -> anyhow::Result<(PlayTime, SongMetadata, S
         .build();
     let score_metadata = ScoreMetadata::builder().difficulty(difficulty).build();
 
-    Ok((date, song_metadata, score_metadata, playlog_score_block_data))
+    Ok((
+        date,
+        song_metadata,
+        score_metadata,
+        playlog_score_block_data,
+    ))
 }
 
 fn parse_difficulty_img(img: ElementRef) -> anyhow::Result<ScoreDifficulty> {
@@ -84,6 +95,8 @@ fn src_attr(element: ElementRef) -> anyhow::Result<&str> {
         .with_context(|| format!("No src in: {}", element.html()))
 }
 
+static IMG_SELECTOR: Lazy<Selector> = Lazy::new(|| Selector::parse("img").unwrap());
+
 type PlaylogScoreBlockData = (BattleResult, TechnicalResult, FullBellKind, FullComboKind);
 fn parse_playlog_score_block(div: ElementRef) -> anyhow::Result<PlaylogScoreBlockData> {
     let mut scores = div.select(selector!(".f_20"));
@@ -103,7 +116,7 @@ fn parse_playlog_score_block(div: ElementRef) -> anyhow::Result<PlaylogScoreBloc
     )
     .context("Failed to parse over damage")?;
 
-    let mut images = div.select(selector!("img"));
+    let mut images = div.select(&IMG_SELECTOR);
     let battle_rank = parse_battle_rank(images.next().context("No img found for battle rank")?)
         .context("Failed to parse battle rank")?;
     let technical_rank =
@@ -237,4 +250,91 @@ fn parse_full_combo(img: ElementRef) -> anyhow::Result<FullComboKind> {
         "https://ongeki-net.com/ongeki-mobile/img/score_detail_ab.png" => AllBreak,
         src => bail!("Unexpected url for full combo: {:?}", src),
     })
+}
+
+fn parse_vs_container(div: ElementRef) -> anyhow::Result<(BattleOpponent, [DeckCard; 3])> {
+    let opponent = parse_vs_block(
+        div.select(selector!(".vs_block"))
+            .next()
+            .context("Could not find vs block")?,
+    )
+    .context("Failed to parse vs block")?;
+
+    let card_blocks = {
+        let mut iter = div.select(selector!(".card_block")).map(parse_card_block);
+        let first = iter
+            .next()
+            .context("Not enough card block")?
+            .context("Failed to parse deck card")?;
+        let second = iter
+            .next()
+            .context("Not enough card block")?
+            .context("Failed to parse deck card")?;
+        let third = iter
+            .next()
+            .context("Not enough card block")?
+            .context("Failed to parse deck card")?;
+        [first, second, third]
+    };
+
+    Ok((opponent, card_blocks))
+}
+
+fn parse_vs_block(div: ElementRef) -> anyhow::Result<BattleOpponent> {
+    let color = parse_battle_opponent_color(
+        div.select(&IMG_SELECTOR)
+            .next()
+            .context("Cannot find battle opponent kind img")?,
+    )
+    .context("Failed to parse battle opponent color")?;
+    let text: String = div.text().collect();
+    let text = text.trim();
+    let (name, level) = text
+        .split_once(" Lv.")
+        .context(format!("Vs block text is in unexpected format: {:?}", text))?;
+    let level = level.parse()?;
+    Ok(BattleOpponent::builder()
+        .color(color)
+        .name(name.to_owned().into())
+        .level(level)
+        .build())
+}
+
+fn parse_battle_opponent_color(img: ElementRef) -> anyhow::Result<BattleOpponentColor> {
+    use BattleOpponentColor::*;
+    Ok(match src_attr(img)? {
+        "https://ongeki-net.com/ongeki-mobile/img/card_icon_fire.png" => Fire,
+        "https://ongeki-net.com/ongeki-mobile/img/card_icon_aqua.png" => Aqua,
+        "https://ongeki-net.com/ongeki-mobile/img/card_icon_leaf.png" => Leaf,
+        src => bail!("Unexpected url for battle opponent color: {:?}", src),
+    })
+}
+
+fn parse_card_block(div: ElementRef) -> anyhow::Result<DeckCard> {
+    let level = div
+        .select(selector!("span.main_color"))
+        .next()
+        .context("Card level not found")?
+        .text()
+        .collect::<String>()
+        .strip_prefix("Lv.")
+        .context("Card level is in unexpected format")?
+        .parse()?;
+    let power = div
+        .select(selector!("span.sub_color"))
+        .next()
+        .context("Card power not found")?
+        .text()
+        .collect::<String>()
+        .parse()?;
+    let img = div
+        .select(&IMG_SELECTOR)
+        .next()
+        .context("Card img not found")?;
+    let url = src_attr(img)?.parse()?;
+    Ok(DeckCard::builder()
+        .level(level)
+        .power(power)
+        .card_image(url)
+        .build())
 }
