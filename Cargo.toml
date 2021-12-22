@@ -29,3 +29,5 @@ getset = "0.1.2"
 arrayvec = "0.7.2"
 typed-html = { git = "https://github.com/bodil/typed-html", branch = "master" }
 num-format = "0.4.0"
+ego-tree = "0.6.2"
+html-minifier = "3.0.14"

@@ -250,8 +250,8 @@ pub struct AchievementPerNoteKindResult {
     tap: Option<AchievementPerNoteKind>,
     hold: Option<AchievementPerNoteKind>,
     flick: Option<AchievementPerNoteKind>,
-    slide_tap: Option<AchievementPerNoteKind>,
-    slide_hold: Option<AchievementPerNoteKind>,
+    side_tap: Option<AchievementPerNoteKind>,
+    side_hold: Option<AchievementPerNoteKind>,
 }
 
 #[derive(

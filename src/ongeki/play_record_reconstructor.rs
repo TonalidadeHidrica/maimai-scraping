@@ -1,7 +1,6 @@
-use std::fmt::Display;
-
 use chrono::NaiveDateTime;
 use typed_html::{
+    dom::TextNode,
     elements::{div, img, table, td},
     html, text,
     types::{Class, SpacedSet},
@@ -72,8 +71,9 @@ fn construct_playlog_score_block(record: &PlayRecord) -> Box<div<String>> {
                 <tr>
                     {construct_score_td(
                         record.battle_result().score(),
+                        |x| text!("{}", x),
                         "battle_score_block",
-                        "BATTLE SCORE"
+                        "BATTLE SCORE",
                     )}
                     <td rowspan="2" class="w_65">
                         {construct_battle_rank(record.battle_result().rank())}
@@ -82,6 +82,7 @@ fn construct_playlog_score_block(record: &PlayRecord) -> Box<div<String>> {
                 <tr>
                     {construct_score_td(
                         record.battle_result().over_damage(),
+                        |x| text!("{}％", x),
                         "battle_score_block",
                         "OVER DAMAGE",
                     )}
@@ -89,6 +90,7 @@ fn construct_playlog_score_block(record: &PlayRecord) -> Box<div<String>> {
                 <tr>
                     {construct_score_td(
                         record.technical_result().score(),
+                        |x| text!("{}", x),
                         "technical_score_block",
                         "TECHNICAL SCORE",
                     )}
@@ -99,15 +101,16 @@ fn construct_playlog_score_block(record: &PlayRecord) -> Box<div<String>> {
             </table>
             <div class="clearfix p_t_5 t_l f_0">
                 {construct_win_or_lose(record.battle_result().win_or_lose())}
-                {construct_full_combo(record.combo_result().full_combo_kind())}
                 {construct_full_bell(record.bell_result().full_bell_kind())}
+                {construct_full_combo(record.combo_result().full_combo_kind())}
             </div>
         </div>
     )
 }
 
-fn construct_score_td<T: Copy + Display>(
+fn construct_score_td<T: Copy>(
     value: ValueWithNewRecord<T>,
+    show: impl FnOnce(T) -> Box<TextNode<String>>,
     class_base: &'static str,
     caption: &'static str,
 ) -> Box<td<String>> {
@@ -118,9 +121,7 @@ fn construct_score_td<T: Copy + Display>(
     html!(
         <td class=[&class_name as &str]>
             <div class="f_11">{text!(caption)}</div>
-            <div class="f_20">{
-                text!("{}", value.value())
-            }</div>
+            <div class="f_20">{show(value.value())}</div>
         </td>
     )
 }
@@ -199,7 +200,7 @@ fn construct_vs_container(participants: &BattleParticipants) -> Box<div<String>>
                 {construct_enemy_icon(opponent.color())}
             </div>
             <div class="t_c l_h_10">
-                {participants.deck().iter().map(construct_card_block)}
+                {participants.deck().iter().enumerate().map(|(i, e)| construct_card_block(e, i == 0))}
                 <div class="clearfix"></div>
             </div>
         </div>
@@ -226,9 +227,14 @@ fn construct_enemy_icon(color: BattleOpponentColor) -> Box<img<String>> {
     html!(<img src={src} class=" v_m"/>)
 }
 
-fn construct_card_block(card: &DeckCard) -> Box<div<String>> {
+fn construct_card_block(card: &DeckCard, is_first: bool) -> Box<div<String>> {
+    dbg!(card);
+    let mut classes: SpacedSet<Class> = "card_block f_l col3".try_into().unwrap();
+    if is_first {
+        classes.insert("f_0".try_into().unwrap());
+    }
     html!(
-        <div class="card_block f_l col3 f_0">
+        <div class={classes}>
             <div class="card_info_block f_11 gray">
                 <span class="main_color">{text!("Lv.{}", card.level())}</span>
                 "　攻撃力"<span class="sub_color">{text!("{}", card.power())}</span>
@@ -290,19 +296,19 @@ fn construct_score_detail_table_right(record: &AchievementPerNoteKindResult) -> 
             </tr>
             <tr>
                 <th>"HOLD"</th>
-                <td class="f_b">{show(record.tap())}</td>
+                <td class="f_b">{show(record.hold())}</td>
             </tr>
             <tr>
                 <th>"FLICK"</th>
-                <td class="f_b">{show(record.tap())}</td>
+                <td class="f_b">{show(record.flick())}</td>
             </tr>
             <tr>
                 <th>"SIDE TAP"</th>
-                <td class="f_b">{show(record.tap())}</td>
+                <td class="f_b">{show(record.side_tap())}</td>
             </tr>
             <tr>
                 <th>"SIDE HOLD"</th>
-                <td class="f_b">{show(record.tap())}</td>
+                <td class="f_b">{show(record.side_hold())}</td>
             </tr>
         </table>
     )

@@ -440,8 +440,8 @@ fn parse_score_details(
         .tap(percentages.next().unwrap()?)
         .hold(percentages.next().unwrap()?)
         .flick(percentages.next().unwrap()?)
-        .slide_tap(percentages.next().unwrap()?)
-        .slide_hold(percentages.next().unwrap()?)
+        .side_tap(percentages.next().unwrap()?)
+        .side_hold(percentages.next().unwrap()?)
         .build();
 
     Ok((max_combo, judge_result, bell_count, damage, per_note))
