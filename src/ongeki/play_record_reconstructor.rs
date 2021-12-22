@@ -4,6 +4,7 @@ use chrono::NaiveDateTime;
 use typed_html::{
     elements::{div, img, table, td},
     html, text,
+    types::{Class, SpacedSet},
 };
 
 use super::schema::latest::*;
@@ -26,6 +27,9 @@ pub fn reconstruct(record: &PlayRecord) -> Box<div<String>> {
             </div>
             {construct_playlog_event_name(record.mission_result())}
             {construct_place_name(record.played_at().place())}
+            {construct_record_link_block(record)}
+            <div class="clearfix"></div>
+            <hr class="gray_line"/>
         </div>
     )
 }
@@ -325,4 +329,36 @@ fn construct_place_name(record: &PlayPlace) -> Box<div<String>> {
             <div class="clearfix"></div>
         </div>
     )
+}
+
+fn construct_record_link_block(record: &PlayRecord) -> Box<div<String>> {
+    let score_id = record.score_metadata().id().to_string();
+    let mut classes: SpacedSet<Class> = "basic_btn w_100 m_5 p_5 d_ib f_r t_c f_12 white"
+        .try_into()
+        .unwrap();
+    let additional = match record.score_metadata().difficulty() {
+        ScoreDifficulty::Basic => "basic_score_back",
+        ScoreDifficulty::Advanced => "advanced_score_back",
+        ScoreDifficulty::Expert => "expert_score_back",
+        ScoreDifficulty::Master => "master_score_back",
+        ScoreDifficulty::Lunatic => "lunatic_score_back",
+    };
+    classes.insert(additional.try_into().unwrap());
+    html!(
+        <div class="p_r_5">
+            <div class="f_r m_5">
+                <form action="https://ongeki-net.com/ongeki-mobile/record/musicDetail/" method="get" accept-charset=["utf-8"]>
+                    <img id="myRecord" src="https://ongeki-net.com/ongeki-mobile/img/btn_myrecord.png" class="basic_btn h_35" />
+                    <input type="hidden" name="idx" value={score_id.clone()} />
+                </form>
+            </div>
+            <div class={classes} onclick="linkRanking(this)">
+                <form action="https://ongeki-net.com/ongeki-mobile/ranking/musicRankingDetail/" method="get" accept-charset=["utf-8"]>
+                    "ランキング"
+                    <input type="hidden" name="diff" value="2" />
+                    <input type="hidden" name="idx" value={score_id} />
+                </form>
+            </div>
+        </div>
+    : String)
 }
