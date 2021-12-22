@@ -18,7 +18,7 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
     let (
         date,
         song_metadata,
-        score_metadata,
+        difficulty,
         (battle_result, technical_result, full_bell_kind, full_combo_kind),
     ) = parse_first_div(root_div_children.next().context("First div not found")?)
         .context("Failed to parse first div")?;
@@ -48,10 +48,21 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
     let play_place = parse_place_name(root_div_children.next().context("Place name not found")?)
         .context("Failed to parse place name name block")?;
 
+    let score_id = parse_score_id(
+        root_div_children
+            .next()
+            .context("Record link div not found")?,
+    )
+    .context("Failed to parse score id")?;
+
     let played_at = PlayedAt::builder()
         .idx(idx)
         .time(date)
         .place(play_place)
+        .build();
+    let score_metadata = ScoreMetadata::builder()
+        .difficulty(difficulty)
+        .id(score_id)
         .build();
     let combo_result = ComboResult::builder()
         .max_combo(max_combo)
@@ -81,7 +92,12 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
 
 fn parse_first_div(
     div: ElementRef,
-) -> anyhow::Result<(PlayTime, SongMetadata, ScoreMetadata, PlaylogScoreBlockData)> {
+) -> anyhow::Result<(
+    PlayTime,
+    SongMetadata,
+    ScoreDifficulty,
+    PlaylogScoreBlockData,
+)> {
     let mut children = div.children().filter_map(ElementRef::wrap);
     let difficulty = parse_difficulty_img(children.next().context("Difficulty img not found")?)
         .context("Failed to parse difficulty")?;
@@ -113,14 +129,8 @@ fn parse_first_div(
         .name(song_name)
         .cover_art(cover_art)
         .build();
-    let score_metadata = ScoreMetadata::builder().difficulty(difficulty).build();
 
-    Ok((
-        date,
-        song_metadata,
-        score_metadata,
-        playlog_score_block_data,
-    ))
+    Ok((date, song_metadata, difficulty, playlog_score_block_data))
 }
 
 fn parse_difficulty_img(img: ElementRef) -> anyhow::Result<ScoreDifficulty> {
@@ -498,5 +508,18 @@ fn parse_place_name(div: ElementRef) -> anyhow::Result<PlayPlace> {
         .context("Span not found")?
         .text()
         .collect::<String>()
+        .into())
+}
+
+fn parse_score_id(div: ElementRef) -> anyhow::Result<ScoreId> {
+    let input = div
+        .select(selector!(r#"input[name="idx"]"#))
+        .next()
+        .context("Input with name `idx` not found")?;
+    Ok(input
+        .value()
+        .attr("value")
+        .with_context(|| format!("Input does not contain value attr: {}", input.html()))?
+        .to_owned()
         .into())
 }

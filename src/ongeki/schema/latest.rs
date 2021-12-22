@@ -69,11 +69,17 @@ pub struct SongName(String);
 #[derive(Clone, PartialEq, Eq, Debug, From, FromStr, AsRef, Display, Serialize, Deserialize)]
 pub struct SongCoverArtUrl(Url);
 
-#[derive(PartialEq, Eq, Debug, TypedBuilder, CopyGetters, Serialize, Deserialize)]
-#[getset(get_copy = "pub")]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, CopyGetters, Serialize, Deserialize)]
 pub struct ScoreMetadata {
+    #[getset(get_copy = "pub")]
     difficulty: ScoreDifficulty,
+    #[getset(get = "pub")]
+    id: ScoreId,
 }
+
+#[derive(Clone, PartialEq, Eq, Debug, From, AsRef, Display, Serialize, Deserialize)]
+#[as_ref(forward)]
+pub struct ScoreId(String);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum ScoreDifficulty {
@@ -157,7 +163,6 @@ impl Display for TechnicalScore {
         }
     }
 }
-
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum TechnicalRank {
