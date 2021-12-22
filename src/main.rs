@@ -1,8 +1,11 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::fmt::Debug;
+use std::fmt::Display;
 use std::io;
 use std::io::BufReader;
 use std::io::BufWriter;
+use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -17,7 +20,11 @@ use maimai_scraping::api::reqwest_client;
 use maimai_scraping::api::try_login;
 use maimai_scraping::cookie_store::CookieStore;
 use maimai_scraping::cookie_store::CookieStoreLoadError;
-use maimai_scraping::schema::latest::PlayRecord;
+use maimai_scraping::maimai::Maimai;
+use maimai_scraping::sega_trait::PlayRecordTrait;
+use maimai_scraping::sega_trait::SegaTrait;
+use serde::Deserialize;
+use serde::Serialize;
 
 #[derive(Parser)]
 struct Opts {
@@ -31,19 +38,30 @@ async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let path = &opts.json_file;
 
-    let mut records = load_from_file(path)?;
+    run::<Maimai>(path).await
+}
 
-    let client = reqwest_client()?;
+async fn run<T>(path: &Path) -> anyhow::Result<()>
+where
+    T: SegaTrait,
+    T::Idx: Display + PartialEq,
+    T::PlayRecord: Serialize,
+    for<'a> T::PlayRecord: Deserialize<'a>,
+    <T::PlayRecord as PlayRecordTrait>::PlayedAt: Debug,
+{
+    let mut records = load_from_file::<T, _>(path)?;
+
+    let client = reqwest_client::<T>()?;
 
     let cookie_store = CookieStore::load();
     let (mut cookie_store, index) = match cookie_store {
         Ok(mut cookie_store) => {
-            let index = download_record_index(&client, &mut cookie_store).await;
+            let index = download_record_index::<T>(&client, &mut cookie_store).await;
             (cookie_store, index.map_err(Some))
         }
         Err(CookieStoreLoadError::NotFound) => {
             println!("Cookie store was not found.  Trying to log in.");
-            let cookie_store = try_login(&client).await?;
+            let cookie_store = try_login::<T>(&client).await?;
             (cookie_store, Err(None))
         }
         Err(e) => return Err(anyhow::Error::from(e)),
@@ -55,9 +73,9 @@ async fn main() -> anyhow::Result<()> {
                 println!("The stored session seems to be expired.  Trying to log in.");
                 println!("    Detail: {:?}", err);
             }
-            cookie_store = try_login(&client).await?;
+            cookie_store = try_login::<T>(&client).await?;
             // return Ok(());
-            download_record_index(&client, &mut cookie_store).await?
+            download_record_index::<T>(&client, &mut cookie_store).await?
         }
     };
     println!("Successfully logged in.");
@@ -69,7 +87,7 @@ async fn main() -> anyhow::Result<()> {
         println!("Checking idx={}...", idx);
         match records.entry(played_at) {
             Entry::Vacant(entry) => {
-                let record = download_record(&client, &mut cookie_store, idx)
+                let record = download_record::<T>(&client, &mut cookie_store, idx)
                     .await?
                     .ok_or_else(|| {
                         anyhow!(
@@ -79,16 +97,16 @@ async fn main() -> anyhow::Result<()> {
                         )
                     })?;
                 println!("  Downloaded record {:?}", record.played_at());
-                if &played_at != record.played_at().time() {
+                if played_at != record.time() {
                     println!(
                         "  Record has been updated at idx={}.  Probably there was a data loss.  Expected: {}, found: {}", 
-                        idx, played_at, record.played_at().time());
+                        idx, played_at, record.time());
                 }
                 entry.insert(record);
                 std::thread::sleep(Duration::from_secs(2));
             }
             Entry::Occupied(entry) => {
-                if *entry.get().played_at().idx() != idx {
+                if entry.get().idx() != idx {
                     println!(
                         "  The currently obtained idx is different from recorded: got {}",
                         idx,
@@ -106,8 +124,10 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn load_from_file<P>(path: P) -> anyhow::Result<BTreeMap<NaiveDateTime, PlayRecord>>
+fn load_from_file<T, P>(path: P) -> anyhow::Result<BTreeMap<NaiveDateTime, T::PlayRecord>>
 where
+    T: SegaTrait,
+    for<'a> T::PlayRecord: Deserialize<'a>,
     P: Into<PathBuf> + std::fmt::Debug,
 {
     let path = path.into();
@@ -115,10 +135,10 @@ where
         Ok(file) => {
             let reader = BufReader::new(file);
             println!("Successfully loaded data from {:?}.", &path);
-            let records: Vec<PlayRecord> = serde_json::from_reader(reader)?;
+            let records: Vec<T::PlayRecord> = serde_json::from_reader(reader)?;
             Ok(records
                 .into_iter()
-                .map(|record| (*record.played_at().time(), record))
+                .map(|record| (record.time(), record))
                 .collect())
         }
         Err(e) => match e.kind() {

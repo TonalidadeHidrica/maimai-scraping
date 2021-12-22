@@ -11,9 +11,9 @@ use std::{
 
 pub type RecordIndexData = (NaiveDateTime, Idx);
 
-pub fn parse_record_index(html: Html) -> anyhow::Result<Vec<RecordIndexData>> {
+pub fn parse_record_index(html: &Html) -> anyhow::Result<Vec<RecordIndexData>> {
     let mut res = vec![];
-    for playlog_top_container in iterate_playlot_top_containers(&html) {
+    for playlog_top_container in iterate_playlot_top_containers(html) {
         let playlog_main_container = playlog_top_container
             .next_siblings()
             .find_map(ElementRef::wrap)
@@ -40,8 +40,8 @@ fn parse_idx_from_playlog_main_container(playlog_top_container: ElementRef) -> a
         .map_err(|e| anyhow!("Idx out of bounds: {}", e))
 }
 
-pub fn parse(html: Html, idx: Idx) -> anyhow::Result<PlayRecord> {
-    let playlog_top_container = iterate_playlot_top_containers(&html)
+pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
+    let playlog_top_container = iterate_playlot_top_containers(html)
         .next()
         .ok_or_else(|| anyhow!("Playlog top container was not found."))?;
     let (difficulty, battle_kind, battle_win_or_lose, track_index, play_date) =

@@ -1,18 +1,27 @@
-use std::io::{self, BufReader, BufWriter};
+use std::{
+    io::{self, BufReader, BufWriter},
+    marker::PhantomData,
+};
 
 use fs_err::File;
 use serde::{Deserialize, Serialize};
+use typed_builder::TypedBuilder;
+
+use crate::sega_trait::SegaTrait;
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct CookieStore {
     pub user_id: UserId,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Credentials {
+#[derive(Debug, TypedBuilder, Serialize, Deserialize)]
+pub struct Credentials<T> {
     pub user_name: UserName,
     pub password: Password,
     pub aime_idx: Option<AimeIdx>,
+    #[serde(skip)]
+    #[builder(default)]
+    _phantom: PhantomData<fn() -> T>,
 }
 
 #[derive(Default, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
@@ -63,17 +72,15 @@ impl From<io::Error> for CookieStoreLoadError {
     }
 }
 
-const CREDENTIALS_PATH: &str = "./ignore/credentials.json";
-
-impl Credentials {
-    pub fn load() -> anyhow::Result<Credentials> {
+impl<T: SegaTrait> Credentials<T> {
+    pub fn load() -> anyhow::Result<Self> {
         Ok(serde_json::from_reader(BufReader::new(File::open(
-            CREDENTIALS_PATH,
+            T::CREDENTIALS_PATH,
         )?))?)
     }
 
     pub fn save(&self) -> std::io::Result<()> {
-        let writer = BufWriter::new(File::create(CREDENTIALS_PATH)?);
+        let writer = BufWriter::new(File::create(T::CREDENTIALS_PATH)?);
         serde_json::to_writer(writer, self)?;
         Ok(())
     }

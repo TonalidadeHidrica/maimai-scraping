@@ -1,13 +1,12 @@
+use std::marker::PhantomData;
+
 use crate::cookie_store::CookieStore;
 use crate::cookie_store::Credentials;
 use crate::cookie_store::Password;
 use crate::cookie_store::UserName;
-use crate::play_record_parser::parse;
-use crate::play_record_parser::parse_record_index;
-use crate::play_record_parser::RecordIndexData;
-use crate::schema::latest::Idx;
-use crate::schema::latest::PlayRecord;
+use crate::sega_trait::SegaTrait;
 use anyhow::anyhow;
+use chrono::NaiveDateTime;
 use reqwest::header;
 use reqwest::redirect;
 use reqwest::IntoUrl;
@@ -15,19 +14,19 @@ use reqwest::Url;
 use scraper::Html;
 use serde::Serialize;
 
-pub fn reqwest_client() -> reqwest::Result<reqwest::Client> {
+pub fn reqwest_client<T: SegaTrait>() -> reqwest::Result<reqwest::Client> {
     // let jar = Arc::new(Jar::default());
     reqwest::Client::builder()
         .cookie_store(true)
         // .cookie_provider(jar.clone())
         .connection_verbose(true)
         .redirect(redirect::Policy::custom(|attempt| {
-            if attempt.url().path() == "/maimai-mobile/error/" {
+            if attempt.url().path() == T::ERROR_PATH {
                 attempt.error(anyhow!("Redirected to error page"))
             } else if attempt
                 .previous()
                 .last()
-                .map_or(false, |x| x.path() == "/maimai-mobile/aimeList/submit/")
+                .map_or(false, |x| x.path() == T::AIME_SUBMIT_PATH)
             {
                 attempt.stop()
             } else {
@@ -37,34 +36,32 @@ pub fn reqwest_client() -> reqwest::Result<reqwest::Client> {
         .build()
 }
 
-pub async fn download_record_index(
+pub async fn download_record_index<T: SegaTrait>(
     client: &reqwest::Client,
     cookie_store: &mut CookieStore,
-) -> anyhow::Result<Vec<RecordIndexData>> {
-    let url = "https://maimaidx.jp/maimai-mobile/record/";
+) -> anyhow::Result<Vec<(NaiveDateTime, T::Idx)>> {
+    let url = T::RECORD_URL;
     let response = fetch_authenticated(client, url, cookie_store).await?.0;
     let document = Html::parse_document(&response.text().await?);
-    parse_record_index(document)
+    T::parse_record_index(&document)
 }
 
-pub async fn download_record(
+pub async fn download_record<T: SegaTrait>(
     client: &reqwest::Client,
     cookie_store: &mut CookieStore,
-    idx: Idx,
-) -> anyhow::Result<Option<PlayRecord>> {
-    let url = format!(
-        "https://maimaidx.jp/maimai-mobile/record/playlogDetail/?idx={}",
-        idx
-    );
+    idx: T::Idx,
+) -> anyhow::Result<Option<T::PlayRecord>> {
+    let url = T::play_log_detail_url(idx);
     let (response, redirect_url) = fetch_authenticated(client, &url, cookie_store).await?;
     if let Some(location) = redirect_url {
-        return match location.path() {
-            "/maimai-mobile/record/" => Ok(None), // There were less than idx records
-            _ => Err(anyhow!("Redirected to error unknown page: {:?}", response)),
+        return if T::play_log_detail_not_found(&location) {
+            Ok(None)
+        } else {
+            Err(anyhow!("Redirected to error unknown page: {:?}", response))
         };
     }
     let document = Html::parse_document(&response.text().await?);
-    parse(document, idx).map(Some)
+    T::parse(&document, idx).map(Some)
 }
 
 async fn fetch_authenticated(
@@ -82,11 +79,6 @@ async fn fetch_authenticated(
         .headers()
         .get(header::LOCATION)
         .and_then(|x| Url::parse(x.to_str().ok()?).ok());
-    if let Some(location) = &location {
-        if location.path() == "/maimai-mobile/errr/" {
-            return Err(anyhow!("Redirected to error page: {:?}", response));
-        }
-    }
     Ok((response, location))
 }
 
@@ -104,41 +96,41 @@ pub fn set_and_save_credentials(
 }
 
 #[derive(Debug, Serialize)]
-struct LoginForm<'a> {
+struct LoginForm<'a, T> {
     #[serde(rename = "segaId")]
     sega_id: &'a UserName,
     password: &'a Password,
     save_cookie: &'static str,
     token: &'a str,
+    #[serde(skip)]
+    _phantom: PhantomData<fn() -> T>,
 }
-impl<'a> LoginForm<'a> {
-    fn new(credentials: &'a Credentials, token: &'a str) -> Self {
+impl<'a, T> LoginForm<'a, T> {
+    fn new(credentials: &'a Credentials<T>, token: &'a str) -> Self {
         Self {
             sega_id: &credentials.user_name,
             password: &credentials.password,
             save_cookie: "on",
             token,
+            _phantom: Default::default(),
         }
     }
 }
 
-pub async fn try_login(client: &reqwest::Client) -> anyhow::Result<CookieStore> {
-    let credentials = Credentials::load()?;
+pub async fn try_login<T: SegaTrait>(client: &reqwest::Client) -> anyhow::Result<CookieStore> {
+    let credentials = Credentials::<T>::load()?;
 
-    let login_form_url = "https://maimaidx.jp/maimai-mobile/";
-    let login_form = client.get(login_form_url).send().await?;
+    let login_form = client.get(T::LOGIN_FORM_URL).send().await?;
     let login_form = Html::parse_document(&login_form.text().await?);
     let token = login_form
-        .select(selector!(
-            r#"form[action="https://maimaidx.jp/maimai-mobile/submit/"] input[name="token"]"#
-        ))
+        .select(T::login_form_token_selector())
         .next()
         .ok_or_else(|| anyhow!("The token was not found in the login form."))?
         .value()
         .attr("value")
         .ok_or_else(|| anyhow!("Value was not present in the token element."))?;
 
-    let login_url = "https://maimaidx.jp/maimai-mobile/submit/";
+    let login_url = T::LOGIN_URL;
     let response = client
         .post(login_url)
         .form(&LoginForm::new(&credentials, token))
@@ -146,17 +138,14 @@ pub async fn try_login(client: &reqwest::Client) -> anyhow::Result<CookieStore> 
         .await?;
 
     let url = response.url().clone();
-    if url.as_str() != "https://maimaidx.jp/maimai-mobile/aimeList/" {
+    if url.as_str() != T::AIME_LIST_URL {
         return Err(anyhow!(
             "Error: redirected to unexpected url while logging in: {}",
             url,
         ));
     }
 
-    let url = format!(
-        "https://maimaidx.jp/maimai-mobile/aimeList/submit/?idx={}",
-        credentials.aime_idx.unwrap_or_default()
-    );
+    let url = T::select_aime_list_url(credentials.aime_idx.unwrap_or_default());
     let response = client.get(&url).send().await?;
 
     let mut cookie_store = CookieStore::default();
@@ -168,7 +157,7 @@ pub async fn try_login(client: &reqwest::Client) -> anyhow::Result<CookieStore> 
 
 #[cfg(test)]
 mod tests {
-    use crate::cookie_store::Credentials;
+    use crate::{cookie_store::Credentials, maimai::Maimai};
 
     use super::LoginForm;
 
@@ -176,11 +165,11 @@ mod tests {
     fn test_login_form() {
         let user_name = "abc".to_owned().into();
         let password = "def".to_owned().into();
-        let credentials = Credentials {
-            user_name,
-            password,
-            aime_idx: None,
-        };
+        let credentials = Credentials::<Maimai>::builder()
+            .user_name(user_name)
+            .password(password)
+            .aime_idx(None)
+            .build();
         let form = LoginForm::new(&credentials, "ghi");
         let json = serde_json::to_string(&form).unwrap();
         assert_eq!(

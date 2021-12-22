@@ -19,7 +19,7 @@ fn main() -> anyhow::Result<()> {
         Html::parse_document(&html)
     };
 
-    let result = maimai_scraping::play_record_parser::parse(html, Idx::default())?;
+    let result = maimai_scraping::play_record_parser::parse(&html, Idx::default())?;
     dbg!(&result);
     let serialized = serde_json::to_string_pretty(&result)?;
     println!("{}", &serialized);
