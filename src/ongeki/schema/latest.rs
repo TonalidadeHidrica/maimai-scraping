@@ -284,5 +284,7 @@ pub struct MissionResult {
 #[as_ref(forward)]
 pub struct MissionName(String);
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Display, Serialize, Deserialize,
+)]
 pub struct MissionScore(u32);

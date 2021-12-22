@@ -32,6 +32,16 @@ pub fn parse(html: &Html) -> anyhow::Result<()> {
     )
     .context("Failed to parse score details block")?;
 
+    let _ = parse_playlog_event_name(
+        root_div_children
+            .next()
+            .context("Playlog event name not found")?,
+    )
+    .context("Failed to parse playlog event name block")?;
+
+    let _ = parse_place_name(root_div_children.next().context("Place name not found")?)
+        .context("Failed to parse place name name block")?;
+
     Ok(())
 }
 
@@ -318,9 +328,12 @@ fn parse_battle_opponent_color(img: ElementRef) -> anyhow::Result<BattleOpponent
     })
 }
 
+static MAIN_COLOR_SELECTOR: Lazy<Selector> =
+    Lazy::new(|| Selector::parse("span.main_color").unwrap());
+
 fn parse_card_block(div: ElementRef) -> anyhow::Result<DeckCard> {
     let level = div
-        .select(selector!("span.main_color"))
+        .select(&MAIN_COLOR_SELECTOR)
         .next()
         .context("Card level not found")?
         .text()
@@ -421,4 +434,32 @@ fn parse_percentage(element: &ElementRef) -> anyhow::Result<Option<AchievementPe
     } else {
         bail!("Unexpected percentage format: {:?}", text);
     }
+}
+
+fn parse_playlog_event_name(div: ElementRef) -> anyhow::Result<MissionResult> {
+    let span = div
+        .select(&MAIN_COLOR_SELECTOR)
+        .next()
+        .context("Main span not found")?;
+    let text: String = span.text().collect();
+    let score = text.trim_matches(&[' ', '+'][..]).parse()?;
+    let name = span
+        .prev_sibling()
+        .context("No previous sibling")?
+        .value()
+        .as_text()
+        .context("Previous sibling is not a text")?
+        .to_string()
+        .into();
+    Ok(MissionResult::builder().name(name).score(score).build())
+}
+
+fn parse_place_name(div: ElementRef) -> anyhow::Result<PlayPlace> {
+    Ok(div
+        .select(selector!("span"))
+        .next()
+        .context("Span not found")?
+        .text()
+        .collect::<String>()
+        .into())
 }
