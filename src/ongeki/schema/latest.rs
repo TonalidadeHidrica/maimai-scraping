@@ -10,7 +10,7 @@ use url::Url;
 #[getset(get = "pub")]
 pub struct PlayRecord {
     played_at: PlayedAt,
-    song_metada: SongMetadata,
+    song_metadata: SongMetadata,
     score_metadata: ScoreMetadata,
     battle_result: BattleResult,
     technical_result: TechnicalResult,
@@ -18,9 +18,9 @@ pub struct PlayRecord {
     bell_result: BellResult,
     judge_result: JudgeResult,
     damage_count: DamageCount,
-    achievement_per_note_kind: AchievementPerNoteKind,
+    achievement_per_note_kind: AchievementPerNoteKindResult,
     battle_participants: BattleParticipants,
-    mission_result: Option<MissionResult>,
+    mission_result: MissionResult,
 }
 
 #[derive(
@@ -150,7 +150,7 @@ pub struct ValueWithNewRecord<T: Copy> {
     new_record: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, TypedBuilder, CopyGetters, Serialize, Deserialize)]
 #[getset(get_copy = "pub")]
 pub struct ComboResult {
     max_combo: ComboCount,

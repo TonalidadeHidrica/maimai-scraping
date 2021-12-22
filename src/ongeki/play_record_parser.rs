@@ -8,41 +8,75 @@ use scraper::{ElementRef, Html, Selector};
 
 use crate::ongeki::schema::latest::*;
 
-pub fn parse(html: &Html) -> anyhow::Result<()> {
+pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
     let root_div = html
         .select(selector!("."))
         .next()
         .context("Top level div not found")?;
     let mut root_div_children = root_div.children().filter_map(ElementRef::wrap).skip(1);
 
-    let _ = parse_first_div(root_div_children.next().context("First div not found")?)
+    let (
+        date,
+        song_metadata,
+        score_metadata,
+        (battle_result, technical_result, full_bell_kind, full_combo_kind),
+    ) = parse_first_div(root_div_children.next().context("First div not found")?)
         .context("Failed to parse first div")?;
     // (battle_result, technical_result, full_bell_kind, full_combo_kind)
 
     root_div_children
         .next()
         .context("Clearfix element not found")?;
-    let _ = parse_vs_container(root_div_children.next().context("Vs container not found")?)
-        .context("Failed to parse vs container");
+    let battle_participants =
+        parse_vs_container(root_div_children.next().context("Vs container not found")?)
+            .context("Failed to parse vs container")?;
 
-    let _ = parse_score_details(
+    let (max_combo, judge_result, bell_count, damage, per_note) = parse_score_details(
         root_div_children
             .next()
             .context("Score details block not found")?,
     )
     .context("Failed to parse score details block")?;
 
-    let _ = parse_playlog_event_name(
+    let mission_result = parse_playlog_event_name(
         root_div_children
             .next()
             .context("Playlog event name not found")?,
     )
     .context("Failed to parse playlog event name block")?;
 
-    let _ = parse_place_name(root_div_children.next().context("Place name not found")?)
+    let play_place = parse_place_name(root_div_children.next().context("Place name not found")?)
         .context("Failed to parse place name name block")?;
 
-    Ok(())
+    let played_at = PlayedAt::builder()
+        .idx(idx)
+        .time(date)
+        .place(play_place)
+        .build();
+    let combo_result = ComboResult::builder()
+        .max_combo(max_combo)
+        .full_combo_kind(full_combo_kind)
+        .build();
+    let bell_result = BellResult::builder()
+        .count(bell_count.0)
+        .max(bell_count.1)
+        .full_bell_kind(full_bell_kind)
+        .build();
+
+    Ok(PlayRecord::builder()
+        .played_at(played_at)
+        .song_metadata(song_metadata)
+        .score_metadata(score_metadata)
+        .battle_result(battle_result)
+        .technical_result(technical_result)
+        .combo_result(combo_result)
+        .bell_result(bell_result)
+        .judge_result(judge_result)
+        .damage_count(damage)
+        .achievement_per_note_kind(per_note)
+        .battle_participants(battle_participants)
+        .mission_result(mission_result)
+        .build())
 }
 
 fn parse_first_div(
@@ -270,7 +304,7 @@ fn parse_full_combo(img: ElementRef) -> anyhow::Result<FullComboKind> {
     })
 }
 
-fn parse_vs_container(div: ElementRef) -> anyhow::Result<(BattleOpponent, [DeckCard; 3])> {
+fn parse_vs_container(div: ElementRef) -> anyhow::Result<BattleParticipants> {
     let opponent = parse_vs_block(
         div.select(selector!(".vs_block"))
             .next()
@@ -295,7 +329,10 @@ fn parse_vs_container(div: ElementRef) -> anyhow::Result<(BattleOpponent, [DeckC
         [first, second, third]
     };
 
-    Ok((opponent, card_blocks))
+    Ok(BattleParticipants::builder()
+        .opponent(opponent)
+        .deck(card_blocks)
+        .build())
 }
 
 fn parse_vs_block(div: ElementRef) -> anyhow::Result<BattleOpponent> {
