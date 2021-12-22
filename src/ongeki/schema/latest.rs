@@ -1,7 +1,10 @@
+use std::fmt::Display;
+
 use chrono::NaiveDateTime;
 use deranged::U8;
 use derive_more::{AsRef, Display, From, FromStr, Into};
 use getset::{CopyGetters, Getters};
+use num_format::{Locale, WriteFormatted};
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use url::Url;
@@ -110,12 +113,25 @@ pub enum BattleRank {
     // UltimateRainbow,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Serialize, Deserialize)]
 pub struct BattleScore(u32);
+impl Display for BattleScore {
+    fn fmt(&self, mut f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match f.write_formatted(&self.0, &Locale::en) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(std::fmt::Error),
+        }
+    }
+}
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Serialize, Deserialize)]
 /// Multiplied by x100, it represents the first two fractional digits
 pub struct OverDamage(u32);
+impl Display for OverDamage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{:02}", self.0 / 100, self.0 % 100)
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum WinOrLose {
@@ -131,8 +147,17 @@ pub struct TechnicalResult {
     rank: TechnicalRank,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Serialize, Deserialize)]
 pub struct TechnicalScore(u32);
+impl Display for TechnicalScore {
+    fn fmt(&self, mut f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match f.write_formatted(&self.0, &Locale::en) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(std::fmt::Error),
+        }
+    }
+}
+
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum TechnicalRank {
@@ -195,7 +220,8 @@ pub enum FullBellKind {
     FullBell,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, TypedBuilder, CopyGetters, Serialize, Deserialize)]
+#[getset(get_copy = "pub")]
 pub struct JudgeResult {
     critical_break: JudgeCount,
     break_: JudgeCount,

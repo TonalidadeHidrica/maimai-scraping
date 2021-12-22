@@ -15,5 +15,6 @@ fn main() -> anyhow::Result<()> {
     let html = Html::parse_document(&read_to_string(&opts.input_file)?);
     let result = ongeki::play_record_parser::parse(&html, Idx::try_from(0)?)?;
     dbg!(&result);
+    println!("{}", ongeki::play_record_reconstructor::reconstruct(&result));
     Ok(())
 }
