@@ -10,7 +10,7 @@ use crate::ongeki::schema::latest::*;
 
 pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
     let root_div = html
-        .select(selector!("."))
+        .select(selector!(".container3"))
         .next()
         .context("Top level div not found")?;
     let mut root_div_children = root_div.children().filter_map(ElementRef::wrap).skip(1);
@@ -463,7 +463,7 @@ fn parse_percentage(element: &ElementRef) -> anyhow::Result<Option<AchievementPe
     let text = element.text().collect::<String>();
     if text == "--%" {
         Ok(None)
-    } else if let Some(percentage) = text.strip_prefix('%') {
+    } else if let Some(percentage) = text.strip_suffix('%') {
         let ret = percentage
             .parse()
             .with_context(|| format!("Unexpected percentage format: {:?}", text))?;

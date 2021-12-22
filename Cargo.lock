@@ -217,8 +217,7 @@ dependencies = [
 [[package]]
 name = "deranged"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c674bb4c92f14ff409b95ffac923d0b31c4b3225a61ba7477ea04b52cb194cef"
+source = "git+https://github.com/TonalidadeHidrica/deranged?branch=try-from-unintentional-recurse#dc2e144048d808ed63307a7d9ecfe494559d9f83"
 dependencies = [
  "serde",
 ]

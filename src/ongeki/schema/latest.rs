@@ -35,8 +35,15 @@ pub struct PlayedAt {
     place: PlayPlace,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Into, Display, Serialize, Deserialize)]
 pub struct Idx(U8<0, 49>);
+impl TryFrom<u8> for Idx {
+    type Error = <U8<0, 49> as TryFrom<u8>>::Error;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        Ok(Idx(U8::try_from(value)?))
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
 pub struct PlayTime(NaiveDateTime);
