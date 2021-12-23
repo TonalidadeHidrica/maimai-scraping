@@ -2,7 +2,7 @@ use std::{io::BufReader, path::PathBuf};
 
 use clap::Parser;
 use fs_err::File;
-use maimai_scraping::schema::ver_20210316_2338::PlayRecord;
+use maimai_scraping::maimai::schema::ver_20210316_2338::PlayRecord;
 
 #[derive(Parser)]
 struct Opts {

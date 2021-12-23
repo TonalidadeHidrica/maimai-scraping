@@ -2,7 +2,7 @@ use std::{io::BufReader, io::Read, path::PathBuf};
 
 use clap::Parser;
 use fs_err::File;
-use maimai_scraping::schema::latest::{Idx, PlayRecord};
+use maimai_scraping::maimai::schema::latest::{Idx, PlayRecord};
 use scraper::Html;
 
 #[derive(Parser)]
@@ -19,7 +19,7 @@ fn main() -> anyhow::Result<()> {
         Html::parse_document(&html)
     };
 
-    let result = maimai_scraping::play_record_parser::parse(&html, Idx::default())?;
+    let result = maimai_scraping::maimai::play_record_parser::parse(&html, Idx::default())?;
     dbg!(&result);
     let serialized = serde_json::to_string_pretty(&result)?;
     println!("{}", &serialized);

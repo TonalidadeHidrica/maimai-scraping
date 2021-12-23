@@ -5,7 +5,7 @@ use std::{
 
 use clap::Parser;
 use fs_err::File;
-use maimai_scraping::schema::latest::PlayRecord;
+use maimai_scraping::maimai::schema::latest::PlayRecord;
 use serde_json::Value;
 
 #[derive(Parser)]

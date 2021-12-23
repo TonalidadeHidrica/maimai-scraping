@@ -4,7 +4,7 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::schema::latest::{AchievementValue, RatingValue};
+use super::schema::latest::{AchievementValue, RatingValue};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
 pub struct RankCoefficient(u64);

@@ -3,7 +3,7 @@ use std::{io::BufReader, path::PathBuf};
 use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
-use maimai_scraping::{
+use maimai_scraping::maimai::{
     rating::{rank_coef_gamerch_old, single_song_rating, ScoreConstant},
     schema::ver_20210316_2338::PlayRecord,
 };

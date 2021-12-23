@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
         Html::parse_document(&html)
     };
 
-    let result = maimai_scraping::play_record_parser::parse_record_index(&html)?;
+    let result = maimai_scraping::maimai::play_record_parser::parse_record_index(&html)?;
     dbg!(&result);
 
     Ok(())

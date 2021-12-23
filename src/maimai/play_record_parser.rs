@@ -1,13 +1,15 @@
-use crate::schema::latest::*;
-use anyhow::anyhow;
-use chrono::NaiveDateTime;
-use itertools::Itertools;
-use scraper::{ElementRef, Html};
 use std::ops::Deref;
 use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
 };
+
+use anyhow::anyhow;
+use chrono::NaiveDateTime;
+use itertools::Itertools;
+use scraper::{ElementRef, Html};
+
+use super::schema::latest::*;
 
 pub type RecordIndexData = (NaiveDateTime, Idx);
 

@@ -1,11 +1,16 @@
+pub mod play_record_parser;
+pub mod rating;
+pub mod schema;
+
 use chrono::NaiveDateTime;
 use scraper::{Html, Selector};
 use url::Url;
 
+use play_record_parser::parse_record_index;
+use schema::latest::{Idx, PlayRecord, PlayedAt};
+
 use crate::{
     cookie_store::AimeIdx,
-    play_record_parser::parse_record_index,
-    schema::latest::{Idx, PlayRecord, PlayedAt},
     sega_trait::{PlayRecordTrait, SegaTrait},
 };
 
@@ -29,7 +34,7 @@ impl SegaTrait for Maimai {
 
     type PlayRecord = PlayRecord;
     fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
-        crate::play_record_parser::parse(html, idx)
+        play_record_parser::parse(html, idx)
     }
 
     fn play_log_detail_not_found(location: &Url) -> bool {
