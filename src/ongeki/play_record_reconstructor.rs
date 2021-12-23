@@ -228,7 +228,6 @@ fn construct_enemy_icon(color: BattleOpponentColor) -> Box<img<String>> {
 }
 
 fn construct_card_block(card: &DeckCard, is_first: bool) -> Box<div<String>> {
-    dbg!(card);
     let mut classes: SpacedSet<Class> = "card_block f_l col3".try_into().unwrap();
     if is_first {
         classes.insert("f_0".try_into().unwrap());
@@ -350,6 +349,13 @@ fn construct_record_link_block(record: &PlayRecord) -> Box<div<String>> {
         ScoreDifficulty::Lunatic => "lunatic_score_back",
     };
     classes.insert(additional.try_into().unwrap());
+    let diff_index = match record.score_metadata().difficulty() {
+        ScoreDifficulty::Basic => 0,
+        ScoreDifficulty::Advanced => 1,
+        ScoreDifficulty::Expert => 2,
+        ScoreDifficulty::Master => 3,
+        ScoreDifficulty::Lunatic => 4,
+    };
     html!(
         <div class="p_r_5">
             <div class="f_r m_5">
@@ -361,7 +367,7 @@ fn construct_record_link_block(record: &PlayRecord) -> Box<div<String>> {
             <div class={classes} onclick="linkRanking(this)">
                 <form action="https://ongeki-net.com/ongeki-mobile/ranking/musicRankingDetail/" method="get" accept-charset=["utf-8"]>
                     "ランキング"
-                    <input type="hidden" name="diff" value="2" />
+                    <input type="hidden" name="diff" value={diff_index.to_string()} />
                     <input type="hidden" name="idx" value={score_id} />
                 </form>
             </div>

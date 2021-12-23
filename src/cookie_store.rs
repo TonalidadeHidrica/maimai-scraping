@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     io::{self, BufReader, BufWriter},
     marker::PhantomData,
 };
@@ -9,9 +10,26 @@ use typed_builder::TypedBuilder;
 
 use crate::sega_trait::SegaTrait;
 
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub struct CookieStore {
+#[derive(Serialize, Deserialize)]
+pub struct CookieStore<T> {
     pub user_id: UserId,
+    #[serde(skip)]
+    _phantom: PhantomData<fn() -> T>,
+}
+impl<T> Default for CookieStore<T> {
+    fn default() -> Self {
+        Self {
+            user_id: UserId::default(),
+            _phantom: Default::default(),
+        }
+    }
+}
+impl<T> Debug for CookieStore<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CookieStore")
+            .field("user_id", &self.user_id)
+            .finish()
+    }
 }
 
 #[derive(Debug, TypedBuilder, Serialize, Deserialize)]
@@ -38,17 +56,15 @@ pub struct Password(String);
 )]
 pub struct AimeIdx(u8);
 
-const COOKIE_STORE_PATH: &str = "./ignore/cookie_store.json";
-
-impl CookieStore {
-    pub fn load() -> Result<CookieStore, CookieStoreLoadError> {
+impl<T: SegaTrait> CookieStore<T> {
+    pub fn load() -> Result<Self, CookieStoreLoadError> {
         Ok(serde_json::from_reader(BufReader::new(File::open(
-            COOKIE_STORE_PATH,
+            T::COOKIE_STORE_PATH,
         )?))?)
     }
 
     pub fn save(&self) -> std::io::Result<()> {
-        let writer = BufWriter::new(File::create(COOKIE_STORE_PATH)?);
+        let writer = BufWriter::new(File::create(T::COOKIE_STORE_PATH)?);
         serde_json::to_writer(writer, self)?;
         Ok(())
     }

@@ -38,7 +38,7 @@ pub fn reqwest_client<T: SegaTrait>() -> reqwest::Result<reqwest::Client> {
 
 pub async fn download_record_index<T: SegaTrait>(
     client: &reqwest::Client,
-    cookie_store: &mut CookieStore,
+    cookie_store: &mut CookieStore<T>,
 ) -> anyhow::Result<Vec<(NaiveDateTime, T::Idx)>> {
     let url = T::RECORD_URL;
     let response = fetch_authenticated(client, url, cookie_store).await?.0;
@@ -48,7 +48,7 @@ pub async fn download_record_index<T: SegaTrait>(
 
 pub async fn download_record<T: SegaTrait>(
     client: &reqwest::Client,
-    cookie_store: &mut CookieStore,
+    cookie_store: &mut CookieStore<T>,
     idx: T::Idx,
 ) -> anyhow::Result<Option<T::PlayRecord>> {
     let url = T::play_log_detail_url(idx);
@@ -64,10 +64,10 @@ pub async fn download_record<T: SegaTrait>(
     T::parse(&document, idx).map(Some)
 }
 
-async fn fetch_authenticated(
+async fn fetch_authenticated<T: SegaTrait>(
     client: &reqwest::Client,
     url: impl IntoUrl,
-    cookie_store: &mut CookieStore,
+    cookie_store: &mut CookieStore<T>,
 ) -> anyhow::Result<(reqwest::Response, Option<Url>)> {
     let response = client
         .get(url)
@@ -82,8 +82,8 @@ async fn fetch_authenticated(
     Ok((response, location))
 }
 
-pub fn set_and_save_credentials(
-    cookie_store: &mut CookieStore,
+pub fn set_and_save_credentials<T: SegaTrait>(
+    cookie_store: &mut CookieStore<T>,
     response: &reqwest::Response,
 ) -> anyhow::Result<bool> {
     if let Some(cookie) = response.cookies().find(|x| x.name() == "userId") {
@@ -117,7 +117,7 @@ impl<'a, T> LoginForm<'a, T> {
     }
 }
 
-pub async fn try_login<T: SegaTrait>(client: &reqwest::Client) -> anyhow::Result<CookieStore> {
+pub async fn try_login<T: SegaTrait>(client: &reqwest::Client) -> anyhow::Result<CookieStore<T>> {
     let credentials = Credentials::<T>::load()?;
 
     let login_form = client.get(T::LOGIN_FORM_URL).send().await?;

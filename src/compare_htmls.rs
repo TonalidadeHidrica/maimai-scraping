@@ -8,6 +8,8 @@ pub fn elements_are_equivalent(
     reconstructed: ElementRef,
     actual: ElementRef,
 ) -> anyhow::Result<()> {
+    // println!("{}", reconstructed.html());
+    // println!("{}", actual.html());
     let mut reconstructed = to_show(reconstructed);
     let mut actual = to_show(actual);
     for pair in reconstructed.by_ref().zip_longest(actual.by_ref()) {

@@ -8,6 +8,29 @@ use scraper::{ElementRef, Html, Selector};
 
 use crate::ongeki::schema::latest::*;
 
+pub fn parse_record_index(html: &Html) -> anyhow::Result<Vec<(NaiveDateTime, Idx)>> {
+    let mut res = vec![];
+    for first_div in html.select(selector!("div.container3 > div.m_10")) {
+        let play_date = parse_first_div(first_div)?.0.into();
+        let idx = parse_idx_from_playlog_index(first_div)?;
+        res.push((play_date, idx));
+    }
+    Ok(res)
+}
+
+fn parse_idx_from_playlog_index(div: ElementRef) -> anyhow::Result<Idx> {
+    div.select(selector!("input[name='idx']"))
+        .next()
+        .ok_or_else(|| anyhow!("idx not found"))?
+        .value()
+        .attr("value")
+        .ok_or_else(|| anyhow!("idx does not have 'value' attr"))?
+        .parse::<u8>()
+        .map_err(|e| anyhow!("Expected integer for idx but found: {}", e))?
+        .try_into()
+        .map_err(|e| anyhow!("Idx out of bounds: {}", e))
+}
+
 pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
     let root_div = html
         .select(selector!(".container3"))

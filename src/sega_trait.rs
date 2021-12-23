@@ -26,6 +26,7 @@ pub trait SegaTrait: Sized {
     fn select_aime_list_url(idx: AimeIdx) -> String;
 
     const CREDENTIALS_PATH: &'static str;
+    const COOKIE_STORE_PATH: &'static str;
 }
 
 pub trait PlayRecordTrait {

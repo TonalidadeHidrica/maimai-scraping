@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use chrono::NaiveDateTime;
+use clap::ArgEnum;
 use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
@@ -21,6 +22,7 @@ use maimai_scraping::api::try_login;
 use maimai_scraping::cookie_store::CookieStore;
 use maimai_scraping::cookie_store::CookieStoreLoadError;
 use maimai_scraping::maimai::Maimai;
+use maimai_scraping::ongeki::Ongeki;
 use maimai_scraping::sega_trait::PlayRecordTrait;
 use maimai_scraping::sega_trait::SegaTrait;
 use serde::Deserialize;
@@ -28,7 +30,14 @@ use serde::Serialize;
 
 #[derive(Parser)]
 struct Opts {
+    #[clap(arg_enum)]
+    game: Game,
     json_file: PathBuf,
+}
+#[derive(Clone, ArgEnum)]
+enum Game {
+    Ongeki,
+    Maimai,
 }
 
 #[tokio::main]
@@ -38,7 +47,10 @@ async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let path = &opts.json_file;
 
-    run::<Maimai>(path).await
+    match opts.game {
+        Game::Maimai => run::<Maimai>(path).await,
+        Game::Ongeki => run::<Ongeki>(path).await,
+    }
 }
 
 async fn run<T>(path: &Path) -> anyhow::Result<()>
