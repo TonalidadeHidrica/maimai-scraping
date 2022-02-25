@@ -259,7 +259,7 @@ where
     anyhow::Error: From<<T as FromStr>::Err>,
     U: From<T>,
 {
-    Ok(s.replace(",", "").parse::<T>()?.into())
+    Ok(s.replace(',', "").parse::<T>()?.into())
 }
 
 fn parse_over_damage(s: &str) -> anyhow::Result<OverDamage> {
@@ -481,7 +481,7 @@ where
 fn parse_bell_count(element: ElementRef) -> anyhow::Result<(BellCount, BellCount)> {
     let text: String = element.text().collect();
     let (value, max) = text
-        .split_once("/")
+        .split_once('/')
         .with_context(|| format!("Unexpected bell count format: {:?}", text))?;
     let value = value
         .parse()
