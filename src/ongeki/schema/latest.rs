@@ -194,10 +194,16 @@ pub struct ComboResult {
     full_combo_kind: FullComboKind,
 }
 
-#[derive(
-    Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Display, Serialize, Deserialize,
-)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Serialize, Deserialize)]
 pub struct ComboCount(u32);
+impl Display for ComboCount {
+    fn fmt(&self, mut f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match f.write_formatted(&self.0, &Locale::en) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(std::fmt::Error),
+        }
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum FullComboKind {
@@ -234,10 +240,16 @@ pub struct JudgeResult {
     miss: JudgeCount,
 }
 
-#[derive(
-    Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Display, Serialize, Deserialize,
-)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Serialize, Deserialize)]
 pub struct JudgeCount(u32);
+impl Display for JudgeCount {
+    fn fmt(&self, mut f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match f.write_formatted(&self.0, &Locale::en) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(std::fmt::Error),
+        }
+    }
+}
 
 #[derive(
     Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Display, Serialize, Deserialize,

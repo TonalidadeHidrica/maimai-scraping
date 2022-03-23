@@ -448,12 +448,14 @@ fn parse_score_details(
         );
     }
 
-    let max_combo = parse_text(tds[0]).context("Failed to parse max combo")?;
+    let max_combo = parse_comma_separated_text(tds[0]).context("Failed to parse max combo")?;
     let judge_result = JudgeResult::builder()
-        .critical_break(parse_text(tds[1]).context("Failed to parse critical break")?)
-        .break_(parse_text(tds[2]).context("Failed to parse break")?)
-        .hit(parse_text(tds[3]).context("Failed to parse hit")?)
-        .miss(parse_text(tds[4]).context("Failed to parse miss")?)
+        .critical_break(
+            parse_comma_separated_text(tds[1]).context("Failed to parse critical break")?,
+        )
+        .break_(parse_comma_separated_text(tds[2]).context("Failed to parse break")?)
+        .hit(parse_comma_separated_text(tds[3]).context("Failed to parse hit")?)
+        .miss(parse_comma_separated_text(tds[4]).context("Failed to parse miss")?)
         .build();
     let bell_count = parse_bell_count(tds[5]).context("Failed to parse bell count")?;
     let damage = parse_text(tds[6]).context("Failed to parse damage")?;
@@ -476,6 +478,14 @@ where
     anyhow::Error: From<T::Err>,
 {
     Ok(element.text().collect::<String>().parse()?)
+}
+
+fn parse_comma_separated_text<T>(element: ElementRef) -> anyhow::Result<T>
+where
+    T: FromStr,
+    anyhow::Error: From<T::Err>,
+{
+    parse_comma_separated_integer(&element.text().collect::<String>())
 }
 
 fn parse_bell_count(element: ElementRef) -> anyhow::Result<(BellCount, BellCount)> {
