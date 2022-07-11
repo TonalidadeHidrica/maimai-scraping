@@ -26,6 +26,7 @@ pub fn reconstruct(record: &PlayRecord) -> Box<div<String>> {
             </div>
             {construct_playlog_event_name(record.mission_result())}
             {construct_place_name(record.played_at().place())}
+            {record.matching_result().as_ref().map(construct_matching_block)}
             {construct_record_link_block(record)}
             <div class="clearfix"></div>
             <hr class="gray_line"/>
@@ -36,11 +37,14 @@ pub fn reconstruct(record: &PlayRecord) -> Box<div<String>> {
 fn construct_first_div(record: &PlayRecord) -> Box<div<String>> {
     html!(
         <div class="m_10">
-            {construct_difficulty_img(record.score_metadata().difficulty())}
+            <img src={difficulty_img_src(record.score_metadata().difficulty())} />
             <span class="f_r f_12 h_10">{text!("{}",
                 NaiveDateTime::from(record.played_at().time()).format("%Y/%m/%d %H:%M")
             )}</span>
             <div class="m_5 l_h_10 break">
+                {record.matching_result().as_ref().map(|_| html!(
+                    <img src="https://ongeki-net.com/ongeki-mobile/img/icon_matching.png" class="f_r h_21" />
+                ))}
                 <img src="https://ongeki-net.com/ongeki-mobile/img/icon_event.png" class="f_r h_21" />
                 {text!("{}", record.song_metadata().name())}
             </div>
@@ -52,16 +56,15 @@ fn construct_first_div(record: &PlayRecord) -> Box<div<String>> {
     )
 }
 
-fn construct_difficulty_img(difficulty: ScoreDifficulty) -> Box<img<String>> {
+fn difficulty_img_src(difficulty: ScoreDifficulty) -> &'static str {
     use ScoreDifficulty::*;
-    let src = match difficulty {
+    match difficulty {
         Basic => "https://ongeki-net.com/ongeki-mobile/img/diff_basic.png",
         Advanced => "https://ongeki-net.com/ongeki-mobile/img/diff_advanced.png",
         Expert => "https://ongeki-net.com/ongeki-mobile/img/diff_expert.png",
         Master => "https://ongeki-net.com/ongeki-mobile/img/diff_master.png",
         Lunatic => "https://ongeki-net.com/ongeki-mobile/img/diff_lunatic.png",
-    };
-    html!(<img src={src} />)
+    }
 }
 
 fn construct_playlog_score_block(record: &PlayRecord) -> Box<div<String>> {
@@ -336,12 +339,43 @@ fn construct_place_name(record: &PlayPlace) -> Box<div<String>> {
     )
 }
 
-fn construct_record_link_block(record: &PlayRecord) -> Box<div<String>> {
-    let score_id = record.score_metadata().id().to_string();
-    let mut classes: SpacedSet<Class> = "basic_btn w_100 m_5 p_5 d_ib f_r t_c f_12 white"
-        .try_into()
-        .unwrap();
-    let additional = match record.score_metadata().difficulty() {
+fn construct_matching_block(matching_result: &MatchingResult) -> Box<div<String>> {
+    let other_players: &[_] = matching_result.other_players().as_ref();
+    html!(
+        <div id="matching" class="t_l m_10 f_0">
+            <img src="https://ongeki-net.com/ongeki-mobile/img/on.png" id="matchingCtrl" class="f_r" />
+            <img src="https://ongeki-net.com/ongeki-mobile/img/icon_matching.png" class="f_l h_17 m_10" />
+            <div class="m_10 f_13 l_h_10">"店内マッチング"</div>
+            <div class="clearfix black">
+                {other_players.iter().map(|o| {
+                    let classes = classes_with_difficulty_back("d_b border_block t_c p_3", o.difficulty());
+                    html!(
+                        <span class="d_ib col3 f_l f_15 l_h_12 p_5">
+                            <span class={classes}>
+                                <img src={difficulty_img_src(o.difficulty())} class="d_ib" />
+                                // TODO: in reality, it's div, not span
+                                <span class="border_block">{text!(o.user_name())}</span>
+                            </span>
+                        </span>
+                    )
+                })}
+                {(other_players.len()..3).map(|o| html!(
+                    <span class="d_ib col3 f_l f_0 p_5">
+                        <img src="https://ongeki-net.com/ongeki-mobile/img/matching_base.png" class="border_block" />
+                    </span>
+                ))}
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    )
+}
+
+fn classes_with_difficulty_back(
+    set: &'static str,
+    difficulty: ScoreDifficulty,
+) -> SpacedSet<Class> {
+    let mut classes: SpacedSet<Class> = set.try_into().unwrap();
+    let additional = match difficulty {
         ScoreDifficulty::Basic => "basic_score_back",
         ScoreDifficulty::Advanced => "advanced_score_back",
         ScoreDifficulty::Expert => "expert_score_back",
@@ -349,6 +383,15 @@ fn construct_record_link_block(record: &PlayRecord) -> Box<div<String>> {
         ScoreDifficulty::Lunatic => "lunatic_score_back",
     };
     classes.insert(additional.try_into().unwrap());
+    classes
+}
+
+fn construct_record_link_block(record: &PlayRecord) -> Box<div<String>> {
+    let score_id = record.score_metadata().id().to_string();
+    let classes = classes_with_difficulty_back(
+        "basic_btn w_100 m_5 p_5 d_ib f_r t_c f_12 white",
+        record.score_metadata().difficulty(),
+    );
     let diff_index = match record.score_metadata().difficulty() {
         ScoreDifficulty::Basic => 0,
         ScoreDifficulty::Advanced => 1,

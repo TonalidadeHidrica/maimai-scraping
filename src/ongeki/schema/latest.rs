@@ -340,13 +340,14 @@ pub struct MissionName(String);
 )]
 pub struct MissionScore(u32);
 
-#[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, CopyGetters, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
 pub struct MatchingResult {
     #[getset(get = "pub")]
     other_players: OtherPlayersList,
 }
 
-#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, AsRef, Serialize, Deserialize)]
+#[as_ref(forward)]
 pub struct OtherPlayersList(Vec<OtherPlayer>);
 
 impl TryFrom<Vec<OtherPlayer>> for OtherPlayersList {
@@ -358,9 +359,10 @@ impl TryFrom<Vec<OtherPlayer>> for OtherPlayersList {
         }
     }
 }
-
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, CopyGetters, Serialize, Deserialize)]
 pub struct OtherPlayer {
+    #[getset(get_copy = "pub")]
     difficulty: ScoreDifficulty,
+    #[getset(get = "pub")]
     user_name: String,
 }

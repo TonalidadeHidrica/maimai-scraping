@@ -44,11 +44,15 @@ fn to_show(element: ElementRef) -> impl Iterator<Item = (bool, &Node)> + '_ {
 fn same(a: &Node, b: &Node) -> anyhow::Result<()> {
     if let (Some(a), Some(b)) = (a.as_element(), b.as_element()) {
         if a.name() != b.name() {
-            bail!(
-                "Tag names are different: found {:?}, expected {:?}",
-                a.name(),
-                b.name()
-            );
+            // TODO: we reluctantly add an exception, because some htmls we want to compares has
+            // div inside span
+            if (a.name(), b.name()) != ("span", "div") {
+                bail!(
+                    "Tag names are different: found {:?}, expected {:?}",
+                    a.name(),
+                    b.name()
+                );
+            }
         }
         let (mut a, mut b) = (a.attrs().sorted(), b.attrs().sorted());
         for ab in (&mut a).zip_longest(&mut b) {
