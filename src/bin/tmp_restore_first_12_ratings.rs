@@ -18,9 +18,9 @@ fn main() -> anyhow::Result<()> {
     for record in old_record_lost {
         let rat = record.rating_result();
         println!(
-            "{}\t{:<12} {}({:+})\t{}",
+            "{}\t{:<12?} {}({:+})\t{}",
             record.played_at().time(),
-            format!("{:?}", record.score_metadata().generation()),
+            record.score_metadata().generation(),
             rat.rating(),
             rat.delta(),
             rat.rating().get() * 8 / 5,

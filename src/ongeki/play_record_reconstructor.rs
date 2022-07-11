@@ -37,7 +37,7 @@ pub fn reconstruct(record: &PlayRecord) -> Box<div<String>> {
 fn construct_first_div(record: &PlayRecord) -> Box<div<String>> {
     html!(
         <div class="m_10">
-            <img src={difficulty_img_src(record.score_metadata().difficulty())} />
+            <img src=difficulty_img_src(record.score_metadata().difficulty()) />
             <span class="f_r f_12 h_10">{text!("{}",
                 NaiveDateTime::from(record.played_at().time()).format("%Y/%m/%d %H:%M")
             )}</span>
@@ -48,7 +48,7 @@ fn construct_first_div(record: &PlayRecord) -> Box<div<String>> {
                 <img src="https://ongeki-net.com/ongeki-mobile/img/icon_event.png" class="f_r h_21" />
                 {text!("{}", record.song_metadata().name())}
             </div>
-            <img src={record.song_metadata().cover_art().to_string()} class="m_5 f_l"/>
+            <img src=(record.song_metadata().cover_art().to_string()) class="m_5 f_l"/>
             <div class="f_r">
                 {construct_playlog_score_block(record)}
             </div>
@@ -141,7 +141,7 @@ fn construct_battle_rank(value: BattleRank) -> Box<img<String>> {
         // => UltimatePlatinum,
         // => UltimateRainbow,
     };
-    html!(<img src={src} class="f_r"/>)
+    html!(<img src=src class="f_r"/>)
 }
 
 fn construct_technical_rank(value: TechnicalRank) -> Box<img<String>> {
@@ -160,7 +160,7 @@ fn construct_technical_rank(value: TechnicalRank) -> Box<img<String>> {
         C => "https://ongeki-net.com/ongeki-mobile/img/score_tr_c.png",
         D => "https://ongeki-net.com/ongeki-mobile/img/score_tr_d.png",
     };
-    html!(<img src={src} class="f_r" />)
+    html!(<img src=src class="f_r" />)
 }
 
 fn construct_win_or_lose(value: WinOrLose) -> Box<img<String>> {
@@ -170,7 +170,7 @@ fn construct_win_or_lose(value: WinOrLose) -> Box<img<String>> {
         Draw => "https://ongeki-net.com/ongeki-mobile/img/score_detail_draw.png",
         Lose => "https://ongeki-net.com/ongeki-mobile/img/score_detail_lose.png",
     };
-    html!(<img src={src} />)
+    html!(<img src=src />)
 }
 
 fn construct_full_bell(value: FullBellKind) -> Box<img<String>> {
@@ -179,7 +179,7 @@ fn construct_full_bell(value: FullBellKind) -> Box<img<String>> {
         Nothing => "https://ongeki-net.com/ongeki-mobile/img/score_detail_fb_base.png",
         FullBell => "https://ongeki-net.com/ongeki-mobile/img/score_detail_fb.png",
     };
-    html!(<img src={src} />)
+    html!(<img src=src />)
 }
 
 fn construct_full_combo(value: FullComboKind) -> Box<img<String>> {
@@ -189,7 +189,7 @@ fn construct_full_combo(value: FullComboKind) -> Box<img<String>> {
         FullCombo => "https://ongeki-net.com/ongeki-mobile/img/score_detail_fc.png",
         AllBreak => "https://ongeki-net.com/ongeki-mobile/img/score_detail_ab.png",
     };
-    html!(<img src={src} />)
+    html!(<img src=src />)
 }
 
 fn construct_vs_container(participants: &BattleParticipants) -> Box<div<String>> {
@@ -217,7 +217,7 @@ fn construct_card_icon(color: BattleOpponentColor) -> Box<img<String>> {
         Leaf => "https://ongeki-net.com/ongeki-mobile/img/card_icon_leaf.png",
         Aqua => "https://ongeki-net.com/ongeki-mobile/img/card_icon_aqua.png",
     };
-    html!(<img src={src} class="h_16 v_m"/>)
+    html!(<img src=src class="h_16 v_m"/>)
 }
 
 fn construct_enemy_icon(color: BattleOpponentColor) -> Box<img<String>> {
@@ -227,7 +227,7 @@ fn construct_enemy_icon(color: BattleOpponentColor) -> Box<img<String>> {
         Leaf => "https://ongeki-net.com/ongeki-mobile/img/enemy_icon_mini_leaf.png",
         Aqua => "https://ongeki-net.com/ongeki-mobile/img/enemy_icon_mini_aqua.png",
     };
-    html!(<img src={src} class=" v_m"/>)
+    html!(<img src=src class=" v_m"/>)
 }
 
 fn construct_card_block(card: &DeckCard, is_first: bool) -> Box<div<String>> {
@@ -236,12 +236,12 @@ fn construct_card_block(card: &DeckCard, is_first: bool) -> Box<div<String>> {
         classes.insert("f_0".try_into().unwrap());
     }
     html!(
-        <div class={classes}>
+        <div class=classes>
             <div class="card_info_block f_11 gray">
                 <span class="main_color">{text!("Lv.{}", card.level())}</span>
                 "　攻撃力"<span class="sub_color">{text!("{}", card.power())}</span>
             </div>
-            <img src={card.card_image().to_string()} class="w_127" />
+            <img src=(card.card_image().to_string()) class="w_127" />
         </div>
     )
 }
@@ -351,15 +351,15 @@ fn construct_matching_block(matching_result: &MatchingResult) -> Box<div<String>
                     let classes = classes_with_difficulty_back("d_b border_block t_c p_3", o.difficulty());
                     html!(
                         <span class="d_ib col3 f_l f_15 l_h_12 p_5">
-                            <span class={classes}>
-                                <img src={difficulty_img_src(o.difficulty())} class="d_ib" />
+                            <span class=classes>
+                                <img src=difficulty_img_src(o.difficulty()) class="d_ib" />
                                 // TODO: in reality, it's div, not span
                                 <span class="border_block">{text!(o.user_name())}</span>
                             </span>
                         </span>
                     )
                 })}
-                {(other_players.len()..3).map(|o| html!(
+                {(other_players.len()..3).map(|_| html!(
                     <span class="d_ib col3 f_l f_0 p_5">
                         <img src="https://ongeki-net.com/ongeki-mobile/img/matching_base.png" class="border_block" />
                     </span>
@@ -404,14 +404,14 @@ fn construct_record_link_block(record: &PlayRecord) -> Box<div<String>> {
             <div class="f_r m_5">
                 <form action="https://ongeki-net.com/ongeki-mobile/record/musicDetail/" method="get" accept-charset=["utf-8"]>
                     <img id="myRecord" src="https://ongeki-net.com/ongeki-mobile/img/btn_myrecord.png" class="basic_btn h_35" />
-                    <input type="hidden" name="idx" value={score_id.clone()} />
+                    <input type="hidden" name="idx" value=score_id.clone() />
                 </form>
             </div>
-            <div class={classes} onclick="linkRanking(this)">
+            <div class=classes onclick="linkRanking(this)">
                 <form action="https://ongeki-net.com/ongeki-mobile/ranking/musicRankingDetail/" method="get" accept-charset=["utf-8"]>
                     "ランキング"
-                    <input type="hidden" name="diff" value={diff_index.to_string()} />
-                    <input type="hidden" name="idx" value={score_id} />
+                    <input type="hidden" name="diff" value=diff_index.to_string() />
+                    <input type="hidden" name="idx" value=score_id />
                 </form>
             </div>
         </div>
