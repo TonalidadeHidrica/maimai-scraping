@@ -24,7 +24,7 @@ pretty_env_logger = "0.4.0"
 derive-getters = "0.2.0"
 itertools = "0.10.0"
 fs-err = "2.6.0"
-deranged = { git = "https://github.com/TonalidadeHidrica/deranged", branch = "try-from-unintentional-recurse", features = ["serde"] }
+deranged = { version = "0.2.1", features = ["serde"] }
 getset = "0.1.2"
 arrayvec = "0.7.2"
 typed-html = { git = "https://github.com/bodil/typed-html", branch = "master" }
