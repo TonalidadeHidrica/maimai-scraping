@@ -549,7 +549,30 @@ fn parse_place_name(div: ElementRef) -> anyhow::Result<PlayPlace> {
 }
 
 fn parse_matching_div(matching_div: ElementRef) -> anyhow::Result<OtherPlayersList> {
-    todo!()
+    matching_div
+        .select(selector!("span.border_block"))
+        .map(|e| {
+            let difficulty = parse_difficulty_img(
+                e.select(selector!("img"))
+                    .next()
+                    .context("Matching difficulty img not found")?,
+            )?;
+            let user_name = e
+                .select(selector!("div"))
+                .next()
+                .context("Matching screen name div not found")?
+                .text()
+                .collect();
+            Ok(OtherPlayer::builder()
+                .difficulty(difficulty)
+                .user_name(user_name)
+                .build())
+        })
+        .collect::<anyhow::Result<Vec<_>>>()
+        .and_then(|e| {
+            e.try_into()
+                .map_err(|e| anyhow!("Other players of unexpected length: {:?}", e))
+        })
 }
 
 fn parse_score_id(div: ElementRef) -> anyhow::Result<ScoreId> {
