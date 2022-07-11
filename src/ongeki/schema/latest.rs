@@ -24,6 +24,7 @@ pub struct PlayRecord {
     achievement_per_note_kind: AchievementPerNoteKindResult,
     battle_participants: BattleParticipants,
     mission_result: MissionResult,
+    matching_result: Option<MatchingResult>,
 }
 
 #[derive(
@@ -338,3 +339,28 @@ pub struct MissionName(String);
     Clone, Copy, PartialEq, Eq, Debug, From, FromStr, Into, Display, Serialize, Deserialize,
 )]
 pub struct MissionScore(u32);
+
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, CopyGetters, Serialize, Deserialize)]
+pub struct MatchingResult {
+    #[getset(get = "pub")]
+    other_players: OtherPlayersList,
+}
+
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct OtherPlayersList(Vec<OtherPlayer>);
+
+impl TryFrom<Vec<OtherPlayer>> for OtherPlayersList {
+    type Error = Vec<OtherPlayer>;
+    fn try_from(value: Vec<OtherPlayer>) -> Result<Self, Self::Error> {
+        match value.len() {
+            1..=3 => Ok(Self(value)),
+            _ => Err(value),
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, CopyGetters, Serialize, Deserialize)]
+pub struct OtherPlayer {
+    difficulty: ScoreDifficulty,
+    user_name: String,
+}
