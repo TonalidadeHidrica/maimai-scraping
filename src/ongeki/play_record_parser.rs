@@ -71,12 +71,13 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
     let play_place = parse_place_name(root_div_children.next().context("Place name not found")?)
         .context("Failed to parse place name name block")?;
 
-    let score_id = parse_score_id(
-        root_div_children
-            .next()
-            .context("Record link div not found")?,
-    )
-    .context("Failed to parse score id")?;
+    let other_players_list = html
+        .select(selector!("#matching"))
+        .next()
+        .map(parse_matching_div)
+        .transpose()?;
+
+    let score_id = parse_score_id(root_div).context("Failed to parse score id")?;
 
     let played_at = PlayedAt::builder()
         .idx(idx)
@@ -96,6 +97,8 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
         .max(bell_count.1)
         .full_bell_kind(full_bell_kind)
         .build();
+    let matching_result =
+        other_players_list.map(|o| MatchingResult::builder().other_players(o).build());
 
     Ok(PlayRecord::builder()
         .played_at(played_at)
@@ -110,6 +113,7 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
         .achievement_per_note_kind(per_note)
         .battle_participants(battle_participants)
         .mission_result(mission_result)
+        .matching_result(matching_result)
         .build())
 }
 
@@ -542,6 +546,10 @@ fn parse_place_name(div: ElementRef) -> anyhow::Result<PlayPlace> {
         .text()
         .collect::<String>()
         .into())
+}
+
+fn parse_matching_div(matching_div: ElementRef) -> anyhow::Result<OtherPlayersList> {
+    todo!()
 }
 
 fn parse_score_id(div: ElementRef) -> anyhow::Result<ScoreId> {
