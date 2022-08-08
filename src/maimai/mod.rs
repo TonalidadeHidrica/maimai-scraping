@@ -55,7 +55,7 @@ impl SegaTrait for Maimai {
     }
 
     const CREDENTIALS_PATH: &'static str = "./ignore/credentials_maimai.json";
-    const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_ongeki.json";
+    const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_maimai.json";
 }
 
 impl PlayRecordTrait for PlayRecord {
