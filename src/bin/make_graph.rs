@@ -11,7 +11,10 @@ use maimai_scraping::maimai::schema::{
     latest::{PlayRecord, ScoreDifficulty},
     ver_20210316_2338::AchievementValue,
 };
-use svg::{node::element::Rectangle, Document};
+use svg::{
+    node::element::{Circle, Rectangle},
+    Document,
+};
 
 #[derive(Parser)]
 struct Opts {
@@ -38,9 +41,9 @@ fn main() -> anyhow::Result<()> {
     let mut document = Document::new().set("viewBox", (0, 0, w, h));
     let margin = 30.0;
     let x_range = margin..w - margin;
-    let x = |i: usize| map_float(i as f64, -1.0..records.len() as _, x_range.clone());
+    let x = |i: usize| map_float(i as f64, -1.0..filtered.len() as _, x_range.clone());
     let y_range = h - margin..margin;
-    let y = |y: AchievementValue| map_float(y.get() as f64, 90.0..101.0, y_range.clone());
+    let y = |y: AchievementValue| map_float(y.get() as f64 / 1e4, 80.0..101.0, y_range.clone());
     document = document.add(
         Rectangle::new()
             .set("x", x_range.start)
@@ -50,6 +53,17 @@ fn main() -> anyhow::Result<()> {
             .set("stroke", "black")
             .set("fill", "none"),
     );
+
+    for (i, record) in filtered.iter().enumerate() {
+        document = document.add(
+            Circle::new()
+                .set("cx", x(i))
+                .set("cy", y(*record.achievement_result().value()))
+                .set("r", 3.0)
+                .set("fill", "blue"),
+        )
+    }
+
     svg::write(BufWriter::new(File::create(&opts.output_file)?), &document)?;
 
     Ok(())
