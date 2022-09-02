@@ -909,6 +909,7 @@ dependencies = [
  "scraper",
  "serde",
  "serde_json",
+ "svg",
  "thiserror",
  "tokio",
  "typed-builder",
@@ -1776,6 +1777,12 @@ dependencies = [
  "rustversion",
  "syn",
 ]
+
+[[package]]
+name = "svg"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e72d8b19ab05827afefcca66bf47040c1e66a0901eb814784c77d4ec118bd309"
 
 [[package]]
 name = "syn"

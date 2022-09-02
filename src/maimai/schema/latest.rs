@@ -1,7 +1,9 @@
+use anyhow::bail;
 use chrono::naive::NaiveDateTime;
 use derive_getters::Getters;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use std::str::FromStr;
 use typed_builder::TypedBuilder;
 use url::Url;
 
@@ -84,6 +86,21 @@ pub enum ScoreDifficulty {
     Expert,
     Master,
     ReMaster,
+}
+
+impl FromStr for ScoreDifficulty {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use ScoreDifficulty::*;
+        Ok(match s.chars().next() {
+            Some('b' | 'B') => Basic,
+            Some('a' | 'A') => Advanced,
+            Some('e' | 'E') => Expert,
+            Some('m' | 'M') => Master,
+            Some('r' | 'R') => ReMaster,
+            _ => bail!("Invalid score difficulty: {:?}", s),
+        })
+    }
 }
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
