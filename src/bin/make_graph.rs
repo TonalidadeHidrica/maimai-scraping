@@ -13,7 +13,7 @@ use maimai_scraping::maimai::schema::{
     ver_20210316_2338::AchievementValue,
 };
 use svg::{
-    node::element::{Circle, Line, Rectangle},
+    node::element::{Circle, Line, Rectangle, Text},
     Document,
 };
 
@@ -98,6 +98,27 @@ fn main() -> anyhow::Result<()> {
                     .set("stroke-width", 0.5),
             )
         }
+    }
+
+    for (date, chunks) in &filtered
+        .iter()
+        .enumerate()
+        .group_by(|x| x.1.played_at().time().date())
+    {
+        let mut count = 0;
+        let mut sum = 0.0;
+        for (i, _) in chunks {
+            count += 1;
+            sum += x(i);
+        }
+        let x = sum / count as f64;
+        document = document.add(
+            Text::new()
+                .add(svg::node::Text::new(date.to_string()))
+                .set("x", x)
+                .set("y", y_range.start)
+                .set("font-size", 15),
+        );
     }
 
     svg::write(BufWriter::new(File::create(&opts.output_file)?), &document)?;
