@@ -1,4 +1,5 @@
 use std::{
+    convert::TryInto,
     io::{BufReader, BufWriter},
     ops::Range,
     path::PathBuf,
@@ -12,7 +13,7 @@ use maimai_scraping::maimai::schema::{
     ver_20210316_2338::AchievementValue,
 };
 use svg::{
-    node::element::{Circle, Rectangle},
+    node::element::{Circle, Line, Rectangle},
     Document,
 };
 
@@ -43,7 +44,7 @@ fn main() -> anyhow::Result<()> {
     let x_range = margin..w - margin;
     let x = |i: usize| map_float(i as f64, -1.0..filtered.len() as _, x_range.clone());
     let y_range = h - margin..margin;
-    let y = |y: AchievementValue| map_float(y.get() as f64 / 1e4, 80.0..101.0, y_range.clone());
+    let y = |y: AchievementValue| map_float(y.get() as f64 / 1e4, 75.0..101.0, y_range.clone());
     document = document.add(
         Rectangle::new()
             .set("x", x_range.start)
@@ -62,6 +63,41 @@ fn main() -> anyhow::Result<()> {
                 .set("r", 3.0)
                 .set("fill", "blue"),
         )
+    }
+
+    for achi in (75_0000..=101_0000).step_by(1_0000) {
+        let y = y(achi.try_into().unwrap());
+        let color = if achi == 97_0000 {
+            "#aa0000"
+        } else if achi % 5_0000 == 0 {
+            "#888"
+        } else {
+            "#bbb"
+        };
+        document = document.add(
+            Line::new()
+                .set("x1", x_range.start)
+                .set("x2", x_range.end)
+                .set("y1", y)
+                .set("y2", y)
+                .set("stroke", color)
+                .set("stroke-width", 0.5),
+        )
+    }
+
+    for ((i, record_i), (j, record_j)) in filtered.iter().enumerate().tuple_windows() {
+        if record_i.played_at().time().date() != record_j.played_at().time().date() {
+            let x = (x(i) + x(j)) / 2.;
+            document = document.add(
+                Line::new()
+                    .set("y1", y_range.start)
+                    .set("y2", y_range.end)
+                    .set("x1", x)
+                    .set("x2", x)
+                    .set("stroke", "#bbb")
+                    .set("stroke-width", 0.5),
+            )
+        }
     }
 
     svg::write(BufWriter::new(File::create(&opts.output_file)?), &document)?;
