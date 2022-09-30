@@ -115,9 +115,12 @@ fn main() -> anyhow::Result<()> {
         document = document.add(
             Text::new()
                 .add(svg::node::Text::new(date.to_string()))
-                .set("x", x)
-                .set("y", y_range.start)
-                .set("font-size", 15),
+                .set("font-size", 10)
+                .set("dominant-baseline", "central")
+                .set(
+                    "transform",
+                    format!("translate({}, {}) rotate(-90)", x, y_range.start),
+                ),
         );
     }
 
