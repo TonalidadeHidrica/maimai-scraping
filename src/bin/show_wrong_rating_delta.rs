@@ -12,7 +12,7 @@ struct Opts {
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let records: Vec<PlayRecord> =
-        serde_json::from_reader(BufReader::new(File::open(&opts.input_file)?))?;
+        serde_json::from_reader(BufReader::new(File::open(opts.input_file)?))?;
 
     for (old, new) in once(None).chain(records.iter().map(Some)).zip(&records) {
         let bef = old.map_or(0, |x| x.rating_result().rating().get() as i16);

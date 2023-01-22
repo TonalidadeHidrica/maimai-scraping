@@ -13,7 +13,7 @@ fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
 
     let records: Vec<PlayRecord> =
-        serde_json::from_reader(BufReader::new(File::open(&opts.input_file)?))?;
+        serde_json::from_reader(BufReader::new(File::open(opts.input_file)?))?;
     for record in records {
         let achievement = record.achievement_result();
         let rating = record.rating_result();

@@ -16,7 +16,7 @@ struct Opts {
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let records: Vec<PlayRecord> =
-        serde_json::from_reader(BufReader::new(File::open(&opts.input_file)?))?;
+        serde_json::from_reader(BufReader::new(File::open(opts.input_file)?))?;
 
     for (i, record) in records.iter().enumerate() {
         let &delta = record.rating_result().delta();

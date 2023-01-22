@@ -12,7 +12,7 @@ struct Opts {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let html = Html::parse_document(&read_to_string(&opts.input_file)?);
+    let html = Html::parse_document(&read_to_string(opts.input_file)?);
     let result = ongeki::play_record_parser::parse(&html, Idx::try_from(0)?)?;
     dbg!(&result);
     check_no_loss(&html, &result)?;

@@ -15,7 +15,7 @@ struct Opts {
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let html = {
-        let mut file = BufReader::new(File::open(&opts.input_file)?);
+        let mut file = BufReader::new(File::open(opts.input_file)?);
         let mut html = String::new();
         file.read_to_string(&mut html)?;
         Html::parse_document(&html)
