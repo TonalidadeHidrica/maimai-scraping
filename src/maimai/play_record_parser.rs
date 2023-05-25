@@ -488,6 +488,21 @@ fn parse_achievement_rank(achievement_rank: ElementRef) -> anyhow::Result<Achiev
         "https://maimaidx.jp/maimai-mobile/img/playlog/b.png?ver=1.30" => B,
         "https://maimaidx.jp/maimai-mobile/img/playlog/c.png?ver=1.30" => C,
         "https://maimaidx.jp/maimai-mobile/img/playlog/d.png?ver=1.30" => D,
+        // Ver 1.35
+        "https://maimaidx.jp/maimai-mobile/img/playlog/sssplus.png?ver=1.35" => SSSPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/sss.png?ver=1.35" => SSS,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/ssplus.png?ver=1.35" => SSPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/ss.png?ver=1.35" => SS,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/splus.png?ver=1.35" => SPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/s.png?ver=1.35" => S,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/aaa.png?ver=1.35" => AAA,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/aa.png?ver=1.35" => AA,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/a.png?ver=1.35" => A,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/bbb.png?ver=1.35" => BBB,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/bb.png?ver=1.35" => BB,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/b.png?ver=1.35" => B,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/c.png?ver=1.35" => C,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/d.png?ver=1.35" => D,
         src => return Err(anyhow!("Unknown url: {}", src)),
     };
     Ok(res)
@@ -624,6 +639,12 @@ fn parse_full_combo_img(full_combo_img: ElementRef) -> anyhow::Result<FullComboK
         "https://maimaidx.jp/maimai-mobile/img/playlog/fcplus.png?ver=1.30" => FullComboPlus,
         "https://maimaidx.jp/maimai-mobile/img/playlog/ap.png?ver=1.30" => AllPerfect,
         "https://maimaidx.jp/maimai-mobile/img/playlog/applus.png?ver=1.30" => AllPerfectPlus,
+        // Ver 1.35
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fc_dummy.png?ver=1.35" => Nothing,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fc.png?ver=1.35" => FullCombo,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fcplus.png?ver=1.35" => FullComboPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/ap.png?ver=1.35" => AllPerfect,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/applus.png?ver=1.35" => AllPerfectPlus,
         src => return Err(anyhow!("Unknown src for full combo img: {}", src)),
     };
     Ok(res)
@@ -666,6 +687,12 @@ fn parse_full_sync_img(full_sync_img: ElementRef) -> anyhow::Result<FullSyncKind
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsplus.png?ver=1.30" => FullSyncPlus,
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsd.png?ver=1.30" => FullSyncDx,
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsdplus.png?ver=1.30" => FullSyncDxPlus,
+        // Ver 1.35
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fs_dummy.png?ver=1.35" => Nothing,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fs.png?ver=1.35" => FullSync,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fsplus.png?ver=1.35" => FullSyncPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fsd.png?ver=1.35" => FullSyncDx,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fsdplus.png?ver=1.35" => FullSyncDxPlus,
         src => return Err(anyhow!("Unknown src for full sync img: {}", src)),
     };
     Ok(res)
@@ -1040,6 +1067,18 @@ fn parse_rating_color(img: ElementRef) -> anyhow::Result<RatingBorderColor> {
         "https://maimaidx.jp/maimai-mobile/img/rating_base_gold.png?ver=1.30" => Gold,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_platinum.png?ver=1.30" => Platinum,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow.png?ver=1.30" => Rainbow,
+        // Ver 1.35
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_normal.png?ver=1.35" => Normal,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_blue.png?ver=1.35" => Blue,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_green.png?ver=1.35" => Green,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_orange.png?ver=1.35" => Orange,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_red.png?ver=1.35" => Red,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_purple.png?ver=1.35" => Purple,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_bronze.png?ver=1.35" => Bronze,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_silver.png?ver=1.35" => Silver,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_gold.png?ver=1.35" => Gold,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_platinum.png?ver=1.35" => Platinum,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow.png?ver=1.35" => Rainbow,
         src => return Err(anyhow!("Unexpected border color: {}", src)),
     };
     Ok(res)
