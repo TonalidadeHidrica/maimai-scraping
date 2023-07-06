@@ -27,9 +27,9 @@ reqwest = { version = "0.11.7", features = ["cookies"] }
 scraper = "0.13.0"
 serde = { version = "1.0.123", features = ["derive"] }
 serde_json = "1.0.61"
-svg = "0.10.0"
+svg = "0.13.1"
 thiserror = "1.0.24"
 tokio = { version = "1.14.0", features = ["rt", "rt-multi-thread", "macros"] }
 typed-builder = "0.10.0"
-typed-html = { git = "https://github.com/bodil/typed-html", branch = "master" }
+typed-html = { git = "https://github.com/bodil/typed-html.git", branch = "master" }
 url = { version = "2.2.1", features = ["serde"] }
