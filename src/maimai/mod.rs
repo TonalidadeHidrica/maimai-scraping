@@ -1,6 +1,7 @@
 pub mod play_record_parser;
 pub mod rating;
 pub mod schema;
+pub mod song_score_parser;
 
 use chrono::NaiveDateTime;
 use scraper::{Html, Selector};

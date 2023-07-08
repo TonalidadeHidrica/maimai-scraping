@@ -384,7 +384,7 @@ fn parse_playlog_result_block(
     ))
 }
 
-fn parse_achievement_txt(achievement_txt: ElementRef) -> anyhow::Result<AchievementValue> {
+pub fn parse_achievement_txt(achievement_txt: ElementRef) -> anyhow::Result<AchievementValue> {
     let text = achievement_txt.text().collect::<String>();
     let captures = regex!(r"^([0-9]{1,3})\.([0-9]{4})%$")
         .captures(&text)
@@ -572,10 +572,10 @@ fn parse_playlog_result_innerblock(
     ))
 }
 
-fn parse_deluxscore(deluxe_score_div: ElementRef) -> anyhow::Result<ValueWithMax<u32>> {
+pub fn parse_deluxscore(deluxe_score_div: ElementRef) -> anyhow::Result<ValueWithMax<u32>> {
     let text = deluxe_score_div.text().collect::<String>();
     let captures = regex!(r"^([0-9,]+) / ([0-9,]+)$")
-        .captures(&text)
+        .captures(text.trim())
         .ok_or_else(|| anyhow!("Invalid deluxscore format: {:?}", text))?;
     let a = parse_integer_with_camma(captures.get(1).expect("Group 1 exists").as_str())?;
     let b = parse_integer_with_camma(captures.get(2).expect("Group 2 exists").as_str())?;
@@ -655,7 +655,7 @@ fn parse_full_sync_img(full_sync_img: ElementRef) -> anyhow::Result<FullSyncKind
     let res = match full_sync_img
         .value()
         .attr("src")
-        .ok_or_else(|| anyhow!("No src was found for full combo image"))?
+        .ok_or_else(|| anyhow!("No src was found for full sync image"))?
     {
         // Ver 1.15
         "https://maimaidx.jp/maimai-mobile/img/playlog/fs_dummy.png?ver=1.15" => Nothing,

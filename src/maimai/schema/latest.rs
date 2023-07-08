@@ -73,13 +73,13 @@ pub struct ScoreMetadata {
     difficulty: ScoreDifficulty,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum ScoreGeneration {
     Standard,
     Deluxe,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum ScoreDifficulty {
     Basic,
     Advanced,
