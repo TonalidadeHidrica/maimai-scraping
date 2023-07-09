@@ -27,7 +27,11 @@ fn main() -> anyhow::Result<()> {
             ScoreGeneration::Standard => "S",
             ScoreGeneration::Deluxe => "D",
         };
-        println!("{first_date} {:3} {song_name} {:?}({gen})", records.len(), score_meta.difficulty());
+        println!(
+            "{first_date} {:3} {song_name} {:?}({gen})",
+            records.len(),
+            score_meta.difficulty()
+        );
     }
 
     Ok(())

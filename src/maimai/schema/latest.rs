@@ -34,7 +34,16 @@ pub struct PlayedAt {
 
 // Default is used for Idx(0), which is valid
 #[derive(
-    Clone, Copy, Default, PartialEq, Eq, Debug, derive_more::Display, Serialize, Deserialize,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Debug,
+    derive_more::Display,
+    derive_more::Into,
+    Serialize,
+    Deserialize,
 )]
 pub struct Idx(u8);
 
