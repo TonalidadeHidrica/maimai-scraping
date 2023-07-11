@@ -31,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
     let (mut client, index) = SegaClient::<Maimai>::new().await?;
 
     let last_saved = rating_targets.last_key_value().map(|x| *x.0);
-    let last_played = index.last().context("There is no play yet.")?.0;
+    let last_played = index.first().context("There is no play yet.")?.0;
     if let Some(date) = last_saved {
         println!("Rating target saved at: {date}");
     } else {
