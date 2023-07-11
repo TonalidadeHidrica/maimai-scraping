@@ -1,7 +1,8 @@
 #![allow(clippy::inconsistent_digit_grouping)]
 #![allow(clippy::zero_prefixed_literal)]
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
+use anyhow::bail;
 use serde::{Deserialize, Serialize};
 
 use super::schema::latest::{AchievementValue, RatingValue};
@@ -84,4 +85,25 @@ pub fn single_song_rating(
     let achievement_value_clamped = achievement_value.get().min(100_5000);
     let prod = score_const.0 as u64 * achievement_value_clamped as u64 * rank_coef.0;
     RatingValue::from((prod / 10 / 100_0000 / 10) as u16)
+}
+
+#[allow(unused)]
+#[derive(Debug)]
+pub struct ScoreLevel {
+    level: u8,
+    plus: bool,
+}
+
+impl FromStr for ScoreLevel {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        let stripped = s.strip_suffix('+');
+        let level = stripped.unwrap_or(s).parse()?;
+        let plus = stripped.is_some();
+        match (level, plus) {
+            (16.., _) | (15, true) => bail!("Level out of range: {s:?}"),
+            _ => Ok(ScoreLevel { level, plus }),
+        }
+    }
 }

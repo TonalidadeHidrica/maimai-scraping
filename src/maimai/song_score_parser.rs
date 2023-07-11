@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use anyhow::{bail, Context};
 use itertools::Itertools;
 use scraper::ElementRef;
@@ -9,9 +7,12 @@ use crate::maimai::{
     schema::latest::ScoreGeneration,
 };
 
-use super::schema::latest::{
-    AchievementRank, AchievementValue, FullComboKind, FullSyncKind, ScoreDifficulty, ScoreMetadata,
-    ValueWithMax,
+use super::{
+    rating::ScoreLevel,
+    schema::latest::{
+        AchievementRank, AchievementValue, FullComboKind, FullSyncKind, ScoreDifficulty,
+        ScoreMetadata, ValueWithMax,
+    },
 };
 
 pub fn parse(html: &scraper::Html, difficulty: ScoreDifficulty) -> anyhow::Result<Vec<ScoreEntry>> {
@@ -199,12 +200,6 @@ pub struct ScoreEntry {
 }
 #[allow(unused)]
 #[derive(Debug)]
-pub struct ScoreLevel {
-    level: u8,
-    plus: bool,
-}
-#[allow(unused)]
-#[derive(Debug)]
 pub struct ScoreResult {
     achievement: AchievementValue,
     rank: AchievementRank,
@@ -215,17 +210,3 @@ pub struct ScoreResult {
 #[allow(unused)]
 #[derive(Debug)]
 pub struct ScoreIdx(String);
-
-impl FromStr for ScoreLevel {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> anyhow::Result<Self> {
-        let stripped = s.strip_suffix('+');
-        let level = stripped.unwrap_or(s).parse()?;
-        let plus = stripped.is_some();
-        match (level, plus) {
-            (16.., _) | (15, true) => bail!("Level out of range: {s:?}"),
-            _ => Ok(ScoreLevel { level, plus }),
-        }
-    }
-}

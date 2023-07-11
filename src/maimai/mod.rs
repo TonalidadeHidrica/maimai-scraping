@@ -1,5 +1,6 @@
 pub mod play_record_parser;
 pub mod rating;
+pub mod rating_target_parser;
 pub mod schema;
 pub mod song_score_parser;
 
