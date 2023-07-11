@@ -1,6 +1,7 @@
 use anyhow::{bail, Context};
 use itertools::Itertools;
 use scraper::ElementRef;
+use serde::{Deserialize, Serialize};
 
 use crate::maimai::{
     play_record_parser::{parse_achievement_txt, parse_deluxscore},
@@ -28,22 +29,10 @@ fn parse_entry_form(
     difficulty: ScoreDifficulty,
 ) -> anyhow::Result<ScoreEntry> {
     let metadata = parse_score_metadata(entry_form, difficulty)?;
-
     let level = find_and_parse_score_level(entry_form)?;
     let song_name = find_and_parse_song_name(entry_form)?;
-
     let result = parse_score_result(entry_form)?;
-
-    let idx = ScoreIdx(
-        entry_form
-            .select(selector!("input"))
-            .next()
-            .context("Idx input not found")?
-            .value()
-            .attr("value")
-            .context("Idx input does not have `value` attribute")?
-            .to_owned(),
-    );
+    let idx = find_and_parse_score_idx(entry_form)?;
     Ok(ScoreEntry {
         metadata,
         song_name,
@@ -54,12 +43,12 @@ fn parse_entry_form(
 }
 
 pub fn find_and_parse_score_level(e: ElementRef) -> anyhow::Result<ScoreLevel> {
-    Ok(e.select(selector!("div.music_lv_block"))
+    e.select(selector!("div.music_lv_block"))
         .next()
         .context("Song name not found")?
         .text()
         .collect::<String>()
-        .parse()?)
+        .parse()
 }
 pub fn find_and_parse_song_name(e: ElementRef) -> anyhow::Result<String> {
     Ok(e.select(selector!("div.music_name_block"))
@@ -197,6 +186,18 @@ fn parse_full_sync_img(full_sync_img: ElementRef) -> anyhow::Result<FullSyncKind
     Ok(res)
 }
 
+pub fn find_and_parse_score_idx(e: ElementRef) -> anyhow::Result<ScoreIdx> {
+    Ok(ScoreIdx(
+        e.select(selector!("input"))
+            .next()
+            .context("Idx input not found")?
+            .value()
+            .attr("value")
+            .context("Idx input does not have `value` attribute")?
+            .to_owned(),
+    ))
+}
+
 #[allow(unused)]
 #[derive(Debug)]
 pub struct ScoreEntry {
@@ -215,6 +216,5 @@ pub struct ScoreResult {
     full_combo_kind: FullComboKind,
     full_sync_kind: FullSyncKind,
 }
-#[allow(unused)]
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ScoreIdx(String);

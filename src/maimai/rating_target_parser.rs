@@ -13,6 +13,7 @@ use crate::maimai::{
 use super::{
     rating::ScoreLevel,
     schema::latest::{AchievementValue, ScoreMetadata},
+    song_score_parser::{find_and_parse_score_idx, ScoreIdx},
 };
 
 pub fn parse(html: &scraper::Html) -> anyhow::Result<RatingTargetList> {
@@ -62,12 +63,14 @@ pub fn parse_entry(div: ElementRef) -> anyhow::Result<RatingTargetEntry> {
     let level = find_and_parse_score_level(div)?;
     let achievement =
         find_and_parse_achievement_value(div)?.context("Achievement value not found")?;
+    let idx = find_and_parse_score_idx(div)?;
 
     Ok(RatingTargetEntry {
         score_metadata,
         song_name,
         level,
         achievement,
+        idx,
     })
 }
 
@@ -86,4 +89,5 @@ pub struct RatingTargetEntry {
     song_name: String,
     level: ScoreLevel,
     achievement: AchievementValue,
+    idx: ScoreIdx,
 }
