@@ -15,12 +15,7 @@ use clap::ArgEnum;
 use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
-use maimai_scraping::api::download_record;
-use maimai_scraping::api::download_record_index;
-use maimai_scraping::api::reqwest_client;
-use maimai_scraping::api::try_login;
-use maimai_scraping::cookie_store::CookieStore;
-use maimai_scraping::cookie_store::CookieStoreLoadError;
+use maimai_scraping::api::SegaClient;
 use maimai_scraping::maimai::Maimai;
 use maimai_scraping::ongeki::Ongeki;
 use maimai_scraping::sega_trait::PlayRecordTrait;
@@ -62,35 +57,7 @@ where
     <T::PlayRecord as PlayRecordTrait>::PlayedAt: Debug,
 {
     let mut records = load_from_file::<T, _>(path)?;
-
-    let client = reqwest_client::<T>()?;
-
-    let cookie_store = CookieStore::load();
-    let (mut cookie_store, index) = match cookie_store {
-        Ok(mut cookie_store) => {
-            let index = download_record_index::<T>(&client, &mut cookie_store).await;
-            (cookie_store, index.map_err(Some))
-        }
-        Err(CookieStoreLoadError::NotFound) => {
-            println!("Cookie store was not found.  Trying to log in.");
-            let cookie_store = try_login::<T>(&client).await?;
-            (cookie_store, Err(None))
-        }
-        Err(e) => return Err(anyhow::Error::from(e)),
-    };
-    let index = match index {
-        Ok(index) => index, // TODO: a bit redundant
-        Err(err) => {
-            if let Some(err) = err {
-                println!("The stored session seems to be expired.  Trying to log in.");
-                println!("    Detail: {:?}", err);
-            }
-            cookie_store = try_login::<T>(&client).await?;
-            // return Ok(());
-            download_record_index::<T>(&client, &mut cookie_store).await?
-        }
-    };
-    println!("Successfully logged in.");
+    let (mut client, index) = SegaClient::<T>::new().await?;
 
     // In `index`, newer result is stored first.
     // Since we want to fetch older result as fast as possible,
@@ -99,15 +66,13 @@ where
         println!("Checking idx={}...", idx);
         match records.entry(played_at) {
             Entry::Vacant(entry) => {
-                let record = download_record::<T>(&client, &mut cookie_store, idx)
-                    .await?
-                    .ok_or_else(|| {
-                        anyhow!(
-                            "  Once found record has been disappeared: played_at={}, idx={}",
-                            played_at,
-                            idx
-                        )
-                    })?;
+                let record = client.download_record(idx).await?.ok_or_else(|| {
+                    anyhow!(
+                        "  Once found record has been disappeared: played_at={}, idx={}",
+                        played_at,
+                        idx
+                    )
+                })?;
                 println!("  Downloaded record {:?}", record.played_at());
                 if played_at != record.time() {
                     println!(

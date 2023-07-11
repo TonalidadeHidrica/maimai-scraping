@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::cookie_store::CookieStore;
+use crate::cookie_store::CookieStoreLoadError;
 use crate::cookie_store::Credentials;
 use crate::cookie_store::Password;
 use crate::cookie_store::UserName;
@@ -14,7 +15,97 @@ use reqwest::Url;
 use scraper::Html;
 use serde::Serialize;
 
-pub fn reqwest_client<T: SegaTrait>() -> reqwest::Result<reqwest::Client> {
+pub struct SegaClient<T: SegaTrait> {
+    client: reqwest::Client,
+    cookie_store: CookieStore<T>,
+}
+
+impl<T: SegaTrait> SegaClient<T> {
+    pub async fn new() -> anyhow::Result<(Self, Vec<(NaiveDateTime, T::Idx)>)> {
+        let client = reqwest_client::<T>()?;
+
+        let cookie_store = CookieStore::load();
+        let (mut client, index) = match cookie_store {
+            Ok(cookie_store) => {
+                let mut client = Self {
+                    client,
+                    cookie_store,
+                };
+                let index = client.download_record_index().await;
+                (client, index.map_err(Some))
+            }
+            Err(CookieStoreLoadError::NotFound) => {
+                println!("Cookie store was not found.  Trying to log in.");
+                let cookie_store = try_login::<T>(&client).await?;
+                let client = Self {
+                    client,
+                    cookie_store,
+                };
+                (client, Err(None))
+            }
+            Err(e) => return Err(anyhow::Error::from(e)),
+        };
+        let index = match index {
+            Ok(index) => index, // TODO: a bit redundant
+            Err(err) => {
+                if let Some(err) = err {
+                    println!("The stored session seems to be expired.  Trying to log in.");
+                    println!("    Detail: {:?}", err);
+                }
+                client.cookie_store = try_login::<T>(&client.client).await?;
+                // return Ok(());
+                client.download_record_index().await?
+            }
+        };
+        println!("Successfully logged in.");
+
+        Ok((client, index))
+    }
+
+    async fn download_record_index(&mut self) -> anyhow::Result<Vec<(NaiveDateTime, T::Idx)>> {
+        let url = T::RECORD_URL;
+        let response = self.fetch_authenticated(url).await?.0;
+        let document = Html::parse_document(&response.text().await?);
+        T::parse_record_index(&document)
+    }
+
+    pub async fn download_record(&mut self, idx: T::Idx) -> anyhow::Result<Option<T::PlayRecord>> {
+        let url = T::play_log_detail_url(idx);
+        let (response, redirect_url) = self.fetch_authenticated(&url).await?;
+        if let Some(location) = redirect_url {
+            return if T::play_log_detail_not_found(&location) {
+                Ok(None)
+            } else {
+                Err(anyhow!("Redirected to error unknown page: {:?}", response))
+            };
+        }
+        let document = Html::parse_document(&response.text().await?);
+        T::parse(&document, idx).map(Some)
+    }
+
+    pub async fn fetch_authenticated(
+        &mut self,
+        url: impl IntoUrl,
+    ) -> anyhow::Result<(reqwest::Response, Option<Url>)> {
+        let response = self
+            .client
+            .get(url)
+            .header(
+                header::COOKIE,
+                format!("userId={}", self.cookie_store.user_id),
+            )
+            .send()
+            .await?;
+        set_and_save_credentials(&mut self.cookie_store, &response)?;
+        let location = response
+            .headers()
+            .get(header::LOCATION)
+            .and_then(|x| Url::parse(x.to_str().ok()?).ok());
+        Ok((response, location))
+    }
+}
+
+fn reqwest_client<T: SegaTrait>() -> reqwest::Result<reqwest::Client> {
     // let jar = Arc::new(Jar::default());
     reqwest::Client::builder()
         .cookie_store(true)
@@ -34,52 +125,6 @@ pub fn reqwest_client<T: SegaTrait>() -> reqwest::Result<reqwest::Client> {
             }
         }))
         .build()
-}
-
-pub async fn download_record_index<T: SegaTrait>(
-    client: &reqwest::Client,
-    cookie_store: &mut CookieStore<T>,
-) -> anyhow::Result<Vec<(NaiveDateTime, T::Idx)>> {
-    let url = T::RECORD_URL;
-    let response = fetch_authenticated(client, url, cookie_store).await?.0;
-    let document = Html::parse_document(&response.text().await?);
-    T::parse_record_index(&document)
-}
-
-pub async fn download_record<T: SegaTrait>(
-    client: &reqwest::Client,
-    cookie_store: &mut CookieStore<T>,
-    idx: T::Idx,
-) -> anyhow::Result<Option<T::PlayRecord>> {
-    let url = T::play_log_detail_url(idx);
-    let (response, redirect_url) = fetch_authenticated(client, &url, cookie_store).await?;
-    if let Some(location) = redirect_url {
-        return if T::play_log_detail_not_found(&location) {
-            Ok(None)
-        } else {
-            Err(anyhow!("Redirected to error unknown page: {:?}", response))
-        };
-    }
-    let document = Html::parse_document(&response.text().await?);
-    T::parse(&document, idx).map(Some)
-}
-
-async fn fetch_authenticated<T: SegaTrait>(
-    client: &reqwest::Client,
-    url: impl IntoUrl,
-    cookie_store: &mut CookieStore<T>,
-) -> anyhow::Result<(reqwest::Response, Option<Url>)> {
-    let response = client
-        .get(url)
-        .header(header::COOKIE, format!("userId={}", cookie_store.user_id))
-        .send()
-        .await?;
-    set_and_save_credentials(cookie_store, &response)?;
-    let location = response
-        .headers()
-        .get(header::LOCATION)
-        .and_then(|x| Url::parse(x.to_str().ok()?).ok());
-    Ok((response, location))
 }
 
 pub fn set_and_save_credentials<T: SegaTrait>(

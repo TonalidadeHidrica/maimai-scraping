@@ -1,6 +1,7 @@
 use anyhow::Context;
 use itertools::{Itertools, PeekingNext};
 use scraper::ElementRef;
+use serde::{Deserialize, Serialize};
 
 use crate::maimai::{
     play_record_parser::{parse_playlog_diff, parse_score_generation_img},
@@ -71,7 +72,7 @@ pub fn parse_entry(div: ElementRef) -> anyhow::Result<RatingTargetEntry> {
 }
 
 #[allow(unused)]
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RatingTargetList {
     target_new: Vec<RatingTargetEntry>,
     target_old: Vec<RatingTargetEntry>,
@@ -79,7 +80,7 @@ pub struct RatingTargetList {
     candidates_old: Vec<RatingTargetEntry>,
 }
 #[allow(unused)]
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RatingTargetEntry {
     score_metadata: ScoreMetadata,
     song_name: String,

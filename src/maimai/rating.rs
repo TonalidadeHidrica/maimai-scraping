@@ -88,7 +88,7 @@ pub fn single_song_rating(
 }
 
 #[allow(unused)]
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ScoreLevel {
     level: u8,
     plus: bool,
