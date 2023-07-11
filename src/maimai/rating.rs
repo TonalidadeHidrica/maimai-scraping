@@ -17,35 +17,38 @@ impl Display for RankCoefficient {
     }
 }
 
-// https://maimai.gamerch.com/%E3%81%A7%E3%82%89%E3%81%A3%E3%81%8F%E3%81%99RATING#content_2_1
-// Retrieved 2021/11/20 1:58
-pub fn rank_coef_gamerch_old(achievement_value: AchievementValue) -> RankCoefficient {
-    let ret = match achievement_value.get() / 100 {
-        100_50..=101_00 => 15_0,
-        100_00..=101_00 => 14_0,
-        99_99..=101_00 => 13_5,
-        99_50..=101_00 => 13_0,
-        99_00..=101_00 => 12_0,
-        98_00..=101_00 => 11_0,
-        97_00..=101_00 => 10_0,
-        94_00..=101_00 => 9_4,
-        90_00..=101_00 => 9_0,
-        80_00..=101_00 => 8_0,
-        75_00..=101_00 => 7_5,
-        70_00..=101_00 => 7_0,
-        60_00..=101_00 => 6_0,
-        50_00..=101_00 => 5_0,
-        40_00..=101_00 => 4_0,
-        30_00..=101_00 => 3_0,
-        20_00..=101_00 => 2_0,
-        10_00..=101_00 => 1_0,
-        0_00..=101_00 => 0_0,
-        _ => unreachable!("The range of value is guarded"),
+// https://gamerch.com/maimai/entry/533647#content_2_1
+// https://sgimera.github.io/mai_RatingAnalyzer/maidx_rating.html
+// Retrieved 2023/07/10 20:02
+pub fn rank_coef(achievement_value: AchievementValue) -> RankCoefficient {
+    #[allow(clippy::mistyped_literal_suffixes)]
+    let ret = match achievement_value.get() {
+        100_5000.. => 22_4,
+        100_4999.. => 22_2,
+        100_0000.. => 21_6,
+        99_9999.. => 21_4,
+        99_5000.. => 21_1,
+        99_0000.. => 20_8,
+        98_0000.. => 20_3,
+        97_0000.. => 20_0,
+        96_9999.. => 17_6,
+        94_0000.. => 16_8,
+        90_0000.. => 15_2,
+        80_0000.. => 13_6,
+        75_0000.. => 12_0,
+        70_0000.. => 11_2,
+        60_0000.. => 9_6,
+        50_0000.. => 8_0,
+        40_0000.. => 6_4,
+        30_0000.. => 4_8,
+        20_0000.. => 3_2,
+        10_0000.. => 1_6,
+        0_0000.. => 0_0,
     };
     ret.into()
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, derive_more::Into, Serialize, Deserialize)]
 pub struct ScoreConstant(u8);
 
 impl TryFrom<u8> for ScoreConstant {
@@ -53,7 +56,7 @@ impl TryFrom<u8> for ScoreConstant {
 
     fn try_from(v: u8) -> Result<Self, u8> {
         match v {
-            0_1..=15_0 => Ok(Self(v)),
+            1_0..=15_0 => Ok(Self(v)),
             _ => Err(v),
         }
     }
@@ -63,13 +66,13 @@ impl Display for ScoreConstant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let x = self.0 / 10;
         let y = self.0 % 10;
-        write!(f, "{}.{:01}%", x, y)
+        write!(f, "{}.{:01}", x, y)
     }
 }
 
 impl ScoreConstant {
     pub fn candidates() -> impl Iterator<Item = Self> {
-        (0_1..=15_0).map(Self)
+        (1_0..=15_0).map(Self)
     }
 }
 

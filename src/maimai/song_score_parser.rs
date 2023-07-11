@@ -188,6 +188,7 @@ fn parse_full_sync_img(full_sync_img: ElementRef) -> anyhow::Result<FullSyncKind
     Ok(res)
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct ScoreEntry {
     metadata: ScoreMetadata,
@@ -196,11 +197,13 @@ pub struct ScoreEntry {
     result: Option<ScoreResult>,
     idx: ScoreIdx,
 }
+#[allow(unused)]
 #[derive(Debug)]
 pub struct ScoreLevel {
     level: u8,
     plus: bool,
 }
+#[allow(unused)]
 #[derive(Debug)]
 pub struct ScoreResult {
     achievement: AchievementValue,
@@ -209,6 +212,7 @@ pub struct ScoreResult {
     full_combo_kind: FullComboKind,
     full_sync_kind: FullSyncKind,
 }
+#[allow(unused)]
 #[derive(Debug)]
 pub struct ScoreIdx(String);
 
