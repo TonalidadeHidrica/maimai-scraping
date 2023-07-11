@@ -2,6 +2,13 @@ use anyhow::Context;
 use itertools::{Itertools, PeekingNext};
 use scraper::ElementRef;
 
+use crate::maimai::{
+    play_record_parser::{parse_playlog_diff, parse_score_generation_img},
+    song_score_parser::{
+        find_and_parse_achievement_value, find_and_parse_score_level, find_and_parse_song_name,
+    },
+};
+
 use super::{
     rating::ScoreLevel,
     schema::latest::{AchievementValue, ScoreMetadata},
@@ -23,8 +30,8 @@ pub fn parse(html: &scraper::Html) -> anyhow::Result<RatingTargetList> {
     })
 }
 
-pub fn parse_entries<'a>(
-    mut elems: impl PeekingNext<Item = ElementRef<'a>>,
+pub fn parse_entries<'a, I: PeekingNext<Item = ElementRef<'a>>>(
+    mut elems: I,
 ) -> anyhow::Result<Vec<RatingTargetEntry>> {
     let next = elems.next().context("No next element")?;
     assert!(selector!("div.screw_block").matches(&next));
@@ -35,7 +42,32 @@ pub fn parse_entries<'a>(
 }
 
 pub fn parse_entry(div: ElementRef) -> anyhow::Result<RatingTargetEntry> {
-    todo!()
+    let difficulty = parse_playlog_diff(
+        div.select(selector!("img.h_20"))
+            .next()
+            .context("Difficulty img not found")?,
+    )?;
+    let generation = parse_score_generation_img(
+        div.select(selector!("img.music_kind_icon"))
+            .next()
+            .context("Generation img not found")?,
+    )?;
+    let score_metadata = ScoreMetadata::builder()
+        .difficulty(difficulty)
+        .generation(generation)
+        .build();
+
+    let song_name = find_and_parse_song_name(div)?;
+    let level = find_and_parse_score_level(div)?;
+    let achievement =
+        find_and_parse_achievement_value(div)?.context("Achievement value not found")?;
+
+    Ok(RatingTargetEntry {
+        score_metadata,
+        song_name,
+        level,
+        achievement,
+    })
 }
 
 #[allow(unused)]

@@ -29,19 +29,8 @@ fn parse_entry_form(
 ) -> anyhow::Result<ScoreEntry> {
     let metadata = parse_score_metadata(entry_form, difficulty)?;
 
-    let level: ScoreLevel = entry_form
-        .select(selector!("div.music_lv_block"))
-        .next()
-        .context("Song name not found")?
-        .text()
-        .collect::<String>()
-        .parse()?;
-    let song_name: String = entry_form
-        .select(selector!("div.music_name_block"))
-        .next()
-        .context("Song name not found")?
-        .text()
-        .collect();
+    let level = find_and_parse_score_level(entry_form)?;
+    let song_name = find_and_parse_song_name(entry_form)?;
 
     let result = parse_score_result(entry_form)?;
 
@@ -62,6 +51,22 @@ fn parse_entry_form(
         result,
         idx,
     })
+}
+
+pub fn find_and_parse_score_level(e: ElementRef) -> anyhow::Result<ScoreLevel> {
+    Ok(e.select(selector!("div.music_lv_block"))
+        .next()
+        .context("Song name not found")?
+        .text()
+        .collect::<String>()
+        .parse()?)
+}
+pub fn find_and_parse_song_name(e: ElementRef) -> anyhow::Result<String> {
+    Ok(e.select(selector!("div.music_name_block"))
+        .next()
+        .context("Song name not found")?
+        .text()
+        .collect())
 }
 
 fn parse_score_metadata(
@@ -92,11 +97,7 @@ fn parse_score_metadata(
 }
 
 fn parse_score_result(entry_form: ElementRef) -> anyhow::Result<Option<ScoreResult>> {
-    let achievement = entry_form
-        .select(selector!("div.music_score_block.w_120"))
-        .next()
-        .map(parse_achievement_txt)
-        .transpose()?;
+    let achievement = find_and_parse_achievement_value(entry_form)?;
     let deluxscore = entry_form
         .select(selector!("div.music_score_block.w_180"))
         .next()
@@ -127,6 +128,13 @@ fn parse_score_result(entry_form: ElementRef) -> anyhow::Result<Option<ScoreResu
         (None, None, None) => None,
         res => bail!("Inconsistent score result: {res:?}",),
     })
+}
+
+pub fn find_and_parse_achievement_value(e: ElementRef) -> anyhow::Result<Option<AchievementValue>> {
+    e.select(selector!("div.music_score_block.w_120"))
+        .next()
+        .map(parse_achievement_txt)
+        .transpose()
 }
 
 fn parse_achievement_rank(achievement_rank: ElementRef) -> anyhow::Result<AchievementRank> {

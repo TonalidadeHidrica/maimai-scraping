@@ -206,7 +206,19 @@ fn parse_playlog_top_conatiner(
     ))
 }
 
-fn parse_playlog_diff(img: ElementRef) -> anyhow::Result<ScoreDifficulty> {
+pub fn parse_score_generation_img(img: ElementRef) -> anyhow::Result<ScoreGeneration> {
+    use ScoreGeneration::*;
+    match img.value().attr("src") {
+        Some("https://maimaidx.jp/maimai-mobile/img/music_dx.png") => Ok(Deluxe),
+        Some("https://maimaidx.jp/maimai-mobile/img/music_standard.png") => Ok(Standard),
+        url => Err(anyhow!(
+            "Unexpected image source for music generation: {:?}",
+            url
+        )),
+    }
+}
+
+pub fn parse_playlog_diff(img: ElementRef) -> anyhow::Result<ScoreDifficulty> {
     use ScoreDifficulty::*;
     match img.value().attr("src") {
         Some("https://maimaidx.jp/maimai-mobile/img/diff_basic.png") => Ok(Basic),
@@ -276,23 +288,12 @@ fn parse_playlog_main_container(
         .attr("src")
         .ok_or_else(|| anyhow!("Music img doesn't have src"))?;
 
-    let generation = match playlog_main_container
-        .select(selector!("img.playlog_music_kind_icon"))
-        .next()
-        .ok_or_else(|| anyhow!("Music generation icon not found"))?
-        .value()
-        .attr("src")
-        .ok_or_else(|| anyhow!("Image src was not found"))?
-    {
-        "https://maimaidx.jp/maimai-mobile/img/music_dx.png" => ScoreGeneration::Deluxe,
-        "https://maimaidx.jp/maimai-mobile/img/music_standard.png" => ScoreGeneration::Standard,
-        src => {
-            return Err(anyhow!(
-                "Unexpected image source for music generation: {}",
-                src
-            ))
-        }
-    };
+    let generation = parse_score_generation_img(
+        playlog_main_container
+            .select(selector!("img.playlog_music_kind_icon"))
+            .next()
+            .ok_or_else(|| anyhow!("Music generation icon not found"))?,
+    )?;
 
     let playlog_result_block = playlog_main_container
         .select(selector!(".playlog_result_block"))
