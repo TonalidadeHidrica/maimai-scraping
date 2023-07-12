@@ -88,10 +88,21 @@ pub fn single_song_rating(
 }
 
 #[allow(unused)]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct ScoreLevel {
     level: u8,
     plus: bool,
+}
+
+impl ScoreLevel {
+    pub fn new(level: u8, plus: bool) -> anyhow::Result<Self> {
+        match (level, plus) {
+            (16.., _) | (15, true) => {
+                bail!("Level out of range: {level}{}", if plus { "+" } else { "" })
+            }
+            _ => Ok(ScoreLevel { level, plus }),
+        }
+    }
 }
 
 impl FromStr for ScoreLevel {
@@ -101,9 +112,6 @@ impl FromStr for ScoreLevel {
         let stripped = s.strip_suffix('+');
         let level = stripped.unwrap_or(s).parse()?;
         let plus = stripped.is_some();
-        match (level, plus) {
-            (16.., _) | (15, true) => bail!("Level out of range: {s:?}"),
-            _ => Ok(ScoreLevel { level, plus }),
-        }
+        Self::new(level, plus)
     }
 }

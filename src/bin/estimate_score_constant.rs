@@ -4,13 +4,15 @@ use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
 use maimai_scraping::maimai::{
+    load_score_level,
     rating::{rank_coef, single_song_rating, ScoreConstant},
-    schema::ver_20210316_2338::PlayRecord,
+    schema::latest::PlayRecord,
 };
 
 #[derive(Parser)]
 struct Opts {
     input_file: PathBuf,
+    level_file: PathBuf,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -19,6 +21,10 @@ fn main() -> anyhow::Result<()> {
     let records: Vec<PlayRecord> =
         serde_json::from_reader(BufReader::new(File::open(opts.input_file)?))?;
 
+    let levels = load_score_level::load(opts.level_file)?;
+    println!("{levels:?}");
+
+    return Ok(());
     for (i, record) in records.iter().enumerate() {
         let &delta = record.rating_result().delta();
         let res = ScoreConstant::candidates()
