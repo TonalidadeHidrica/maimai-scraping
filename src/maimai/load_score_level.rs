@@ -1,8 +1,10 @@
-use std::{io::BufReader, path::PathBuf};
+use std::{collections::HashMap, io::BufReader, path::PathBuf};
 
 use anyhow::{anyhow, bail};
+use chrono::NaiveDate;
 use fs_err::File;
 use serde::Deserialize;
+use url::Url;
 
 use super::{
     rating::{ScoreConstant, ScoreLevel},
@@ -12,6 +14,15 @@ use super::{
 pub fn load(path: impl Into<PathBuf>) -> anyhow::Result<Vec<Song>> {
     let songs: Vec<SongRaw> = serde_json::from_reader(BufReader::new(File::open(path)?))?;
     songs.into_iter().map(Song::try_from).collect()
+}
+pub fn make_map(songs: &[Song]) -> anyhow::Result<HashMap<(&Url, ScoreGeneration), &Song>> {
+    let mut map = HashMap::new();
+    for song in songs {
+        if let Some(entry) = map.insert((&song.icon, song.generation), song) {
+            bail!("Duplicating icon url: {entry:?}");
+        }
+    }
+    Ok(map)
 }
 
 #[allow(unused)]
@@ -28,8 +39,10 @@ struct SongRaw {
 #[derive(Debug)]
 pub struct Song {
     generation: ScoreGeneration,
+    version: MaimaiVersion,
     levels: ScoreLevels,
     song_name: String,
+    icon: Url,
 }
 impl TryFrom<SongRaw> for Song {
     type Error = anyhow::Error;
@@ -52,6 +65,7 @@ impl TryFrom<SongRaw> for Song {
                 1 => ScoreGeneration::Deluxe,
                 _ => bail!("Unexpected generation: {}", song.dx),
             },
+            version: song.v.try_into()?,
             levels: ScoreLevels {
                 basic: song.lv[0].try_into()?,
                 advanced: song.lv[1].try_into()?,
@@ -60,6 +74,10 @@ impl TryFrom<SongRaw> for Song {
                 re_master,
             },
             song_name: song.n,
+            icon: Url::parse(&format!(
+                "https://maimaidx.jp/maimai-mobile/img/Music/{}.png",
+                song.ico
+            ))?,
         })
     }
 }
@@ -115,6 +133,7 @@ impl TryFrom<f64> for InternalScoreLevel {
 }
 
 #[non_exhaustive]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum MaimaiVersion {
     Maimai,
     MaimaiPlus,
@@ -138,8 +157,64 @@ pub enum MaimaiVersion {
     Festival,
     FestivalPlus,
 }
-// impl TryFrom<u8> for MaimaiVersion {
-//     type Error = anyhow::Error;
-//     fn try_from(v: u8) -> anyhow::Result<Self> {
-//     }
-// }
+impl TryFrom<i8> for MaimaiVersion {
+    type Error = anyhow::Error;
+    fn try_from(v: i8) -> anyhow::Result<Self> {
+        use MaimaiVersion::*;
+        Ok(match v.abs() {
+            0 => Maimai,
+            1 => MaimaiPlus,
+            2 => Green,
+            3 => GreenPlus,
+            4 => Orange,
+            5 => OrangePlus,
+            6 => Pink,
+            7 => PinkPlus,
+            8 => Murasaki,
+            9 => MurasakiPlus,
+            10 => Milk,
+            11 => MilkPlus,
+            12 => Finale,
+            13 => Deluxe,
+            14 => DeluxePlus,
+            15 => Splash,
+            16 => SplashPlus,
+            17 => Universe,
+            18 => UniversePlus,
+            19 => Festival,
+            20 => FestivalPlus,
+            _ => bail!("Unexpected version: {v}"),
+        })
+    }
+}
+impl MaimaiVersion {
+    pub fn start_date(self) -> NaiveDate {
+        use MaimaiVersion::*;
+        match self {
+            Maimai => NaiveDate::from_ymd(2012, 7, 12),
+            MaimaiPlus => NaiveDate::from_ymd(2012, 12, 13),
+            Green => NaiveDate::from_ymd(2013, 7, 11),
+            GreenPlus => NaiveDate::from_ymd(2014, 2, 26),
+            Orange => NaiveDate::from_ymd(2014, 9, 18),
+            OrangePlus => NaiveDate::from_ymd(2015, 3, 19),
+            Pink => NaiveDate::from_ymd(2015, 12, 9),
+            PinkPlus => NaiveDate::from_ymd(2016, 6, 30),
+            Murasaki => NaiveDate::from_ymd(2016, 12, 14),
+            MurasakiPlus => NaiveDate::from_ymd(2017, 6, 22),
+            Milk => NaiveDate::from_ymd(2017, 12, 14),
+            MilkPlus => NaiveDate::from_ymd(2018, 6, 21),
+            Finale => NaiveDate::from_ymd(2018, 12, 13),
+            Deluxe => NaiveDate::from_ymd(2019, 7, 11),
+            DeluxePlus => NaiveDate::from_ymd(2020, 1, 23),
+            Splash => NaiveDate::from_ymd(2020, 9, 17),
+            SplashPlus => NaiveDate::from_ymd(2021, 3, 18),
+            Universe => NaiveDate::from_ymd(2021, 9, 16),
+            UniversePlus => NaiveDate::from_ymd(2022, 3, 24),
+            Festival => NaiveDate::from_ymd(2022, 9, 15),
+            FestivalPlus => NaiveDate::from_ymd(2023, 3, 23),
+        }
+    }
+    pub fn latest() -> Self {
+        Self::FestivalPlus
+    }
+}

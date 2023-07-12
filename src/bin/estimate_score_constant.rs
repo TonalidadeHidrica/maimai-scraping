@@ -1,11 +1,11 @@
 use std::{io::BufReader, path::PathBuf};
 
+use anyhow::Context;
+use chrono::NaiveTime;
 use clap::Parser;
 use fs_err::File;
-use itertools::Itertools;
 use maimai_scraping::maimai::{
-    load_score_level,
-    rating::{rank_coef, single_song_rating, ScoreConstant},
+    load_score_level::{self, MaimaiVersion},
     schema::latest::PlayRecord,
 };
 
@@ -22,35 +22,28 @@ fn main() -> anyhow::Result<()> {
         serde_json::from_reader(BufReader::new(File::open(opts.input_file)?))?;
 
     let levels = load_score_level::load(opts.level_file)?;
-    println!("{levels:?}");
+    let levels = load_score_level::make_map(&levels)?;
 
-    return Ok(());
-    for (i, record) in records.iter().enumerate() {
-        let &delta = record.rating_result().delta();
-        let res = ScoreConstant::candidates()
-            .filter_map(|score_const| {
-                let &achievement_value = record.achievement_result().value();
-                let rank_coef = rank_coef(achievement_value);
-                let res = single_song_rating(score_const, achievement_value, rank_coef);
-                (res.get() as i16 == delta).then(|| {
-                    format!(
-                        "{:?} x {} ({:?}) x {} = {}",
-                        score_const,
-                        achievement_value,
-                        record.achievement_result().rank(),
-                        rank_coef,
-                        res
-                    )
-                })
-            })
-            .collect_vec();
-        println!(
-            "{:>2} {} ({:?}) => {:?}",
-            i,
-            record.song_metadata().name(),
-            record.score_metadata().difficulty(),
-            res
-        );
+    let version = MaimaiVersion::latest();
+    let start_time = version.start_date().and_time(NaiveTime::from_hms(5, 0, 0));
+
+    for record in records
+        .iter()
+        .filter(|r| start_time <= *r.played_at().time())
+    {
+        let song = levels
+            .get(&(
+                record.song_metadata().cover_art(),
+                *record.score_metadata().generation(),
+            ))
+            .with_context(|| {
+                format!(
+                    "Song not found: {:?} {:?}",
+                    record.song_metadata(),
+                    record.score_metadata()
+                )
+            })?;
+        println!("{song:?}");
     }
 
     Ok(())
