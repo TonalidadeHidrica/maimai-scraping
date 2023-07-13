@@ -3,6 +3,7 @@ use std::{collections::HashMap, io::BufReader, path::PathBuf};
 use anyhow::{anyhow, bail};
 use chrono::NaiveDate;
 use fs_err::File;
+use getset::{CopyGetters, Getters};
 use serde::Deserialize;
 use url::Url;
 
@@ -36,12 +37,17 @@ struct SongRaw {
 }
 
 #[allow(unused)]
-#[derive(Debug)]
+#[derive(Debug, Getters, CopyGetters)]
 pub struct Song {
+    #[getset(get_copy = "pub")]
     generation: ScoreGeneration,
+    #[getset(get_copy = "pub")]
     version: MaimaiVersion,
+    #[getset(get_copy = "pub")]
     levels: ScoreLevels,
+    #[getset(get = "pub")]
     song_name: String,
+    #[getset(get = "pub")]
     icon: Url,
 }
 impl TryFrom<SongRaw> for Song {
@@ -129,6 +135,14 @@ impl TryFrom<f64> for InternalScoreLevel {
                     .map_err(|_| anyhow!("Out-of-range unknown value: {value}"))?,
             )
         })
+    }
+}
+impl InternalScoreLevel {
+    pub fn known(self) -> Option<ScoreConstant> {
+        match self {
+            InternalScoreLevel::Unknown(_) => None,
+            InternalScoreLevel::Known(x) => Some(x),
+        }
     }
 }
 

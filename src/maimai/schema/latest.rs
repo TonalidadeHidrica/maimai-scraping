@@ -76,19 +76,32 @@ pub struct SongMetadata {
     cover_art: Url,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Debug,
+    TypedBuilder,
+    Getters,
+    Serialize,
+    Deserialize,
+)]
 pub struct ScoreMetadata {
     generation: ScoreGeneration,
     difficulty: ScoreDifficulty,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 pub enum ScoreGeneration {
     Standard,
     Deluxe,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 pub enum ScoreDifficulty {
     Basic,
     Advanced,

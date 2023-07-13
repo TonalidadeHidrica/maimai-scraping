@@ -38,6 +38,9 @@ fn main() -> anyhow::Result<()> {
             let start = range.peek().unwrap().0;
             let end = AchievementValue::try_from((range.last().unwrap().0.get() + 1).min(101_0000))
                 .unwrap();
+            if (127..130).contains(&u8::from(score_constant)) && start.get() >= 100_0000 {
+                println!("{score_constant}  [{start}, {end}) {val}");
+            }
             document = document.add(
                 Rectangle::new()
                     .set("x", x(start))

@@ -1,11 +1,17 @@
-use std::{io::BufReader, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    io::BufReader,
+    path::PathBuf,
+};
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use chrono::NaiveTime;
 use clap::Parser;
 use fs_err::File;
+use itertools::Itertools;
 use maimai_scraping::maimai::{
     load_score_level::{self, MaimaiVersion},
+    rating::{rank_coef, single_song_rating, ScoreConstant},
     schema::latest::PlayRecord,
 };
 
@@ -27,24 +33,158 @@ fn main() -> anyhow::Result<()> {
     let version = MaimaiVersion::latest();
     let start_time = version.start_date().and_time(NaiveTime::from_hms(5, 0, 0));
 
+    // rating to song / song to rating
+    let mut r2s = BTreeSet::<(i16, _)>::new();
+    let mut s2r = HashMap::<_, i16>::new();
+    let mut key_to_record = HashMap::new();
+
     for record in records
         .iter()
         .filter(|r| start_time <= *r.played_at().time())
     {
-        let song = levels
-            .get(&(
-                record.song_metadata().cover_art(),
-                *record.score_metadata().generation(),
-            ))
-            .with_context(|| {
-                format!(
-                    "Song not found: {:?} {:?}",
-                    record.song_metadata(),
-                    record.score_metadata()
-                )
-            })?;
-        println!("{song:?}");
+        let song_key = (
+            record.song_metadata().cover_art(),
+            *record.score_metadata().generation(),
+        );
+        let song = levels.get(&song_key).with_context(|| {
+            format!(
+                "Song not found: {:?} {:?}",
+                record.song_metadata(),
+                record.score_metadata()
+            )
+        })?;
+        let &delta = record.rating_result().delta();
+        if song.version() == version && delta > 0 {
+            use std::collections::hash_map::Entry::*;
+            let key = (song_key.0, record.score_metadata());
+            let rating = match s2r.entry(key) {
+                Occupied(mut s2r_entry) => {
+                    // println!("  Song list does not change, just updating score (delta={delta})");
+                    let rating = s2r_entry.get_mut();
+                    assert!(r2s.remove(&(*rating, key)));
+                    *rating += delta;
+                    assert!(r2s.insert((*rating, key)));
+                    *rating
+                }
+                Vacant(s2r_entry) => {
+                    if r2s.len() == 15 {
+                        // println!("  Removing the song with lowest score & inserting new one instead (delta={delta})");
+                        let (removed_rating, removed_key) = r2s.pop_first().unwrap();
+                        // println!("    Removed={}", removed_rating);
+                        let new_rating = removed_rating + delta;
+                        assert!(r2s.insert((new_rating, key)));
+                        s2r_entry.insert(new_rating);
+                        assert!(s2r.remove(&removed_key).is_some());
+                        new_rating
+                    } else {
+                        // Just insert the new song
+                        s2r_entry.insert(delta);
+                        assert!(r2s.insert((delta, key)));
+                        delta
+                    }
+                }
+            };
+            key_to_record.insert(key, record);
+
+            let a = *record.achievement_result().value();
+            let estimated_levels = ScoreConstant::candidates()
+                .filter(|&level| single_song_rating(level, a, rank_coef(a)).get() as i16 == rating)
+                .collect_vec();
+            match estimated_levels[..] {
+                [] => bail!("Error: no possible levels!"),
+                [estimated] => {
+                    match song
+                        .levels()
+                        .get(*record.score_metadata().difficulty())
+                        .unwrap()
+                        .known()
+                    {
+                        None => {
+                            println!(
+                                "Constant confirmed! {} ({:?} {:?}): {estimated}",
+                                record.song_metadata().name(),
+                                record.score_metadata().generation(),
+                                record.score_metadata().difficulty(),
+                            );
+                        }
+                        Some(known) if known != estimated => {
+                            bail!("Conflict levels! Database: {known}, esimated: {estimated}");
+                        }
+                        _ => {}
+                    }
+                }
+                _ => println!("Multiple candidates: {estimated_levels:?}"),
+            }
+
+            // println!(
+            //     "{} {:?} {} => {rating} (Expected: {expected:?})",
+            //     record.song_metadata().name(),
+            //     record.score_metadata(),
+            //     record.achievement_result().value(),
+            // );
+        }
     }
 
+    println!("Current best");
+    for (rating, key) in r2s.iter().rev() {
+        let record = key_to_record[key];
+        println!(
+            "{rating:3}  {} {:?}",
+            record.song_metadata().name(),
+            record.score_metadata()
+        );
+    }
+    println!("Sum: {}", r2s.iter().map(|x| x.0).sum::<i16>());
+
     Ok(())
+}
+
+#[allow(unused)]
+struct MultiBTreeSet<T> {
+    map: BTreeMap<T, usize>,
+    len: usize,
+}
+
+#[allow(unused)]
+impl<T: Ord> MultiBTreeSet<T> {
+    fn new() -> Self {
+        Self {
+            map: BTreeMap::new(),
+            len: 0,
+        }
+    }
+    fn len(&self) -> usize {
+        self.len
+    }
+    fn insert(&mut self, t: T) {
+        self.len += 1;
+        *self.map.entry(t).or_default() += 1;
+    }
+    fn remove(&mut self, t: T) -> bool {
+        use std::collections::btree_map::*;
+        self.len -= 1;
+        match self.map.entry(t) {
+            Entry::Vacant(_) => false,
+            Entry::Occupied(mut e) => {
+                *e.get_mut() -= 1;
+                if *e.get() == 0 {
+                    e.remove_entry();
+                }
+                true
+            }
+        }
+    }
+}
+#[allow(unused)]
+impl<T: Ord + Clone> MultiBTreeSet<T> {
+    fn pop_first(&mut self) -> Option<T> {
+        self.len -= 1;
+        let mut first = self.map.first_entry()?;
+        *first.get_mut() -= 1;
+        Some(if *first.get() == 0 {
+            first.remove_entry().0
+        } else {
+            first.key().clone()
+        })
+    }
 }
