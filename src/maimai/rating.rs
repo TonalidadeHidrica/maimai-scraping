@@ -77,13 +77,21 @@ impl ScoreConstant {
     }
 }
 
+pub fn single_song_rating_precise(
+    score_const: ScoreConstant,
+    achievement_value: AchievementValue,
+    rank_coef: RankCoefficient,
+) -> u64 {
+    let achievement_value_clamped = achievement_value.get().min(100_5000);
+    score_const.0 as u64 * achievement_value_clamped as u64 * rank_coef.0
+}
+
 pub fn single_song_rating(
     score_const: ScoreConstant,
     achievement_value: AchievementValue,
     rank_coef: RankCoefficient,
 ) -> RatingValue {
-    let achievement_value_clamped = achievement_value.get().min(100_5000);
-    let prod = score_const.0 as u64 * achievement_value_clamped as u64 * rank_coef.0;
+    let prod = single_song_rating_precise(score_const, achievement_value, rank_coef);
     RatingValue::from((prod / 10 / 100_0000 / 10) as u16)
 }
 
