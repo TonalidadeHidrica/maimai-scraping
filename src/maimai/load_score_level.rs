@@ -27,7 +27,7 @@ pub fn make_map(songs: &[Song]) -> anyhow::Result<HashMap<(&Url, ScoreGeneration
 }
 
 #[allow(unused)]
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct SongRaw {
     dx: u8,
     v: i8,
@@ -53,13 +53,14 @@ pub struct Song {
 impl TryFrom<SongRaw> for Song {
     type Error = anyhow::Error;
     fn try_from(song: SongRaw) -> anyhow::Result<Self> {
+        println!("{song:?}");
         let zero = song.lv[4].abs() < 1e-8;
         let re_master = match song.lv.len() {
             6 => {
                 if !zero {
                     bail!("song.lv[4] is not zero, but there are 6 elements");
                 } else {
-                    Some(song.lv[4].try_into()?)
+                    Some(song.lv[5].try_into()?)
                 }
             }
             5 => (!zero).then(|| song.lv[4].try_into()).transpose()?,

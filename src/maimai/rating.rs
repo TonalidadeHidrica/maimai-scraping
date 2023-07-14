@@ -105,11 +105,26 @@ pub struct ScoreLevel {
 impl ScoreLevel {
     pub fn new(level: u8, plus: bool) -> anyhow::Result<Self> {
         match (level, plus) {
-            (16.., _) | (15, true) => {
+            (0 | 16.., _) | (1..=6 | 15, true) => {
                 bail!("Level out of range: {level}{}", if plus { "+" } else { "" })
             }
             _ => Ok(ScoreLevel { level, plus }),
         }
+    }
+    pub fn score_constant_candidates(self) -> impl Iterator<Item = ScoreConstant> + Clone {
+        let range = match self.level {
+            a @ 1..=6 => a * 10..(a + 1) * 10,
+            a @ 7..=14 => {
+                if self.plus {
+                    a * 10 + 7..(a + 1) * 10
+                } else {
+                    a * 10..a * 10 + 7
+                }
+            }
+            15 => 150..151,
+            _ => unreachable!(),
+        };
+        range.map(ScoreConstant)
     }
 }
 

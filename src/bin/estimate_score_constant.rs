@@ -10,10 +10,11 @@ use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
 use maimai_scraping::maimai::{
-    load_score_level::{self, MaimaiVersion},
+    load_score_level::{self, InternalScoreLevel, MaimaiVersion, Song},
     rating::{rank_coef, single_song_rating, ScoreConstant},
-    schema::latest::PlayRecord,
+    schema::latest::{PlayRecord, ScoreGeneration},
 };
+use url::Url;
 
 #[derive(Parser)]
 struct Opts {
@@ -30,14 +31,21 @@ fn main() -> anyhow::Result<()> {
     let levels = load_score_level::load(opts.level_file)?;
     let levels = load_score_level::make_map(&levels)?;
 
+    analyze_new_songs(&records, &levels)?;
+    analyze_old_songs(&records, &levels)?;
+
+    Ok(())
+}
+
+fn analyze_new_songs(
+    records: &[PlayRecord],
+    levels: &HashMap<(&Url, ScoreGeneration), &Song>,
+) -> anyhow::Result<()> {
     let version = MaimaiVersion::latest();
     let start_time = version.start_date().and_time(NaiveTime::from_hms(5, 0, 0));
-
-    // rating to song / song to rating
     let mut r2s = BTreeSet::<(i16, _)>::new();
     let mut s2r = HashMap::<_, i16>::new();
     let mut key_to_record = HashMap::new();
-
     for record in records
         .iter()
         .filter(|r| start_time <= *r.played_at().time())
@@ -124,7 +132,6 @@ fn main() -> anyhow::Result<()> {
             // );
         }
     }
-
     println!("Current best");
     for (rating, key) in r2s.iter().rev() {
         let record = key_to_record[key];
@@ -135,7 +142,61 @@ fn main() -> anyhow::Result<()> {
         );
     }
     println!("Sum: {}", r2s.iter().map(|x| x.0).sum::<i16>());
+    Ok(())
+}
 
+fn analyze_old_songs(
+    records: &[PlayRecord],
+    levels: &HashMap<(&Url, ScoreGeneration), &Song>,
+) -> anyhow::Result<()> {
+    let mut best = HashMap::new();
+    for record in records {
+        let old = best.insert(
+            (record.song_metadata().cover_art(), record.score_metadata()),
+            record,
+        );
+        if *record.achievement_result().new_record() != old.is_some() {
+            println!("old = {old:?}");
+            println!("record = {record:?}");
+            bail!("Failed due to the error above");
+        }
+    }
+    for ((icon, score_metadata), record) in best {
+        let Some(song) = levels.get(&(icon, *score_metadata.generation())) else {
+            println!("Removed song: {}", record.song_metadata().name());
+            continue;
+        };
+        let level = song
+            .levels()
+            .get(*score_metadata.difficulty())
+            .with_context(|| {
+                format!(
+                    "Song not found: {:?} {:?}",
+                    record.song_metadata(),
+                    record.score_metadata()
+                )
+            })?;
+        let a = *record.achievement_result().value();
+        let c = rank_coef(a);
+        let (min, max) = match level {
+            InternalScoreLevel::Unknown(lv) => {
+                let lvs = lv.score_constant_candidates();
+                let min = single_song_rating(lvs.clone().next().unwrap(), a, c);
+                let max = single_song_rating(lvs.clone().last().unwrap(), a, c);
+                (min, max)
+            }
+            InternalScoreLevel::Known(lv) => {
+                let val = single_song_rating(lv, a, c);
+                (val, val)
+            }
+        };
+        println!(
+            "{} ({:?} {:?}) => [{min}, {max}]",
+            record.song_metadata().name(),
+            record.score_metadata().generation(),
+            record.score_metadata().difficulty()
+        );
+    }
     Ok(())
 }
 
