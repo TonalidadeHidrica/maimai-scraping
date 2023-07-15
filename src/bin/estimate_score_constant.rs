@@ -1,16 +1,16 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    io::{BufReader, BufWriter},
+    io::BufReader,
     path::PathBuf,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
 use chrono::NaiveTime;
 use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
 use maimai_scraping::maimai::{
-    load_score_level::{self, InternalScoreLevel, MaimaiVersion, Song},
+    load_score_level::{self, InternalScoreLevel, MaimaiVersion, RemovedSong, Song},
     rating::{rank_coef, single_song_rating, ScoreConstant},
     schema::latest::{PlayRecord, ScoreGeneration},
 };
@@ -20,6 +20,7 @@ use url::Url;
 struct Opts {
     input_file: PathBuf,
     level_file: PathBuf,
+    removed_songs: PathBuf,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -29,10 +30,14 @@ fn main() -> anyhow::Result<()> {
         serde_json::from_reader(BufReader::new(File::open(opts.input_file)?))?;
 
     let levels = load_score_level::load(opts.level_file)?;
-    let levels = load_score_level::make_map(&levels)?;
+    let levels = load_score_level::make_map(&levels, |song| (song.icon(), song.generation()))?;
+
+    let removed_songs: Vec<RemovedSong> =
+        serde_json::from_reader(BufReader::new(File::open(opts.removed_songs)?))?;
+    let removed_songs = load_score_level::make_map(&removed_songs, |r| r.icon())?;
 
     // analyze_new_songs(&records, &levels)?;
-    analyze_old_songs(&records, &levels)?;
+    analyze_old_songs(&records, &levels, &removed_songs)?;
 
     Ok(())
 }
@@ -149,6 +154,7 @@ fn analyze_new_songs(
 fn analyze_old_songs(
     records: &[PlayRecord],
     levels: &HashMap<(&Url, ScoreGeneration), &Song>,
+    removed_songs: &HashMap<&Url, &RemovedSong>,
 ) -> anyhow::Result<()> {
     let mut best = HashMap::<_, &PlayRecord>::new();
     for record in records {
@@ -166,13 +172,19 @@ fn analyze_old_songs(
     }
 
     let mut bests = vec![];
-    let mut removed_songs = vec![];
     for ((icon, score_metadata), record) in best {
-        let Some(song) = levels.get(&(icon, *score_metadata.generation())) else {
-            println!("Removed song: {} {:?}", record.song_metadata().name(), score_metadata.generation());
-            removed_songs.push(maimai_scraping::maimai::load_score_level::RemovedSong { icon: icon.to_owned(), name:record.song_metadata().name().to_owned()  });
+        if removed_songs.contains_key(icon) {
             continue;
-        };
+        }
+        let song = levels
+            .get(&(icon, *score_metadata.generation()))
+            .with_context(|| {
+                anyhow!(
+                    "Unknown song: {:?} {:?}",
+                    record.song_metadata().name(),
+                    record.score_metadata().generation()
+                )
+            })?;
         let level = song
             .levels()
             .get(*score_metadata.difficulty())
@@ -215,11 +227,6 @@ fn analyze_old_songs(
     //         a.score_metadata().difficulty()
     //     );
     // }
-
-    serde_json::to_writer(
-        BufWriter::new(File::create("ignore/removed_songs.json")?),
-        &removed_songs,
-    )?;
 
     Ok(())
 }

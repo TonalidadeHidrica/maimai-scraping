@@ -16,17 +16,21 @@ pub fn load(path: impl Into<PathBuf>) -> anyhow::Result<Vec<Song>> {
     let songs: Vec<SongRaw> = serde_json::from_reader(BufReader::new(File::open(path)?))?;
     songs.into_iter().map(Song::try_from).collect()
 }
-pub fn make_map(songs: &[Song]) -> anyhow::Result<HashMap<(&Url, ScoreGeneration), &Song>> {
+pub fn make_map<'t, T, U, F>(songs: &'t [T], mut key: F) -> anyhow::Result<HashMap<U, &'t T>>
+where
+    T: std::fmt::Debug,
+    U: std::hash::Hash + std::cmp::Eq,
+    F: FnMut(&'t T) -> U,
+{
     let mut map = HashMap::new();
     for song in songs {
-        if let Some(entry) = map.insert((&song.icon, song.generation), song) {
+        if let Some(entry) = map.insert(key(song), song) {
             bail!("Duplicating icon url: {entry:?}");
         }
     }
     Ok(map)
 }
 
-#[allow(unused)]
 #[derive(Debug, Deserialize)]
 struct SongRaw {
     dx: u8,
@@ -233,8 +237,10 @@ impl MaimaiVersion {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Getters)]
 pub struct RemovedSong {
-    pub icon: Url,
-    pub name: String,
+    #[getset(get = "pub")]
+    icon: Url,
+    #[getset(get = "pub")]
+    name: String,
 }
