@@ -12,7 +12,7 @@ use crate::maimai::{
 
 use super::{
     rating::ScoreLevel,
-    schema::latest::{AchievementValue, ScoreMetadata},
+    schema::latest::{AchievementValue, RatingValue, ScoreMetadata},
     song_score_parser::{find_and_parse_score_idx, ScoreIdx},
 };
 
@@ -24,7 +24,18 @@ pub fn parse(html: &scraper::Html) -> anyhow::Result<RatingTargetList> {
         .next_siblings()
         .filter_map(ElementRef::wrap)
         .peekable();
+
+    let rating = html
+        .select(selector!("div.rating_block"))
+        .next()
+        .context("Rating block not found")?
+        .text()
+        .collect::<String>()
+        .parse::<u16>()?
+        .into();
+
     Ok(RatingTargetList {
+        rating,
         target_new: parse_entries(&mut divs)?,
         target_old: parse_entries(&mut divs)?,
         candidates_new: parse_entries(&mut divs)?,
@@ -77,6 +88,7 @@ pub fn parse_entry(div: ElementRef) -> anyhow::Result<RatingTargetEntry> {
 #[allow(unused)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RatingTargetList {
+    rating: RatingValue,
     target_new: Vec<RatingTargetEntry>,
     target_old: Vec<RatingTargetEntry>,
     candidates_new: Vec<RatingTargetEntry>,
