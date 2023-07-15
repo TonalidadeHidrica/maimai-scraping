@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    io::BufReader,
+    io::{BufReader, BufWriter},
     path::PathBuf,
 };
 
@@ -166,9 +166,11 @@ fn analyze_old_songs(
     }
 
     let mut bests = vec![];
+    let mut removed_songs = vec![];
     for ((icon, score_metadata), record) in best {
         let Some(song) = levels.get(&(icon, *score_metadata.generation())) else {
             println!("Removed song: {} {:?}", record.song_metadata().name(), score_metadata.generation());
+            removed_songs.push(maimai_scraping::maimai::load_score_level::RemovedSong { icon: icon.to_owned(), name:record.song_metadata().name().to_owned()  });
             continue;
         };
         let level = song
@@ -213,6 +215,11 @@ fn analyze_old_songs(
     //         a.score_metadata().difficulty()
     //     );
     // }
+
+    serde_json::to_writer(
+        BufWriter::new(File::create("ignore/removed_songs.json")?),
+        &removed_songs,
+    )?;
 
     Ok(())
 }

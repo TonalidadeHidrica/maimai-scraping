@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail};
 use chrono::NaiveDate;
 use fs_err::File;
 use getset::{CopyGetters, Getters};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 use super::{
@@ -231,4 +231,10 @@ impl MaimaiVersion {
     pub fn latest() -> Self {
         Self::FestivalPlus
     }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RemovedSong {
+    pub icon: Url,
+    pub name: String,
 }
