@@ -7,6 +7,7 @@ use crate::cookie_store::Password;
 use crate::cookie_store::UserName;
 use crate::sega_trait::SegaTrait;
 use anyhow::anyhow;
+use anyhow::bail;
 use chrono::NaiveDateTime;
 use reqwest::header;
 use reqwest::redirect;
@@ -97,6 +98,9 @@ impl<T: SegaTrait> SegaClient<T> {
             .send()
             .await?;
         set_and_save_credentials(&mut self.cookie_store, &response)?;
+        if !response.status().is_success() {
+            bail!("Failed to log in: server returned {:?}", response.status());
+        }
         let location = response
             .headers()
             .get(header::LOCATION)
@@ -181,6 +185,10 @@ pub async fn try_login<T: SegaTrait>(client: &reqwest::Client) -> anyhow::Result
         .form(&LoginForm::new(&credentials, token))
         .send()
         .await?;
+
+    if !response.status().is_success() {
+        bail!("Failed to log in: server returned {:?}", response.status());
+    }
 
     let url = response.url().clone();
     if url.as_str() != T::AIME_LIST_URL {
