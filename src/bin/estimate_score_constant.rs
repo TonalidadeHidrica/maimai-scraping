@@ -31,12 +31,13 @@ fn main() -> anyhow::Result<()> {
     let levels = load_score_level::load(opts.level_file)?;
     let levels = load_score_level::make_map(&levels)?;
 
-    analyze_new_songs(&records, &levels)?;
+    // analyze_new_songs(&records, &levels)?;
     analyze_old_songs(&records, &levels)?;
 
     Ok(())
 }
 
+#[allow(unused)]
 fn analyze_new_songs(
     records: &[PlayRecord],
     levels: &HashMap<(&Url, ScoreGeneration), &Song>,
@@ -167,7 +168,7 @@ fn analyze_old_songs(
     let mut bests = vec![];
     for ((icon, score_metadata), record) in best {
         let Some(song) = levels.get(&(icon, *score_metadata.generation())) else {
-            println!("Removed song: {}", record.song_metadata().name());
+            println!("Removed song: {} {:?}", record.song_metadata().name(), score_metadata.generation());
             continue;
         };
         let level = song
@@ -203,15 +204,15 @@ fn analyze_old_songs(
         // );
     }
 
-    bests.sort_by_key(|x| (x.2, x.1));
-    for (i, (a, b, c)) in bests.iter().rev().enumerate().take(50) {
-        println!(
-            "{i:2}  {b} {c}   {} ({:?} {:?})",
-            a.song_metadata().name(),
-            a.score_metadata().generation(),
-            a.score_metadata().difficulty()
-        );
-    }
+    // bests.sort_by_key(|x| (x.2, x.1));
+    // for (i, (a, b, c)) in bests.iter().rev().enumerate().take(50) {
+    //     println!(
+    //         "{i:2}  {b} {c}   {} ({:?} {:?})",
+    //         a.song_metadata().name(),
+    //         a.score_metadata().generation(),
+    //         a.score_metadata().difficulty()
+    //     );
+    // }
 
     Ok(())
 }
