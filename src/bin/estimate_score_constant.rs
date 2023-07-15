@@ -149,18 +149,22 @@ fn analyze_old_songs(
     records: &[PlayRecord],
     levels: &HashMap<(&Url, ScoreGeneration), &Song>,
 ) -> anyhow::Result<()> {
-    let mut best = HashMap::new();
+    let mut best = HashMap::<_, &PlayRecord>::new();
     for record in records {
-        let old = best.insert(
-            (record.song_metadata().cover_art(), record.score_metadata()),
-            record,
-        );
-        if *record.achievement_result().new_record() != old.is_some() {
-            println!("old = {old:?}");
-            println!("record = {record:?}");
-            bail!("Failed due to the error above");
+        use std::collections::hash_map::Entry::*;
+        match best.entry((record.song_metadata().cover_art(), record.score_metadata())) {
+            Occupied(mut old) => {
+                if old.get().achievement_result().value() < record.achievement_result().value() {
+                    *old.get_mut() = record;
+                }
+            }
+            Vacant(entry) => {
+                entry.insert(record);
+            }
         }
     }
+
+    let mut bests = vec![];
     for ((icon, score_metadata), record) in best {
         let Some(song) = levels.get(&(icon, *score_metadata.generation())) else {
             println!("Removed song: {}", record.song_metadata().name());
@@ -190,13 +194,25 @@ fn analyze_old_songs(
                 (val, val)
             }
         };
+        bests.push((record, min, max));
+        // println!(
+        //     "{} ({:?} {:?}) => [{min}, {max}]",
+        //     record.song_metadata().name(),
+        //     record.score_metadata().generation(),
+        //     record.score_metadata().difficulty()
+        // );
+    }
+
+    bests.sort_by_key(|x| (x.2, x.1));
+    for (i, (a, b, c)) in bests.iter().rev().enumerate().take(50) {
         println!(
-            "{} ({:?} {:?}) => [{min}, {max}]",
-            record.song_metadata().name(),
-            record.score_metadata().generation(),
-            record.score_metadata().difficulty()
+            "{i:2}  {b} {c}   {} ({:?} {:?})",
+            a.song_metadata().name(),
+            a.score_metadata().generation(),
+            a.score_metadata().difficulty()
         );
     }
+
     Ok(())
 }
 

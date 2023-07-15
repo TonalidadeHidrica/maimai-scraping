@@ -53,7 +53,6 @@ pub struct Song {
 impl TryFrom<SongRaw> for Song {
     type Error = anyhow::Error;
     fn try_from(song: SongRaw) -> anyhow::Result<Self> {
-        println!("{song:?}");
         let zero = song.lv[4].abs() < 1e-8;
         let re_master = match song.lv.len() {
             6 => {

@@ -76,7 +76,7 @@ pub struct AchievementResult {
     rank: AchievementRank,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct AchievementValue(u32);
 
 impl TryFrom<u32> for AchievementValue {
@@ -173,6 +173,8 @@ pub struct RatingResult {
     Copy,
     PartialEq,
     Eq,
+    PartialOrd,
+    Ord,
     Debug,
     derive_more::From,
     derive_more::Display,
