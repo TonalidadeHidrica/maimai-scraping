@@ -3,6 +3,7 @@
 #[macro_use]
 pub mod macros;
 
+pub mod algorithm;
 pub mod api;
 pub mod compare_htmls;
 pub mod cookie_store;
