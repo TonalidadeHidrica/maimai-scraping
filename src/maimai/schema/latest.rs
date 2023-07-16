@@ -4,6 +4,7 @@ use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::str::FromStr;
+use strum::EnumIter;
 use typed_builder::TypedBuilder;
 use url::Url;
 
@@ -173,7 +174,9 @@ pub enum ScoreGeneration {
     Deluxe,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize, EnumIter,
+)]
 pub enum ScoreDifficulty {
     Basic,
     Advanced,

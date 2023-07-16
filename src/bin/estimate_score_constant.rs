@@ -8,12 +8,12 @@ use anyhow::{anyhow, bail, Context};
 use chrono::NaiveTime;
 use clap::Parser;
 use fs_err::File;
-use itertools::Itertools;
 use maimai_scraping::maimai::{
     load_score_level::{self, InternalScoreLevel, MaimaiVersion, RemovedSong, Song},
     rating::{rank_coef, single_song_rating, ScoreConstant},
-    schema::latest::{PlayRecord, PlayTime, ScoreGeneration, SongIcon},
+    schema::latest::{PlayRecord, PlayTime, ScoreDifficulty, ScoreGeneration, SongIcon},
 };
+use strum::IntoEnumIterator;
 
 #[derive(Parser)]
 struct Opts {
@@ -23,7 +23,6 @@ struct Opts {
 }
 
 fn main() -> anyhow::Result<()> {
-    // TODO: use rank coeffieicnts for appropriate versions
     let opts = Opts::parse();
     let records: Vec<PlayRecord> =
         serde_json::from_reader(BufReader::new(File::open(opts.input_file)?))?;
@@ -35,16 +34,110 @@ fn main() -> anyhow::Result<()> {
         serde_json::from_reader(BufReader::new(File::open(opts.removed_songs)?))?;
     let removed_songs = load_score_level::make_map(&removed_songs, |r| r.icon())?;
 
-    // analyze_new_songs(&records, &levels)?;
-    analyze_old_songs(&records, &levels, &removed_songs)?;
+    let mut levels = ScoreConstantsStore::new(levels, removed_songs);
+    levels.reset();
+    analyze_new_songs(&records, &mut levels)?;
+    // analyze_old_songs(&records, &mut levels, &removed_songs)?;
 
     Ok(())
 }
 
-#[allow(unused)]
-fn analyze_new_songs(
-    records: &[PlayRecord],
-    levels: &HashMap<(&SongIcon, ScoreGeneration), &Song>,
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+struct ScoreKey<'a> {
+    icon: &'a SongIcon,
+    generation: ScoreGeneration,
+    difficulty: ScoreDifficulty,
+}
+impl<'a> From<&'a PlayRecord> for ScoreKey<'a> {
+    fn from(record: &'a PlayRecord) -> Self {
+        Self {
+            icon: record.song_metadata().cover_art(),
+            generation: record.score_metadata().generation(),
+            difficulty: record.score_metadata().difficulty(),
+        }
+    }
+}
+
+struct ScoreConstantsStore<'s, 'r> {
+    updated: bool,
+    constants: HashMap<ScoreKey<'s>, (&'s Song, Vec<ScoreConstant>)>,
+    removed_songs: HashMap<&'s SongIcon, &'r RemovedSong>,
+}
+impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
+    fn new(
+        map: HashMap<(&'s SongIcon, ScoreGeneration), &'s Song>,
+        removed_songs: HashMap<&'s SongIcon, &'r RemovedSong>,
+    ) -> Self {
+        Self {
+            updated: false,
+            constants: map
+                .into_iter()
+                .flat_map(|((icon, generation), song)| {
+                    ScoreDifficulty::iter().filter_map(move |difficulty| {
+                        let key = ScoreKey {
+                            icon,
+                            generation,
+                            difficulty,
+                        };
+                        let levels = match song.levels().get(difficulty)? {
+                            InternalScoreLevel::Unknown(level) => {
+                                level.score_constant_candidates().collect()
+                            }
+                            InternalScoreLevel::Known(level) => vec![level],
+                        };
+                        Some((key, (song, levels)))
+                    })
+                })
+                .collect(),
+            removed_songs,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.updated = false;
+    }
+
+    fn get(&self, key: ScoreKey<'s>) -> anyhow::Result<Option<(&'s Song, &[ScoreConstant])>> {
+        if self.removed_songs.contains_key(key.icon) {
+            return Ok(None);
+        }
+        match self.constants.get(&key) {
+            Some((x, y)) => Ok(Some((*x, &y[..]))),
+            None => bail!("No score constant entry was found for {key:?}"),
+        }
+    }
+
+    fn set(
+        &mut self,
+        key: ScoreKey<'s>,
+        new: impl Iterator<Item = ScoreConstant>,
+    ) -> anyhow::Result<()> {
+        let (song, levels) = self.constants.get_mut(&key).unwrap();
+        let old_len = levels.len();
+        let new: BTreeSet<_> = new.collect();
+        levels.retain(|x| new.contains(x));
+        if levels.is_empty() {
+            bail!("No more candidates! {:?} {key:?}", song.song_name());
+        }
+        if levels.len() < old_len {
+            self.updated = true;
+            if levels.len() == 1 {
+                println!(
+                    "Internal level determined! {} ({:?} {:?}): {}",
+                    song.song_name(),
+                    key.generation,
+                    key.difficulty,
+                    levels[0]
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
+fn analyze_new_songs<'s>(
+    records: &'s [PlayRecord],
+    levels: &mut ScoreConstantsStore<'s, '_>,
 ) -> anyhow::Result<()> {
     let version = MaimaiVersion::latest();
     let start_time: PlayTime = version
@@ -58,28 +151,18 @@ fn analyze_new_songs(
         .iter()
         .filter(|r| start_time <= r.played_at().time())
     {
-        let song_key = (
-            record.song_metadata().cover_art(),
-            record.score_metadata().generation(),
-        );
-        let song = levels.get(&song_key).with_context(|| {
-            format!(
-                "Song not found: {:?} {:?}",
-                record.song_metadata(),
-                record.score_metadata()
-            )
-        })?;
+        let score_key = ScoreKey::from(record);
+        let Some((song, _)) = levels.get(score_key)? else { continue };
         let delta = record.rating_result().delta();
         if song.version() == version && delta > 0 {
             use std::collections::hash_map::Entry::*;
-            let key = (song_key.0, record.score_metadata());
-            let rating = match s2r.entry(key) {
+            let rating = match s2r.entry(score_key) {
                 Occupied(mut s2r_entry) => {
                     // println!("  Song list does not change, just updating score (delta={delta})");
                     let rating = s2r_entry.get_mut();
-                    assert!(r2s.remove(&(*rating, key)));
+                    assert!(r2s.remove(&(*rating, score_key)));
                     *rating += delta;
-                    assert!(r2s.insert((*rating, key)));
+                    assert!(r2s.insert((*rating, score_key)));
                     *rating
                 }
                 Vacant(s2r_entry) => {
@@ -88,71 +171,43 @@ fn analyze_new_songs(
                         let (removed_rating, removed_key) = r2s.pop_first().unwrap();
                         // println!("    Removed={}", removed_rating);
                         let new_rating = removed_rating + delta;
-                        assert!(r2s.insert((new_rating, key)));
+                        assert!(r2s.insert((new_rating, score_key)));
                         s2r_entry.insert(new_rating);
                         assert!(s2r.remove(&removed_key).is_some());
                         new_rating
                     } else {
                         // Just insert the new song
                         s2r_entry.insert(delta);
-                        assert!(r2s.insert((delta, key)));
+                        assert!(r2s.insert((delta, score_key)));
                         delta
                     }
                 }
             };
-            key_to_record.insert(key, record);
+            key_to_record.insert(score_key, record);
 
             let a = record.achievement_result().value();
-            let estimated_levels = ScoreConstant::candidates()
-                .filter(|&level| single_song_rating(level, a, rank_coef(a)).get() as i16 == rating)
-                .collect_vec();
-            match estimated_levels[..] {
-                [] => bail!("Error: no possible levels!"),
-                [estimated] => {
-                    match song
-                        .levels()
-                        .get(record.score_metadata().difficulty())
-                        .unwrap()
-                        .known()
-                    {
-                        None => {
-                            println!(
-                                "Constant confirmed! {} ({:?} {:?}): {estimated}",
-                                record.song_metadata().name(),
-                                record.score_metadata().generation(),
-                                record.score_metadata().difficulty(),
-                            );
-                        }
-                        Some(known) if known != estimated => {
-                            bail!("Conflict levels! Database: {known}, esimated: {estimated}");
-                        }
-                        _ => {}
-                    }
-                }
-                _ => println!("Multiple candidates: {estimated_levels:?}"),
-            }
-
-            // println!(
-            //     "{} {:?} {} => {rating} (Expected: {expected:?})",
-            //     record.song_metadata().name(),
-            //     record.score_metadata(),
-            //     record.achievement_result().value(),
-            // );
+            levels.set(
+                score_key,
+                ScoreConstant::candidates().filter(|&level| {
+                    single_song_rating(level, a, rank_coef(a)).get() as i16 == rating
+                }),
+            )?;
         }
     }
-    println!("Current best");
-    for (rating, key) in r2s.iter().rev() {
-        let record = key_to_record[key];
-        println!(
-            "{rating:3}  {} {:?}",
-            record.song_metadata().name(),
-            record.score_metadata()
-        );
-    }
-    println!("Sum: {}", r2s.iter().map(|x| x.0).sum::<i16>());
+    // println!("Current best");
+    // for (rating, key) in r2s.iter().rev() {
+    //     let record = key_to_record[key];
+    //     println!(
+    //         "{rating:3}  {} {:?}",
+    //         record.song_metadata().name(),
+    //         record.score_metadata()
+    //     );
+    // }
+    // println!("Sum: {}", r2s.iter().map(|x| x.0).sum::<i16>());
     Ok(())
 }
 
+#[allow(unused)]
 fn analyze_old_songs(
     records: &[PlayRecord],
     levels: &HashMap<(&SongIcon, ScoreGeneration), &Song>,

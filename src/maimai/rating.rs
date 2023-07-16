@@ -49,7 +49,9 @@ pub fn rank_coef(achievement_value: AchievementValue) -> RankCoefficient {
     ret.into()
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, derive_more::Into, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, derive_more::Into, Serialize, Deserialize,
+)]
 pub struct ScoreConstant(u8);
 
 impl TryFrom<u8> for ScoreConstant {

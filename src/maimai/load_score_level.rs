@@ -50,7 +50,7 @@ pub struct Song {
     #[getset(get_copy = "pub")]
     levels: ScoreLevels,
     #[getset(get = "pub")]
-    song_name: String,
+    song_name: SongName,
     #[getset(get = "pub")]
     icon: SongIcon,
 }
@@ -83,7 +83,7 @@ impl TryFrom<SongRaw> for Song {
                 master: song.lv[3].try_into()?,
                 re_master,
             },
-            song_name: song.n,
+            song_name: song.n.into(),
             icon: Url::parse(&format!(
                 "https://maimaidx.jp/maimai-mobile/img/Music/{}.png",
                 song.ico
