@@ -10,7 +10,6 @@ use itertools::Itertools;
 ///
 /// # Constraints
 /// - `a` and `c` must be pure.
-/// - The first elements of the elements of `a(i)` must be in ascending order.
 ///
 /// # Returns
 /// A vector `ret` of length `n`.
