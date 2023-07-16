@@ -1,21 +1,24 @@
-use chrono::NaiveDateTime;
 use scraper::{Html, Selector};
 use url::Url;
 
 use crate::cookie_store::AimeIdx;
 
+pub type Idx<T> = <<T as SegaTrait>::PlayRecord as PlayRecordTrait>::Idx;
+pub type PlayTime<T> = <<T as SegaTrait>::PlayRecord as PlayRecordTrait>::PlayTime;
+pub type PlayedAt<T> = <<T as SegaTrait>::PlayRecord as PlayRecordTrait>::PlayedAt;
 pub trait SegaTrait: Sized {
     const ERROR_PATH: &'static str;
     const AIME_SUBMIT_PATH: &'static str;
     const RECORD_URL: &'static str;
 
-    type Idx: Copy;
-    fn play_log_detail_url(idx: Self::Idx) -> String;
+    // type Idx: Copy;
+    // type PlayTime: Ord + Display;
+    fn play_log_detail_url(idx: Idx<Self>) -> String;
 
-    fn parse_record_index(html: &Html) -> anyhow::Result<Vec<(NaiveDateTime, Self::Idx)>>;
+    fn parse_record_index(html: &Html) -> anyhow::Result<Vec<(PlayTime<Self>, Idx<Self>)>>;
 
-    type PlayRecord: PlayRecordTrait<Idx = Self::Idx>;
-    fn parse(html: &Html, idx: Self::Idx) -> anyhow::Result<Self::PlayRecord>;
+    type PlayRecord: PlayRecordTrait;
+    fn parse(html: &Html, idx: Idx<Self>) -> anyhow::Result<Self::PlayRecord>;
 
     fn play_log_detail_not_found(url: &Url) -> bool;
 
@@ -32,7 +35,8 @@ pub trait SegaTrait: Sized {
 pub trait PlayRecordTrait {
     type PlayedAt;
     fn played_at(&self) -> &Self::PlayedAt;
-    fn time(&self) -> NaiveDateTime;
+    type PlayTime;
+    fn time(&self) -> Self::PlayTime;
     type Idx;
     fn idx(&self) -> Self::Idx;
 }

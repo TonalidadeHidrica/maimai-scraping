@@ -5,12 +5,11 @@ pub mod rating_target_parser;
 pub mod schema;
 pub mod song_score_parser;
 
-use chrono::NaiveDateTime;
 use scraper::{Html, Selector};
 use url::Url;
 
 use play_record_parser::parse_record_index;
-use schema::latest::{Idx, PlayRecord, PlayedAt};
+use schema::latest::{Idx, PlayRecord, PlayTime, PlayedAt};
 
 use crate::{
     cookie_store::AimeIdx,
@@ -23,7 +22,6 @@ impl SegaTrait for Maimai {
     const AIME_SUBMIT_PATH: &'static str = "/maimai-mobile/aimeList/submit/";
     const RECORD_URL: &'static str = "https://maimaidx.jp/maimai-mobile/record/";
 
-    type Idx = Idx;
     fn play_log_detail_url(idx: Idx) -> String {
         format!(
             "https://maimaidx.jp/maimai-mobile/record/playlogDetail/?idx={}",
@@ -31,7 +29,7 @@ impl SegaTrait for Maimai {
         )
     }
 
-    fn parse_record_index(html: &Html) -> anyhow::Result<Vec<(NaiveDateTime, Idx)>> {
+    fn parse_record_index(html: &Html) -> anyhow::Result<Vec<(PlayTime, Idx)>> {
         parse_record_index(html)
     }
 
@@ -66,7 +64,8 @@ impl PlayRecordTrait for PlayRecord {
     fn played_at(&self) -> &PlayedAt {
         self.played_at()
     }
-    fn time(&self) -> NaiveDateTime {
+    type PlayTime = PlayTime;
+    fn time(&self) -> PlayTime {
         self.played_at().time()
     }
     type Idx = Idx;

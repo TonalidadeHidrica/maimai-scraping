@@ -6,17 +6,19 @@ use std::{
     path::PathBuf,
 };
 
-use chrono::NaiveDateTime;
 use clap::Parser;
 use fs_err::File;
-use maimai_scraping::maimai::{rating_target_parser::RatingTargetList, schema::latest::PlayRecord};
+use maimai_scraping::maimai::{
+    rating_target_parser::RatingTargetList,
+    schema::latest::{PlayRecord, PlayTime},
+};
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
 
     let records: Vec<PlayRecord> =
         serde_json::from_reader(BufReader::new(File::open(opts.records_file)?))?;
-    let mut rating_targets: BTreeMap<NaiveDateTime, RatingTargetList> =
+    let mut rating_targets: BTreeMap<PlayTime, RatingTargetList> =
         serde_json::from_reader(BufReader::new(File::open(opts.rating_target_file)?))?;
     let records: BTreeMap<_, _> = records
         .into_iter()

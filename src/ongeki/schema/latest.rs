@@ -49,7 +49,9 @@ impl TryFrom<u8> for Idx {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, From, Into, Display, Serialize, Deserialize,
+)]
 pub struct PlayTime(NaiveDateTime);
 
 #[derive(Clone, PartialEq, Eq, Debug, From, AsRef, Display, Serialize, Deserialize)]
@@ -364,5 +366,8 @@ pub struct OtherPlayer {
     #[getset(get_copy = "pub")]
     difficulty: ScoreDifficulty,
     #[getset(get = "pub")]
-    user_name: String,
+    user_name: UserName,
 }
+
+#[derive(Clone, PartialEq, Eq, Debug, From, Display, Serialize, Deserialize)]
+pub struct UserName(String);

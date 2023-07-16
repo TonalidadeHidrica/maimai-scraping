@@ -11,7 +11,7 @@ use scraper::{ElementRef, Html};
 
 use super::schema::latest::*;
 
-pub type RecordIndexData = (NaiveDateTime, Idx);
+pub type RecordIndexData = (PlayTime, Idx);
 
 pub fn parse_record_index(html: &Html) -> anyhow::Result<Vec<RecordIndexData>> {
     let mut res = vec![];
@@ -75,7 +75,7 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
         .select(selector!("#placeName > span"))
         .next()
         .ok_or_else(|| anyhow!("Place name div not found"))?;
-    let place_name = place_name_div.text().collect::<String>();
+    let place_name = place_name_div.text().collect::<String>().into();
 
     let gray_block = place_name_div
         .parent()
@@ -164,7 +164,7 @@ fn parse_playlog_top_conatiner(
     Option<BattleKind>,
     Option<BattleWinOrLose>,
     TrackIndex,
-    NaiveDateTime,
+    PlayTime,
 )> {
     let difficulty = parse_playlog_diff(
         div.select(selector!("img.playlog_diff"))
@@ -243,11 +243,8 @@ fn parse_track_index(span: ElementRef) -> anyhow::Result<TrackIndex> {
         .expect("The value is within the range of 1-4"))
 }
 
-fn parse_play_date(span: ElementRef) -> anyhow::Result<NaiveDateTime> {
-    Ok(NaiveDateTime::parse_from_str(
-        &span.text().collect::<String>(),
-        "%Y/%m/%d %H:%M",
-    )?)
+fn parse_play_date(span: ElementRef) -> anyhow::Result<PlayTime> {
+    Ok(NaiveDateTime::parse_from_str(&span.text().collect::<String>(), "%Y/%m/%d %H:%M")?.into())
 }
 
 #[allow(clippy::type_complexity)]
@@ -268,7 +265,7 @@ fn parse_playlog_main_container(
         .select(selector!(".basic_block"))
         .next()
         .ok_or_else(|| anyhow!("No basic_block was found"))?;
-    let song_title = basic_block.text().collect::<String>();
+    let song_title = basic_block.text().collect::<String>().into();
 
     let cleared = match basic_block
         .select(selector!("img"))
@@ -1154,7 +1151,7 @@ fn parse_matching_div(matching_div: ElementRef) -> anyhow::Result<OtherPlayersLi
                 None => return Some(Err(anyhow!("No valid class was found for matching div"))),
             };
             let user_name = match e.select(selector!("div")).next() {
-                Some(e) => e.text().collect(),
+                Some(e) => e.text().collect::<String>().into(),
                 None => return Some(Err(anyhow!("User name div was not found for matching div"))),
             };
             Some(Ok(OtherPlayer::builder()
@@ -1215,7 +1212,7 @@ pub fn parse_vs_user(div: ElementRef) -> anyhow::Result<(BattleKind, BattleOppon
 
 pub fn parse_vs_user_left_span(
     span: ElementRef,
-) -> anyhow::Result<(BattleKind, String, AchievementValue)> {
+) -> anyhow::Result<(BattleKind, UserName, AchievementValue)> {
     let battle_kind = parse_battle_kind_img(
         span.select(selector!(":scope > img"))
             .next()
@@ -1233,7 +1230,8 @@ pub fn parse_vs_user_left_span(
             scraper::Node::Text(text) => Some(text.deref().to_owned()),
             _ => None,
         })
-        .ok_or_else(|| anyhow!("Opponent user name not found"))?;
+        .ok_or_else(|| anyhow!("Opponent user name not found"))?
+        .into();
 
     let achievement_value = parse_achievement_txt(
         wrapping_div

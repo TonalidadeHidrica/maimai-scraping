@@ -12,9 +12,8 @@ use itertools::Itertools;
 use maimai_scraping::maimai::{
     load_score_level::{self, InternalScoreLevel, MaimaiVersion, RemovedSong, Song},
     rating::{rank_coef, single_song_rating, ScoreConstant},
-    schema::latest::{PlayRecord, ScoreGeneration},
+    schema::latest::{PlayRecord, PlayTime, ScoreGeneration, SongIcon},
 };
-use url::Url;
 
 #[derive(Parser)]
 struct Opts {
@@ -45,10 +44,13 @@ fn main() -> anyhow::Result<()> {
 #[allow(unused)]
 fn analyze_new_songs(
     records: &[PlayRecord],
-    levels: &HashMap<(&Url, ScoreGeneration), &Song>,
+    levels: &HashMap<(&SongIcon, ScoreGeneration), &Song>,
 ) -> anyhow::Result<()> {
     let version = MaimaiVersion::latest();
-    let start_time = version.start_date().and_time(NaiveTime::from_hms(5, 0, 0));
+    let start_time: PlayTime = version
+        .start_date()
+        .and_time(NaiveTime::from_hms(5, 0, 0))
+        .into();
     let mut r2s = BTreeSet::<(i16, _)>::new();
     let mut s2r = HashMap::<_, i16>::new();
     let mut key_to_record = HashMap::new();
@@ -153,8 +155,8 @@ fn analyze_new_songs(
 
 fn analyze_old_songs(
     records: &[PlayRecord],
-    levels: &HashMap<(&Url, ScoreGeneration), &Song>,
-    removed_songs: &HashMap<&Url, &RemovedSong>,
+    levels: &HashMap<(&SongIcon, ScoreGeneration), &Song>,
+    removed_songs: &HashMap<&SongIcon, &RemovedSong>,
 ) -> anyhow::Result<()> {
     let mut best = HashMap::<_, &PlayRecord>::new();
     for record in records {

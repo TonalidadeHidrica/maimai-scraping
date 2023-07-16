@@ -42,9 +42,9 @@ pub struct PlayedAt {
     #[getset(get_copy = "pub")]
     idx: Idx,
     #[getset(get_copy = "pub")]
-    time: NaiveDateTime,
+    time: PlayTime,
     #[getset(get = "pub")]
-    place: String,
+    place: PlaceName,
     #[getset(get_copy = "pub")]
     track: TrackIndex,
 }
@@ -74,6 +74,30 @@ impl TryFrom<u8> for Idx {
     }
 }
 
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Debug,
+    derive_more::From,
+    derive_more::Display,
+    Serialize,
+    Deserialize,
+)]
+pub struct PlayTime(NaiveDateTime);
+
+impl PlayTime {
+    pub fn get(self) -> NaiveDateTime {
+        self.0
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
+pub struct PlaceName(String);
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct TrackIndex(u8);
 
@@ -90,9 +114,38 @@ impl TryFrom<u8> for TrackIndex {
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
 #[getset(get = "pub")]
 pub struct SongMetadata {
-    name: String,
-    cover_art: Url,
+    name: SongName,
+    cover_art: SongIcon,
 }
+
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    derive_more::From,
+    derive_more::FromStr,
+    derive_more::Display,
+    Serialize,
+    Deserialize,
+)]
+pub struct SongName(String);
+
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Debug,
+    derive_more::From,
+    derive_more::FromStr,
+    Serialize,
+    Deserialize,
+)]
+pub struct SongIcon(Url);
 
 #[derive(
     Clone,
@@ -266,10 +319,13 @@ pub struct TourMember {
     #[getset(get_copy = "pub")]
     star: u32,
     #[getset(get = "pub")]
-    icon: Url,
+    icon: TourMemberIcon,
     #[getset(get_copy = "pub")]
     level: u32,
 }
+
+#[derive(Clone, PartialEq, Eq, Debug, derive_more::FromStr, Serialize, Deserialize)]
+pub struct TourMemberIcon(Url);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct ValueWithMax<T: PartialOrd> {
@@ -365,8 +421,11 @@ pub struct OtherPlayer {
     #[getset(get_copy = "pub")]
     difficulty: ScoreDifficulty,
     #[getset(get = "pub")]
-    user_name: String,
+    user_name: UserName,
 }
+
+#[derive(Clone, PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
+pub struct UserName(String);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct MatchingRank(u8);
@@ -402,7 +461,7 @@ pub enum BattleWinOrLose {
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct BattleOpponent {
-    user_name: String,
+    user_name: UserName,
     achievement_value: AchievementValue,
     rating: RatingValue,
     border_color: RatingBorderColor,

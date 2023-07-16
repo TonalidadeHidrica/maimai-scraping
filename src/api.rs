@@ -5,10 +5,11 @@ use crate::cookie_store::CookieStoreLoadError;
 use crate::cookie_store::Credentials;
 use crate::cookie_store::Password;
 use crate::cookie_store::UserName;
+use crate::sega_trait::Idx;
+use crate::sega_trait::PlayTime;
 use crate::sega_trait::SegaTrait;
 use anyhow::anyhow;
 use anyhow::bail;
-use chrono::NaiveDateTime;
 use reqwest::header;
 use reqwest::redirect;
 use reqwest::IntoUrl;
@@ -22,7 +23,7 @@ pub struct SegaClient<T: SegaTrait> {
 }
 
 impl<T: SegaTrait> SegaClient<T> {
-    pub async fn new() -> anyhow::Result<(Self, Vec<(NaiveDateTime, T::Idx)>)> {
+    pub async fn new() -> anyhow::Result<(Self, Vec<(PlayTime<T>, Idx<T>)>)> {
         let client = reqwest_client::<T>()?;
 
         let cookie_store = CookieStore::load();
@@ -63,14 +64,17 @@ impl<T: SegaTrait> SegaClient<T> {
         Ok((client, index))
     }
 
-    async fn download_record_index(&mut self) -> anyhow::Result<Vec<(NaiveDateTime, T::Idx)>> {
+    async fn download_record_index(&mut self) -> anyhow::Result<Vec<(PlayTime<T>, Idx<T>)>> {
         let url = T::RECORD_URL;
         let response = self.fetch_authenticated(url).await?.0;
         let document = Html::parse_document(&response.text().await?);
         T::parse_record_index(&document)
     }
 
-    pub async fn download_record(&mut self, idx: T::Idx) -> anyhow::Result<Option<T::PlayRecord>> {
+    pub async fn download_record(&mut self, idx: Idx<T>) -> anyhow::Result<Option<T::PlayRecord>>
+    where
+        Idx<T>: Copy,
+    {
         let url = T::play_log_detail_url(idx);
         let (response, redirect_url) = self.fetch_authenticated(&url).await?;
         if let Some(location) = redirect_url {

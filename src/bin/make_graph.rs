@@ -9,7 +9,7 @@ use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
 use maimai_scraping::maimai::schema::{
-    latest::{PlayRecord, ScoreDifficulty},
+    latest::{PlayRecord, ScoreDifficulty, SongName},
     ver_20210316_2338::AchievementValue,
 };
 use svg::{
@@ -20,7 +20,7 @@ use svg::{
 #[derive(Parser)]
 struct Opts {
     input_file: PathBuf,
-    song_name: String,
+    song_name: SongName,
     difficulty: ScoreDifficulty,
     output_file: PathBuf,
 }
@@ -86,7 +86,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     for ((i, record_i), (j, record_j)) in filtered.iter().enumerate().tuple_windows() {
-        if record_i.played_at().time().date() != record_j.played_at().time().date() {
+        if record_i.played_at().time().get().date() != record_j.played_at().time().get().date() {
             let x = (x(i) + x(j)) / 2.;
             document = document.add(
                 Line::new()
@@ -103,7 +103,7 @@ fn main() -> anyhow::Result<()> {
     for (date, chunks) in &filtered
         .iter()
         .enumerate()
-        .group_by(|x| x.1.played_at().time().date())
+        .group_by(|x| x.1.played_at().time().get().date())
     {
         let mut count = 0;
         let mut sum = 0.0;

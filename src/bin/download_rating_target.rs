@@ -6,13 +6,13 @@ use std::{
 };
 
 use anyhow::{bail, Context};
-use chrono::NaiveDateTime;
 use clap::Parser;
 use fs_err::File;
 use maimai_scraping::{
     api::SegaClient,
     maimai::{
         rating_target_parser::{self, RatingTargetList},
+        schema::latest::PlayTime,
         Maimai,
     },
 };
@@ -66,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
 
 fn load_from_file(
     path: impl Into<PathBuf>,
-) -> anyhow::Result<BTreeMap<NaiveDateTime, RatingTargetList>> {
+) -> anyhow::Result<BTreeMap<PlayTime, RatingTargetList>> {
     let path = path.into();
     match File::open(&path) {
         Ok(file) => {

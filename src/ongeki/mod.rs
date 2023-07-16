@@ -1,5 +1,4 @@
 use anyhow::Context;
-use chrono::NaiveDateTime;
 use scraper::{ElementRef, Html, Selector};
 
 use crate::{
@@ -9,7 +8,7 @@ use crate::{
 
 use self::{
     play_record_parser::parse_record_index,
-    schema::latest::{Idx, PlayRecord, PlayedAt},
+    schema::latest::{Idx, PlayRecord, PlayTime, PlayedAt},
 };
 
 pub mod play_record_parser;
@@ -39,15 +38,14 @@ impl SegaTrait for Ongeki {
     const AIME_SUBMIT_PATH: &'static str = "/ongeki-mobile/aimeList/submit/";
     const RECORD_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/record/playlog/";
 
-    type Idx = Idx;
-    fn play_log_detail_url(idx: Self::Idx) -> String {
+    fn play_log_detail_url(idx: Idx) -> String {
         format!(
             "https://ongeki-net.com/ongeki-mobile/record/playlogDetail/?idx={}",
             idx,
         )
     }
 
-    fn parse_record_index(html: &scraper::Html) -> anyhow::Result<Vec<(NaiveDateTime, Idx)>> {
+    fn parse_record_index(html: &scraper::Html) -> anyhow::Result<Vec<(PlayTime, Idx)>> {
         parse_record_index(html)
     }
 
@@ -86,8 +84,9 @@ impl PlayRecordTrait for PlayRecord {
     fn played_at(&self) -> &PlayedAt {
         self.played_at()
     }
-    fn time(&self) -> NaiveDateTime {
-        self.played_at().time().into()
+    type PlayTime = PlayTime;
+    fn time(&self) -> PlayTime {
+        self.played_at().time()
     }
     type Idx = Idx;
     fn idx(&self) -> Idx {

@@ -10,7 +10,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use chrono::NaiveDateTime;
 use clap::ArgEnum;
 use clap::Parser;
 use fs_err::File;
@@ -18,7 +17,10 @@ use itertools::Itertools;
 use maimai_scraping::api::SegaClient;
 use maimai_scraping::maimai::Maimai;
 use maimai_scraping::ongeki::Ongeki;
+use maimai_scraping::sega_trait::Idx;
 use maimai_scraping::sega_trait::PlayRecordTrait;
+use maimai_scraping::sega_trait::PlayTime;
+use maimai_scraping::sega_trait::PlayedAt;
 use maimai_scraping::sega_trait::SegaTrait;
 use serde::Deserialize;
 use serde::Serialize;
@@ -51,10 +53,11 @@ async fn main() -> anyhow::Result<()> {
 async fn run<T>(path: &Path) -> anyhow::Result<()>
 where
     T: SegaTrait,
-    T::Idx: Display + PartialEq,
+    Idx<T>: Copy + PartialEq + Display,
+    PlayTime<T>: Copy + Ord + Display,
+    PlayedAt<T>: Debug,
     T::PlayRecord: Serialize,
     for<'a> T::PlayRecord: Deserialize<'a>,
-    <T::PlayRecord as PlayRecordTrait>::PlayedAt: Debug,
 {
     let mut records = load_from_file::<T, _>(path)?;
     let (mut client, index) = SegaClient::<T>::new().await?;
@@ -101,9 +104,10 @@ where
     Ok(())
 }
 
-fn load_from_file<T, P>(path: P) -> anyhow::Result<BTreeMap<NaiveDateTime, T::PlayRecord>>
+fn load_from_file<T, P>(path: P) -> anyhow::Result<BTreeMap<PlayTime<T>, T::PlayRecord>>
 where
     T: SegaTrait,
+    PlayTime<T>: Copy + Ord + Display,
     for<'a> T::PlayRecord: Deserialize<'a>,
     P: Into<PathBuf> + std::fmt::Debug,
 {

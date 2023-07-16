@@ -9,7 +9,7 @@ use url::Url;
 
 use super::{
     rating::{ScoreConstant, ScoreLevel},
-    schema::latest::{ScoreDifficulty, ScoreGeneration},
+    schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
 };
 
 pub fn load(path: impl Into<PathBuf>) -> anyhow::Result<Vec<Song>> {
@@ -52,7 +52,7 @@ pub struct Song {
     #[getset(get = "pub")]
     song_name: String,
     #[getset(get = "pub")]
-    icon: Url,
+    icon: SongIcon,
 }
 impl TryFrom<SongRaw> for Song {
     type Error = anyhow::Error;
@@ -87,7 +87,8 @@ impl TryFrom<SongRaw> for Song {
             icon: Url::parse(&format!(
                 "https://maimaidx.jp/maimai-mobile/img/Music/{}.png",
                 song.ico
-            ))?,
+            ))?
+            .into(),
         })
     }
 }
@@ -240,7 +241,7 @@ impl MaimaiVersion {
 #[derive(Debug, Serialize, Deserialize, Getters)]
 pub struct RemovedSong {
     #[getset(get = "pub")]
-    icon: Url,
+    icon: SongIcon,
     #[getset(get = "pub")]
-    name: String,
+    name: SongName,
 }

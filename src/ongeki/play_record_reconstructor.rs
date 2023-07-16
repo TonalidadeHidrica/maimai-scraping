@@ -354,7 +354,7 @@ fn construct_matching_block(matching_result: &MatchingResult) -> Box<div<String>
                             <span class=classes>
                                 <img src=difficulty_img_src(o.difficulty()) class="d_ib" />
                                 // TODO: in reality, it's div, not span
-                                <span class="border_block">{text!(o.user_name())}</span>
+                                <span class="border_block">{text!("{}", o.user_name())}</span>
                             </span>
                         </span>
                     )

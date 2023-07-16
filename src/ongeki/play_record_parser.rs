@@ -8,10 +8,10 @@ use scraper::{ElementRef, Html, Selector};
 
 use crate::ongeki::schema::latest::*;
 
-pub fn parse_record_index(html: &Html) -> anyhow::Result<Vec<(NaiveDateTime, Idx)>> {
+pub fn parse_record_index(html: &Html) -> anyhow::Result<Vec<(PlayTime, Idx)>> {
     let mut res = vec![];
     for first_div in html.select(selector!("div.container3 > div.m_10")) {
-        let play_date = parse_first_div(first_div)?.0.into();
+        let play_date = parse_first_div(first_div)?.0;
         let idx = parse_idx_from_playlog_index(first_div)?;
         res.push((play_date, idx));
     }
@@ -562,7 +562,8 @@ fn parse_matching_div(matching_div: ElementRef) -> anyhow::Result<OtherPlayersLi
                 .next()
                 .context("Matching screen name div not found")?
                 .text()
-                .collect();
+                .collect::<String>()
+                .into();
             Ok(OtherPlayer::builder()
                 .difficulty(difficulty)
                 .user_name(user_name)
