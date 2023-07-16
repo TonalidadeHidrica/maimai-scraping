@@ -1,11 +1,12 @@
 use chrono::naive::NaiveDateTime;
-use derive_getters::Getters;
+use getset::Getters;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt::Display};
 use typed_builder::TypedBuilder;
 use url::Url;
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
+#[getset(get = "pub")]
 pub struct PlayRecord {
     played_at: PlayedAt,
     song_metadata: SongMetadata,
@@ -23,6 +24,7 @@ pub struct PlayRecord {
 }
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
+#[getset(get = "pub")]
 pub struct PlayedAt {
     time: NaiveDateTime,
     place: String,
@@ -43,12 +45,14 @@ impl TryFrom<u8> for TrackIndex {
 }
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
+#[getset(get = "pub")]
 pub struct SongMetadata {
     name: String,
     cover_art: Url,
 }
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
+#[getset(get = "pub")]
 pub struct ScoreMetadata {
     generation: ScoreGeneration,
     difficulty: ScoreDifficulty,
@@ -70,6 +74,7 @@ pub enum ScoreDifficulty {
 }
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
+#[getset(get = "pub")]
 pub struct AchievementResult {
     value: AchievementValue,
     new_record: bool,
@@ -160,6 +165,7 @@ pub enum FullComboKind {
 pub struct PerfectChallengeResult(ValueWithMax<u32>);
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
+#[getset(get = "pub")]
 pub struct RatingResult {
     rating: RatingValue,
     delta: i16,

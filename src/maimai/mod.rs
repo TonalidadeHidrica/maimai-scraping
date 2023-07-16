@@ -67,10 +67,10 @@ impl PlayRecordTrait for PlayRecord {
         self.played_at()
     }
     fn time(&self) -> NaiveDateTime {
-        *self.played_at().time()
+        self.played_at().time()
     }
     type Idx = Idx;
     fn idx(&self) -> Idx {
-        *self.played_at().idx()
+        self.played_at().idx()
     }
 }

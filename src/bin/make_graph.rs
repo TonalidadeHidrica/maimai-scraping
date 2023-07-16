@@ -33,7 +33,7 @@ fn main() -> anyhow::Result<()> {
         .iter()
         .filter(|x| {
             x.song_metadata().name() == &opts.song_name
-                && *x.score_metadata().difficulty() == opts.difficulty
+                && x.score_metadata().difficulty() == opts.difficulty
         })
         .collect_vec();
     println!("Found {} record(s)", filtered.len());
@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
         document = document.add(
             Circle::new()
                 .set("cx", x(i))
-                .set("cy", y(*record.achievement_result().value()))
+                .set("cy", y(record.achievement_result().value()))
                 .set("r", 3.0)
                 .set("fill", "blue"),
         )

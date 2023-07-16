@@ -40,7 +40,7 @@ fn main() -> anyhow::Result<()> {
     records.splice(pos..pos, inserted);
 
     for (i, records) in records.iter().enumerate() {
-        assert_eq!((i % 50) as u8, u8::from(*records.played_at().idx()));
+        assert_eq!((i % 50) as u8, u8::from(records.played_at().idx()));
     }
     println!("Done!");
 

@@ -54,11 +54,11 @@ fn analyze_new_songs(
     let mut key_to_record = HashMap::new();
     for record in records
         .iter()
-        .filter(|r| start_time <= *r.played_at().time())
+        .filter(|r| start_time <= r.played_at().time())
     {
         let song_key = (
             record.song_metadata().cover_art(),
-            *record.score_metadata().generation(),
+            record.score_metadata().generation(),
         );
         let song = levels.get(&song_key).with_context(|| {
             format!(
@@ -67,7 +67,7 @@ fn analyze_new_songs(
                 record.score_metadata()
             )
         })?;
-        let &delta = record.rating_result().delta();
+        let delta = record.rating_result().delta();
         if song.version() == version && delta > 0 {
             use std::collections::hash_map::Entry::*;
             let key = (song_key.0, record.score_metadata());
@@ -100,7 +100,7 @@ fn analyze_new_songs(
             };
             key_to_record.insert(key, record);
 
-            let a = *record.achievement_result().value();
+            let a = record.achievement_result().value();
             let estimated_levels = ScoreConstant::candidates()
                 .filter(|&level| single_song_rating(level, a, rank_coef(a)).get() as i16 == rating)
                 .collect_vec();
@@ -109,7 +109,7 @@ fn analyze_new_songs(
                 [estimated] => {
                     match song
                         .levels()
-                        .get(*record.score_metadata().difficulty())
+                        .get(record.score_metadata().difficulty())
                         .unwrap()
                         .known()
                     {
@@ -177,7 +177,7 @@ fn analyze_old_songs(
             continue;
         }
         let song = levels
-            .get(&(icon, *score_metadata.generation()))
+            .get(&(icon, score_metadata.generation()))
             .with_context(|| {
                 anyhow!(
                     "Unknown song: {:?} {:?}",
@@ -187,7 +187,7 @@ fn analyze_old_songs(
             })?;
         let level = song
             .levels()
-            .get(*score_metadata.difficulty())
+            .get(score_metadata.difficulty())
             .with_context(|| {
                 format!(
                     "Song not found: {:?} {:?}",
@@ -195,7 +195,7 @@ fn analyze_old_songs(
                     record.score_metadata()
                 )
             })?;
-        let a = *record.achievement_result().value();
+        let a = record.achievement_result().value();
         let c = rank_coef(a);
         let (min, max) = match level {
             InternalScoreLevel::Unknown(lv) => {

@@ -20,11 +20,11 @@ fn main() -> anyhow::Result<()> {
         serde_json::from_reader(BufReader::new(File::open(opts.rating_target_file)?))?;
     let records: BTreeMap<_, _> = records
         .into_iter()
-        .map(|r| (*r.played_at().time(), r))
+        .map(|r| (r.played_at().time(), r))
         .collect();
     #[allow(unused)]
     for (time, list) in rating_targets.iter_mut() {
-        let &rating = records[time].rating_result().rating();
+        let rating = records[time].rating_result().rating();
         // list.rating = Some(rating);
     }
 
