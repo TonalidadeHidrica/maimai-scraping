@@ -4,7 +4,7 @@ use itertools::Itertools;
 
 /// Consider a sequence `b[i]` of length `n` such that:
 /// - `b[i]` is one of `a(i)`;
-/// - `b[i]` is monotonically increasing w.r.t. `cmp`;
+/// - `b[i]` is sorted in an ascending order w.r.t. `cmp`;
 /// - Sum of `b[i].0` is `sum`.
 /// Can `a(i).nth(j)` be `b[i]`?
 ///
@@ -15,6 +15,13 @@ use itertools::Itertools;
 /// # Returns
 /// A vector `ret` of length `n`.
 /// `ret[i]` is a subset of `a(i)` that can be `b[i]`.
+///
+/// ## Complexity
+/// `O(n^2 m^2 Δa)`, where
+/// - `m = max(a(i).count())`
+/// - `Δa = max(a(i).last().unwrap().0 - a(i).first().unwrap().0)`
+///
+/// (because (`sum` in `solve_partial`) = `O(n Δa)`)
 pub fn solve<T, F, I, C>(n: usize, a: F, cmp: C, sum: usize) -> Vec<Vec<(usize, T)>>
 where
     F: Fn(usize) -> I,
@@ -24,12 +31,14 @@ where
     if n == 0 {
         return vec![];
     }
-    let Some(minimum_sum) = (0..n).map(|i| a(i).next()).fold_options(0, |s, x| s + x.0) else {
+    let Some(min_sum) = (0..n).map(|i| a(i).next()).fold_options(0, |s, x| s + x.0) else {
         return empty(n);
     };
-    let Some(sum) = sum.checked_sub(minimum_sum) else {
+    let max_sum = (0..n).map(|i| a(i).last().unwrap().0).sum();
+    if !(min_sum..=max_sum).contains(&sum) {
         return empty(n);
-    };
+    }
+    let sum = sum - min_sum;
     let asc = solve_partial(n, &a, &cmp, sum);
     let dsc = solve_partial(n, |i| a(n - 1 - i), |x, y| cmp(x, y).reverse(), sum);
     let mut res = (0..n).map(|i| vec![false; a(i).count()]).collect_vec();
@@ -66,6 +75,9 @@ where
 ///
 /// ## Returns
 /// `ret[i][s][j]`: Can `a(i).nth(j)` be the i-th element, the prefix until whom has the sum `s`?
+///
+/// ## Complexity
+/// `O(n m^2 sum)`, where `m = max(a(i).count())`
 fn solve_partial<T, F, I, C>(n: usize, a: F, cmp: C, sum: usize) -> Vec<Vec<Vec<bool>>>
 where
     F: Fn(usize) -> I,
