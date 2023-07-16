@@ -1,5 +1,3 @@
-mod test_rating_target_with_file;
-
 use std::{
     io::{BufReader, Read},
     path::PathBuf,
