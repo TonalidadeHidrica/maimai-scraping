@@ -1,11 +1,11 @@
-use std::{collections::BTreeMap, path::PathBuf};
+use std::path::PathBuf;
 
 use anyhow::bail;
 use clap::Parser;
 use maimai_scraping::{
     fs_json_util::{read_json, write_json},
     maimai::{
-        rating_target_parser::{self, RatingTargetList, RatingTargetFile},
+        rating_target_parser::{self, RatingTargetFile},
         schema::latest::PlayTime,
     },
 };

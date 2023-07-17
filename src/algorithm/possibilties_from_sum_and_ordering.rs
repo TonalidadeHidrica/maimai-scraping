@@ -27,6 +27,13 @@ where
     I: Iterator<Item = (usize, T)>,
     C: Fn(&(usize, T), &(usize, T)) -> Ordering,
 {
+    // println!(
+    //     "solve({n}, {:?}, .., {sum})",
+    //     (0..n)
+    //         .map(|i| a(i).map(|x| x.0).collect_vec())
+    //         .collect_vec(),
+    // );
+
     if n == 0 {
         return vec![];
     }

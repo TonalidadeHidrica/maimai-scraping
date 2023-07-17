@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{anyhow, bail};
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -233,6 +233,9 @@ impl MaimaiVersion {
             Festival => NaiveDate::from_ymd(2022, 9, 15),
             FestivalPlus => NaiveDate::from_ymd(2023, 3, 23),
         }
+    }
+    pub fn start_time(self) -> NaiveDateTime {
+        self.start_date().and_time(NaiveTime::from_hms(5, 0, 0))
     }
     pub fn latest() -> Self {
         Self::FestivalPlus

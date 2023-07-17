@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::Context;
+use getset::{CopyGetters, Getters};
 use itertools::{Itertools, PeekingNext};
 use scraper::ElementRef;
 use serde::{Deserialize, Serialize};
@@ -87,22 +88,30 @@ pub fn parse_entry(div: ElementRef) -> anyhow::Result<RatingTargetEntry> {
     })
 }
 
-#[allow(unused)]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Getters, CopyGetters, Serialize, Deserialize)]
 pub struct RatingTargetList {
+    #[getset(get_copy = "pub")]
     rating: RatingValue,
+    #[getset(get = "pub")]
     target_new: Vec<RatingTargetEntry>,
+    #[getset(get = "pub")]
     target_old: Vec<RatingTargetEntry>,
+    #[getset(get = "pub")]
     candidates_new: Vec<RatingTargetEntry>,
+    #[getset(get = "pub")]
     candidates_old: Vec<RatingTargetEntry>,
 }
-#[allow(unused)]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Getters, CopyGetters, Serialize, Deserialize)]
 pub struct RatingTargetEntry {
+    #[getset(get_copy = "pub")]
     score_metadata: ScoreMetadata,
+    #[getset(get = "pub")]
     song_name: SongName,
+    #[getset(get_copy = "pub")]
     level: ScoreLevel,
+    #[getset(get_copy = "pub")]
     achievement: AchievementValue,
+    #[getset(get = "pub")]
     idx: ScoreIdx,
 }
 

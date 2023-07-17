@@ -1,42 +1,65 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     path::PathBuf,
 };
 
 use anyhow::{anyhow, bail, Context};
-use chrono::NaiveTime;
 use clap::Parser;
+use itertools::{chain, Itertools};
+use log::debug;
 use maimai_scraping::{
+    algorithm::possibilties_from_sum_and_ordering,
     fs_json_util::read_json,
     maimai::{
         load_score_level::{self, InternalScoreLevel, MaimaiVersion, RemovedSong, Song},
         rating::{rank_coef, single_song_rating, ScoreConstant},
-        schema::latest::{PlayRecord, PlayTime, ScoreDifficulty, ScoreGeneration, SongIcon},
+        rating_target_parser::{RatingTargetEntry, RatingTargetFile},
+        schema::{
+            latest::{PlayRecord, PlayTime, ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
+            ver_20210316_2338::RatingValue,
+        },
     },
 };
 use strum::IntoEnumIterator;
+use tap::Tap;
 
 #[derive(Parser)]
 struct Opts {
     input_file: PathBuf,
+    rating_target_file: PathBuf,
     level_file: PathBuf,
     removed_songs: PathBuf,
 }
 
 fn main() -> anyhow::Result<()> {
+    env_logger::init();
+
     let opts = Opts::parse();
     let records: Vec<PlayRecord> = read_json(opts.input_file)?;
+    let rating_targets: RatingTargetFile = read_json(opts.rating_target_file)?;
 
     let levels = load_score_level::load(opts.level_file)?;
-    let levels = load_score_level::make_map(&levels, |song| (song.icon(), song.generation()))?;
+    let song_name_to_icon = HashMap::<_, HashSet<_>>::new().tap_mut(|map| {
+        for song in &levels {
+            map.entry(song.song_name()).or_default().insert(song.icon());
+        }
+    });
 
     let removed_songs: Vec<RemovedSong> = read_json(opts.removed_songs)?;
     let removed_songs = load_score_level::make_map(&removed_songs, |r| r.icon())?;
 
-    let mut levels = ScoreConstantsStore::new(levels, removed_songs);
-    levels.reset();
+    let levels = load_score_level::make_map(&levels, |song| (song.icon(), song.generation()))?;
+    let mut levels = ScoreConstantsStore::new(levels, removed_songs, song_name_to_icon);
+    println!("# New songs");
     analyze_new_songs(&records, &mut levels)?;
-    // analyze_old_songs(&records, &mut levels, &removed_songs)?;
+    for i in 1.. {
+        println!("Iteration {i}");
+        levels.reset();
+        guess_from_rating_target_order(&rating_targets, &mut levels)?;
+        if !levels.updated {
+            break;
+        }
+    }
 
     Ok(())
 }
@@ -61,11 +84,13 @@ struct ScoreConstantsStore<'s, 'r> {
     updated: bool,
     constants: HashMap<ScoreKey<'s>, (&'s Song, Vec<ScoreConstant>)>,
     removed_songs: HashMap<&'s SongIcon, &'r RemovedSong>,
+    song_name_to_icon: HashMap<&'s SongName, HashSet<&'s SongIcon>>,
 }
 impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
     fn new(
         map: HashMap<(&'s SongIcon, ScoreGeneration), &'s Song>,
         removed_songs: HashMap<&'s SongIcon, &'r RemovedSong>,
+        song_name_to_icon: HashMap<&'s SongName, HashSet<&'s SongIcon>>,
     ) -> Self {
         Self {
             updated: false,
@@ -89,6 +114,7 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
                 })
                 .collect(),
             removed_songs,
+            song_name_to_icon,
         }
     }
 
@@ -118,19 +144,55 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
         if levels.is_empty() {
             bail!("No more candidates! {:?} {key:?}", song.song_name());
         }
+        let score_name = || {
+            format!(
+                "{} ({:?} {:?})",
+                song.song_name(),
+                key.generation,
+                key.difficulty,
+            )
+        };
+        let levels_str = || levels.iter().map(|s| s.to_string()).collect_vec();
         if levels.len() < old_len {
             self.updated = true;
             if levels.len() == 1 {
                 println!(
-                    "Internal level determined! {} ({:?} {:?}): {}",
-                    song.song_name(),
-                    key.generation,
-                    key.difficulty,
+                    "Internal level determined!     {}: {}",
+                    score_name(),
                     levels[0]
                 );
-            }
+            } else {
+                debug!(
+                    "Internal level constrained:    {}: {:?}",
+                    score_name(),
+                    levels_str()
+                );
+            };
+        } else if levels.len() > 1 {
+            debug!(
+                "Internal level not constrained:{}: {:?}",
+                score_name(),
+                levels_str()
+            );
         }
         Ok(())
+    }
+
+    fn key_from_target_entry(
+        &self,
+        entry: &RatingTargetEntry,
+    ) -> anyhow::Result<Option<ScoreKey<'s>>> {
+        match self.song_name_to_icon.get(entry.song_name()) {
+            None => bail!("Unknown song: {:?}", entry.song_name()),
+            Some(icons) => Ok((icons.len() == 1).then(|| {
+                let m = entry.score_metadata();
+                ScoreKey {
+                    icon: icons.iter().next().unwrap(),
+                    generation: m.generation(),
+                    difficulty: m.difficulty(),
+                }
+            })),
+        }
     }
 }
 
@@ -139,10 +201,7 @@ fn analyze_new_songs<'s>(
     levels: &mut ScoreConstantsStore<'s, '_>,
 ) -> anyhow::Result<()> {
     let version = MaimaiVersion::latest();
-    let start_time: PlayTime = version
-        .start_date()
-        .and_time(NaiveTime::from_hms(5, 0, 0))
-        .into();
+    let start_time: PlayTime = version.start_time().into();
     let mut r2s = BTreeSet::<(i16, _)>::new();
     let mut s2r = HashMap::<_, i16>::new();
     let mut key_to_record = HashMap::new();
@@ -203,6 +262,82 @@ fn analyze_new_songs<'s>(
     //     );
     // }
     // println!("Sum: {}", r2s.iter().map(|x| x.0).sum::<i16>());
+    Ok(())
+}
+
+fn single_song_rating_for_target_entry(
+    level: ScoreConstant,
+    entry: &RatingTargetEntry,
+) -> RatingValue {
+    let a = entry.achievement();
+    single_song_rating(level, a, rank_coef(a))
+}
+
+fn guess_from_rating_target_order(
+    rating_targets: &RatingTargetFile,
+    levels: &mut ScoreConstantsStore,
+) -> anyhow::Result<()> {
+    // TODO be careful of version
+    for list in rating_targets.values() {
+        let mut new_song_raing_sum = 0;
+        for entry in list.target_new() {
+            let Some(key) = levels.key_from_target_entry(entry)? else {
+                println!(
+                    "TODO: score cannot be uniquely determined from the song name {:?}",
+                    entry.song_name()
+                );
+                return Ok(());
+            };
+            let levels = levels.get(key)?.unwrap().1;
+            if levels.len() != 1 {
+                panic!("Score constants of new songs must be determined!");
+            }
+            new_song_raing_sum += single_song_rating_for_target_entry(levels[0], entry).get();
+        }
+        let olds = chain(list.target_old(), list.candidates_old()).collect_vec();
+        let old_target_len = list.target_old().len();
+        let mut keys = vec![];
+        for &entry in &olds {
+            let Some(key) = levels.key_from_target_entry(entry)? else {
+                println!(
+                    "TODO: score cannot be uniquely determined from the song name {:?}",
+                    entry.song_name()
+                );
+                return Ok(());
+            };
+            if levels.get(key)?.is_none() {
+                bail!("Song not found for {key:?}");
+            }
+            keys.push(key);
+        }
+        // println!("{} - {}", list.rating(), new_song_raing_sum);
+        let res = possibilties_from_sum_and_ordering::solve(
+            olds.len(),
+            |i| {
+                let (key, entry) = (keys[i], olds[i]);
+                let levels = levels.get(key).unwrap().unwrap().1.iter();
+                levels.map(move |&level| {
+                    let rating = single_song_rating_for_target_entry(level, entry).get() as usize;
+                    let score = rating * (i < old_target_len) as usize;
+                    (score, ((rating, entry.achievement()), level))
+                })
+            },
+            |x, y| x.1 .0.cmp(&y.1 .0).reverse(),
+            list.rating()
+                .get()
+                .checked_sub(new_song_raing_sum)
+                .context("new_song_raing_sum is greater than rating value")? as usize,
+        );
+        for (&key, res) in keys.iter().zip_eq(res) {
+            levels.set(key, res.iter().map(|x| x.1 .1))?;
+        }
+        // println!(
+        //     "{:?}",
+        //     res.iter()
+        //         .map(|x| x.iter().map(|x| x.1 .0 .0).collect_vec())
+        //         .collect_vec()
+        // );
+    }
     Ok(())
 }
 

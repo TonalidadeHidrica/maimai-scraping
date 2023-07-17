@@ -7,8 +7,7 @@ use maimai_scraping::{
     api::SegaClient,
     fs_json_util::write_json,
     maimai::{
-        rating_target_parser::{self, RatingTargetFile, RatingTargetList},
-        schema::latest::PlayTime,
+        rating_target_parser::{self, RatingTargetFile},
         Maimai,
     },
 };
