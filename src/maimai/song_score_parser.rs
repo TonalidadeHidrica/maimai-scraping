@@ -12,7 +12,7 @@ use super::{
     rating::ScoreLevel,
     schema::latest::{
         AchievementRank, AchievementValue, FullComboKind, FullSyncKind, ScoreDifficulty,
-        ScoreMetadata, ValueWithMax,
+        ScoreMetadata, SongName, ValueWithMax,
     },
 };
 
@@ -50,12 +50,13 @@ pub fn find_and_parse_score_level(e: ElementRef) -> anyhow::Result<ScoreLevel> {
         .collect::<String>()
         .parse()
 }
-pub fn find_and_parse_song_name(e: ElementRef) -> anyhow::Result<String> {
+pub fn find_and_parse_song_name(e: ElementRef) -> anyhow::Result<SongName> {
     Ok(e.select(selector!("div.music_name_block"))
         .next()
         .context("Song name not found")?
         .text()
-        .collect())
+        .collect::<String>()
+        .into())
 }
 
 fn parse_score_metadata(
@@ -202,7 +203,7 @@ pub fn find_and_parse_score_idx(e: ElementRef) -> anyhow::Result<ScoreIdx> {
 #[derive(Debug)]
 pub struct ScoreEntry {
     metadata: ScoreMetadata,
-    song_name: String,
+    song_name: SongName,
     level: ScoreLevel,
     result: Option<ScoreResult>,
     idx: ScoreIdx,

@@ -5,22 +5,24 @@ use std::{
 };
 
 use anyhow::bail;
-use chrono::NaiveDateTime;
 use clap::Parser;
 use fs_err::File;
-use maimai_scraping::maimai::rating_target_parser::{self, RatingTargetList};
+use maimai_scraping::maimai::{
+    rating_target_parser::{self, RatingTargetList},
+    schema::latest::PlayTime,
+};
 use scraper::Html;
 
 #[derive(Parser)]
 struct Opts {
     json: PathBuf,
-    date: NaiveDateTime,
+    date: PlayTime,
     html: PathBuf,
 }
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let mut rating_targets: BTreeMap<NaiveDateTime, RatingTargetList> =
+    let mut rating_targets: BTreeMap<PlayTime, RatingTargetList> =
         serde_json::from_reader(BufReader::new(File::open(&opts.json)?))?;
     let list =
         rating_target_parser::parse(&Html::parse_document(&fs_err::read_to_string(opts.html)?))?;

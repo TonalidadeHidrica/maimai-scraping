@@ -12,7 +12,7 @@ use crate::maimai::{
 
 use super::{
     rating::ScoreLevel,
-    schema::latest::{AchievementValue, RatingValue, ScoreMetadata},
+    schema::latest::{AchievementValue, RatingValue, ScoreMetadata, SongName},
     song_score_parser::{find_and_parse_score_idx, ScoreIdx},
 };
 
@@ -98,7 +98,7 @@ pub struct RatingTargetList {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RatingTargetEntry {
     score_metadata: ScoreMetadata,
-    song_name: String,
+    song_name: SongName,
     level: ScoreLevel,
     achievement: AchievementValue,
     idx: ScoreIdx,

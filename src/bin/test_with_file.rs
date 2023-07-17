@@ -1,7 +1,6 @@
-use std::{io::BufReader, io::Read, path::PathBuf};
+use std::path::PathBuf;
 
 use clap::Parser;
-use fs_err::File;
 use maimai_scraping::maimai::schema::latest::{Idx, PlayRecord};
 use scraper::Html;
 
@@ -12,12 +11,7 @@ struct Opts {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let html = {
-        let mut file = BufReader::new(File::open(opts.input_file)?);
-        let mut html = String::new();
-        file.read_to_string(&mut html)?;
-        Html::parse_document(&html)
-    };
+    let html = Html::parse_document(&fs_err::read_to_string(opts.input_file)?);
 
     let result = maimai_scraping::maimai::play_record_parser::parse(&html, Idx::default())?;
     dbg!(&result);

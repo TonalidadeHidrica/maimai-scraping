@@ -84,6 +84,7 @@ impl TryFrom<u8> for Idx {
     Ord,
     Debug,
     derive_more::From,
+    derive_more::FromStr,
     derive_more::Display,
     Serialize,
     Deserialize,
