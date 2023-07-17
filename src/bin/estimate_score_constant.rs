@@ -32,6 +32,8 @@ struct Opts {
     rating_target_file: PathBuf,
     level_file: PathBuf,
     removed_songs: PathBuf,
+    #[clap(long)]
+    details: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -53,10 +55,15 @@ fn main() -> anyhow::Result<()> {
 
     let levels = load_score_level::make_map(&levels, |song| (song.icon(), song.generation()))?;
     let mut levels = ScoreConstantsStore::new(levels, removed_songs, song_name_to_icon);
-    println!("New songs");
+    levels.show_details = opts.details;
+    if opts.details {
+        println!("New songs");
+    }
     analyze_new_songs(&records, &mut levels)?;
     for i in 1.. {
-        println!("Iteration {i}");
+        if opts.details {
+            println!("Iteration {i}");
+        }
         levels.reset();
         guess_from_rating_target_order(&rating_targets, &mut levels)?;
         if !levels.updated {
@@ -88,6 +95,7 @@ struct ScoreConstantsStore<'s, 'r> {
     constants: HashMap<ScoreKey<'s>, ScoreConstantsEntry<'s>>,
     removed_songs: HashMap<&'s SongIcon, &'r RemovedSong>,
     song_name_to_icon: HashMap<&'s SongName, HashSet<&'s SongIcon>>,
+    show_details: bool,
 }
 impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
     fn new(
@@ -128,6 +136,7 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
                 .collect(),
             removed_songs,
             song_name_to_icon,
+            show_details: false,
         }
     }
 
@@ -174,13 +183,20 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
             );
             match entry.candidates[..] {
                 [] => {
-                    println!("  No more candidates for {score_name} :(");
-                    print_reasons();
-                    bail!("No more candidates");
+                    let message = lazy_format!("No more candidates for {score_name} :(");
+                    if self.show_details {
+                        println!("  {message}");
+                        print_reasons();
+                    }
+                    bail!("{message}");
                 }
                 [determined] => {
-                    println!("  Internal level determined! {score_name}: {determined}");
-                    print_reasons();
+                    if self.show_details {
+                        println!("  Internal level determined! {score_name}: {determined}");
+                        print_reasons();
+                    } else {
+                        println!("{score_name}: {determined}");
+                    }
                 }
                 _ => {}
             }
