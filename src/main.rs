@@ -4,7 +4,6 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io;
 use std::io::BufReader;
-use std::io::BufWriter;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -15,6 +14,7 @@ use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
 use maimai_scraping::api::SegaClient;
+use maimai_scraping::fs_json_util::write_json;
 use maimai_scraping::maimai::Maimai;
 use maimai_scraping::ongeki::Ongeki;
 use maimai_scraping::sega_trait::Idx;
@@ -97,8 +97,7 @@ where
         }
     }
 
-    let file = BufWriter::new(File::create(path)?);
-    serde_json::to_writer(file, &records.values().collect_vec())?;
+    write_json(path, &records.values().collect_vec())?;
     println!("Successfully saved data to {:?}.", path);
 
     Ok(())

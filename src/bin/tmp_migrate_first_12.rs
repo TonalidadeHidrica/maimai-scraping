@@ -1,11 +1,10 @@
-use std::{
-    io::{BufReader, BufWriter},
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 use clap::Parser;
-use fs_err::File;
-use maimai_scraping::maimai::schema::latest::PlayRecord;
+use maimai_scraping::{
+    fs_json_util::{read_json, write_json},
+    maimai::schema::latest::PlayRecord,
+};
 use serde_json::Value;
 
 #[derive(Parser)]
@@ -16,11 +15,10 @@ struct Opts {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let new_records: Vec<PlayRecord> =
-        serde_json::from_reader(BufReader::new(File::open(&opts.new_file)?))?;
+    let new_records: Vec<PlayRecord> = read_json(&opts.new_file)?;
     assert_eq!(new_records.len(), 65);
 
-    let mut value: Value = serde_json::from_reader(BufReader::new(File::open(opts.old_file)?))?;
+    let mut value: Value = read_json(opts.old_file)?;
 
     let mut result = vec![];
 
@@ -72,7 +70,7 @@ fn main() -> anyhow::Result<()> {
 
     result.extend(new_records);
 
-    serde_json::to_writer(BufWriter::new(File::create(&opts.new_file)?), &result)?;
+    write_json(&opts.new_file, &result)?;
 
     Ok(())
 }

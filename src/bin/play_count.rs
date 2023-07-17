@@ -1,9 +1,11 @@
-use std::{io::BufReader, path::PathBuf};
+use std::path::PathBuf;
 
 use clap::Parser;
-use fs_err::File;
 use indexmap::IndexMap;
-use maimai_scraping::maimai::schema::latest::{PlayRecord, ScoreGeneration};
+use maimai_scraping::{
+    fs_json_util::read_json,
+    maimai::schema::latest::{PlayRecord, ScoreGeneration},
+};
 
 #[derive(Parser)]
 struct Opts {
@@ -12,8 +14,7 @@ struct Opts {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let records: Vec<PlayRecord> =
-        serde_json::from_reader(BufReader::new(File::open(opts.input_file)?))?;
+    let records: Vec<PlayRecord> = read_json(opts.input_file)?;
 
     let mut map = IndexMap::<_, Vec<_>>::new();
     for record in &records {

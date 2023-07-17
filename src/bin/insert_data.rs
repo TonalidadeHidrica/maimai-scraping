@@ -1,13 +1,11 @@
-use std::{
-    collections::VecDeque,
-    io::{BufReader, BufWriter},
-    path::PathBuf,
-};
+use std::{collections::VecDeque, path::PathBuf};
 
 use anyhow::bail;
 use clap::Parser;
-use fs_err::File;
-use maimai_scraping::maimai::schema::latest::PlayRecord;
+use maimai_scraping::{
+    fs_json_util::{read_json, write_json},
+    maimai::schema::latest::PlayRecord,
+};
 
 #[derive(Parser)]
 struct Opts {
@@ -18,11 +16,7 @@ struct Opts {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let read = |path: &PathBuf| {
-        anyhow::Ok(serde_json::from_reader::<_, Vec<PlayRecord>>(
-            BufReader::new(File::open(path)?),
-        )?)
-    };
+    let read = |path: &PathBuf| anyhow::Ok(read_json::<_, Vec<PlayRecord>>(path)?);
     let mut records = read(&opts.input_file)?;
     let mut inserted = VecDeque::from_iter(read(&opts.insert_file)?);
     let pos = opts.insert_pos;
@@ -44,7 +38,7 @@ fn main() -> anyhow::Result<()> {
     }
     println!("Done!");
 
-    serde_json::to_writer(BufWriter::new(File::create(&opts.input_file)?), &records)?;
+    write_json(&opts.input_file, &records)?;
 
     Ok(())
 }

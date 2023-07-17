@@ -1,11 +1,12 @@
-use std::{collections::HashMap, io::BufReader, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{anyhow, bail};
 use chrono::NaiveDate;
-use fs_err::File;
 use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use url::Url;
+
+use crate::fs_json_util::read_json;
 
 use super::{
     rating::{ScoreConstant, ScoreLevel},
@@ -13,7 +14,7 @@ use super::{
 };
 
 pub fn load(path: impl Into<PathBuf>) -> anyhow::Result<Vec<Song>> {
-    let songs: Vec<SongRaw> = serde_json::from_reader(BufReader::new(File::open(path)?))?;
+    let songs: Vec<SongRaw> = read_json(path)?;
     songs.into_iter().map(Song::try_from).collect()
 }
 pub fn make_map<'t, T, U, F>(songs: &'t [T], mut key: F) -> anyhow::Result<HashMap<U, &'t T>>

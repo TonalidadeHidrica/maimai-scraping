@@ -1,15 +1,11 @@
-use std::{
-    cmp::Ordering,
-    collections::BTreeMap,
-    io::{BufReader, BufWriter},
-    path::PathBuf,
-};
+use std::{cmp::Ordering, collections::BTreeMap, io::BufReader, path::PathBuf};
 
 use anyhow::{bail, Context};
 use clap::Parser;
 use fs_err::File;
 use maimai_scraping::{
     api::SegaClient,
+    fs_json_util::write_json,
     maimai::{
         rating_target_parser::{self, RatingTargetList},
         schema::latest::PlayTime,
@@ -57,8 +53,7 @@ async fn main() -> anyhow::Result<()> {
     let res = rating_target_parser::parse(&Html::parse_document(&res.0.text().await?))?;
     rating_targets.insert(last_played, res);
 
-    let file = BufWriter::new(File::create(&opts.rating_target_file)?);
-    serde_json::to_writer(file, &rating_targets)?;
+    write_json(&opts.rating_target_file, &rating_targets)?;
     println!("Successfully saved data to {:?}", opts.rating_target_file);
 
     Ok(())

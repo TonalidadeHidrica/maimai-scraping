@@ -1,16 +1,14 @@
-use std::{
-    convert::TryInto,
-    io::{BufReader, BufWriter},
-    ops::Range,
-    path::PathBuf,
-};
+use std::{convert::TryInto, io::BufWriter, ops::Range, path::PathBuf};
 
 use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
-use maimai_scraping::maimai::schema::{
-    latest::{PlayRecord, ScoreDifficulty, SongName},
-    ver_20210316_2338::AchievementValue,
+use maimai_scraping::{
+    fs_json_util::read_json,
+    maimai::schema::{
+        latest::{PlayRecord, ScoreDifficulty, SongName},
+        ver_20210316_2338::AchievementValue,
+    },
 };
 use svg::{
     node::element::{Circle, Line, Rectangle, Text},
@@ -27,8 +25,7 @@ struct Opts {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let records: Vec<PlayRecord> =
-        serde_json::from_reader(BufReader::new(File::open(&opts.input_file)?))?;
+    let records: Vec<PlayRecord> = read_json(&opts.input_file)?;
     let filtered = records
         .iter()
         .filter(|x| {

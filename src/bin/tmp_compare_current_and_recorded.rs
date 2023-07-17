@@ -1,8 +1,7 @@
-use std::{collections::BTreeMap, io::BufReader, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use clap::Parser;
-use fs_err::File;
-use maimai_scraping::maimai::schema::latest::PlayRecord;
+use maimai_scraping::{fs_json_util::read_json, maimai::schema::latest::PlayRecord};
 
 #[derive(Parser)]
 struct Opts {
@@ -12,10 +11,8 @@ struct Opts {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let recorded: Vec<PlayRecord> =
-        serde_json::from_reader(BufReader::new(File::open(&opts.recorded)?))?;
-    let current: Vec<PlayRecord> =
-        serde_json::from_reader(BufReader::new(File::open(&opts.current)?))?;
+    let recorded: Vec<PlayRecord> = read_json(&opts.recorded)?;
+    let current: Vec<PlayRecord> = read_json(&opts.current)?;
     let recorded = recorded
         .into_iter()
         .map(|x| (x.played_at().time(), x))

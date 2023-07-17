@@ -1,17 +1,18 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    io::BufReader,
     path::PathBuf,
 };
 
 use anyhow::{anyhow, bail, Context};
 use chrono::NaiveTime;
 use clap::Parser;
-use fs_err::File;
-use maimai_scraping::maimai::{
-    load_score_level::{self, InternalScoreLevel, MaimaiVersion, RemovedSong, Song},
-    rating::{rank_coef, single_song_rating, ScoreConstant},
-    schema::latest::{PlayRecord, PlayTime, ScoreDifficulty, ScoreGeneration, SongIcon},
+use maimai_scraping::{
+    fs_json_util::read_json,
+    maimai::{
+        load_score_level::{self, InternalScoreLevel, MaimaiVersion, RemovedSong, Song},
+        rating::{rank_coef, single_song_rating, ScoreConstant},
+        schema::latest::{PlayRecord, PlayTime, ScoreDifficulty, ScoreGeneration, SongIcon},
+    },
 };
 use strum::IntoEnumIterator;
 
@@ -24,14 +25,12 @@ struct Opts {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let records: Vec<PlayRecord> =
-        serde_json::from_reader(BufReader::new(File::open(opts.input_file)?))?;
+    let records: Vec<PlayRecord> = read_json(opts.input_file)?;
 
     let levels = load_score_level::load(opts.level_file)?;
     let levels = load_score_level::make_map(&levels, |song| (song.icon(), song.generation()))?;
 
-    let removed_songs: Vec<RemovedSong> =
-        serde_json::from_reader(BufReader::new(File::open(opts.removed_songs)?))?;
+    let removed_songs: Vec<RemovedSong> = read_json(opts.removed_songs)?;
     let removed_songs = load_score_level::make_map(&removed_songs, |r| r.icon())?;
 
     let mut levels = ScoreConstantsStore::new(levels, removed_songs);

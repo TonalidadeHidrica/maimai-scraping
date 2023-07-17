@@ -1,8 +1,7 @@
-use std::{io::BufReader, path::PathBuf};
+use std::path::PathBuf;
 
 use clap::Parser;
-use fs_err::File;
-use maimai_scraping::maimai::schema::ver_20210316_2338::PlayRecord;
+use maimai_scraping::{fs_json_util::read_json, maimai::schema::ver_20210316_2338::PlayRecord};
 
 #[derive(Parser)]
 struct Opts {
@@ -12,8 +11,7 @@ struct Opts {
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
 
-    let records: Vec<PlayRecord> =
-        serde_json::from_reader(BufReader::new(File::open(opts.input_file)?))?;
+    let records: Vec<PlayRecord> = read_json(opts.input_file)?;
     for record in records {
         let achievement = record.achievement_result();
         let rating = record.rating_result();
