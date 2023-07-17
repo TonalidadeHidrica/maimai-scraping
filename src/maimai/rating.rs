@@ -74,7 +74,7 @@ impl Display for ScoreConstant {
 }
 
 impl ScoreConstant {
-    pub fn candidates() -> impl Iterator<Item = Self> {
+    pub fn candidates() -> impl DoubleEndedIterator<Item = Self> {
         (1_0..=15_0).map(Self)
     }
 }
