@@ -140,3 +140,9 @@ impl FromStr for ScoreLevel {
         Self::new(level, plus)
     }
 }
+
+impl Display for ScoreLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.level, if self.plus { "+" } else { "" })
+    }
+}

@@ -1,12 +1,15 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    fmt::Display,
     path::PathBuf,
 };
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{bail, Context};
 use clap::Parser;
+use either::Either;
 use itertools::{chain, Itertools};
-use log::debug;
+use joinery::JoinableIterator;
+use lazy_format::lazy_format;
 use maimai_scraping::{
     algorithm::possibilties_from_sum_and_ordering,
     fs_json_util::read_json,
@@ -50,7 +53,7 @@ fn main() -> anyhow::Result<()> {
 
     let levels = load_score_level::make_map(&levels, |song| (song.icon(), song.generation()))?;
     let mut levels = ScoreConstantsStore::new(levels, removed_songs, song_name_to_icon);
-    println!("# New songs");
+    println!("New songs");
     analyze_new_songs(&records, &mut levels)?;
     for i in 1.. {
         println!("Iteration {i}");
@@ -82,7 +85,7 @@ impl<'a> From<&'a PlayRecord> for ScoreKey<'a> {
 
 struct ScoreConstantsStore<'s, 'r> {
     updated: bool,
-    constants: HashMap<ScoreKey<'s>, (&'s Song, Vec<ScoreConstant>)>,
+    constants: HashMap<ScoreKey<'s>, ScoreConstantsEntry<'s>>,
     removed_songs: HashMap<&'s SongIcon, &'r RemovedSong>,
     song_name_to_icon: HashMap<&'s SongName, HashSet<&'s SongIcon>>,
 }
@@ -103,13 +106,23 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
                             generation,
                             difficulty,
                         };
-                        let levels = match song.levels().get(difficulty)? {
+                        let (candidates, reason) = match song.levels().get(difficulty)? {
                             InternalScoreLevel::Unknown(level) => {
-                                level.score_constant_candidates().collect()
+                                let levels = level.score_constant_candidates().collect();
+                                let reason = lazy_format!("because this score's level is {level}");
+                                (levels, Either::Left(reason))
                             }
-                            InternalScoreLevel::Known(level) => vec![level],
+                            InternalScoreLevel::Known(level) => {
+                                (vec![level], Either::Right("as it is already known"))
+                            }
                         };
-                        Some((key, (song, levels)))
+                        let mut entry = ScoreConstantsEntry {
+                            song,
+                            candidates,
+                            reasons: vec![],
+                        };
+                        entry.add_reason(reason);
+                        Some((key, entry))
                     })
                 })
                 .collect(),
@@ -127,7 +140,7 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
             return Ok(None);
         }
         match self.constants.get(&key) {
-            Some((x, y)) => Ok(Some((*x, &y[..]))),
+            Some(entry) => Ok(Some((entry.song, &entry.candidates))),
             None => bail!("No score constant entry was found for {key:?}"),
         }
     }
@@ -136,44 +149,41 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
         &mut self,
         key: ScoreKey<'s>,
         new: impl Iterator<Item = ScoreConstant>,
+        reason: impl Display,
     ) -> anyhow::Result<()> {
-        let (song, levels) = self.constants.get_mut(&key).unwrap();
-        let old_len = levels.len();
+        let entry = self.constants.get_mut(&key).unwrap();
+        let old_len = entry.candidates.len();
+
         let new: BTreeSet<_> = new.collect();
-        levels.retain(|x| new.contains(x));
-        if levels.is_empty() {
-            bail!("No more candidates! {:?} {key:?}", song.song_name());
-        }
-        let score_name = || {
-            format!(
+        entry.candidates.retain(|x| new.contains(x));
+
+        if entry.candidates.len() < old_len {
+            self.updated = true;
+            entry.add_reason(reason);
+            let print_reasons = || {
+                for reason in &entry.reasons {
+                    println!("    - {reason}");
+                }
+            };
+            let song = &entry.song;
+            let score_name = lazy_format!(
                 "{} ({:?} {:?})",
                 song.song_name(),
                 key.generation,
                 key.difficulty,
-            )
-        };
-        let levels_str = || levels.iter().map(|s| s.to_string()).collect_vec();
-        if levels.len() < old_len {
-            self.updated = true;
-            if levels.len() == 1 {
-                println!(
-                    "Internal level determined!     {}: {}",
-                    score_name(),
-                    levels[0]
-                );
-            } else {
-                debug!(
-                    "Internal level constrained:    {}: {:?}",
-                    score_name(),
-                    levels_str()
-                );
-            };
-        } else if levels.len() > 1 {
-            debug!(
-                "Internal level not constrained:{}: {:?}",
-                score_name(),
-                levels_str()
             );
+            match entry.candidates[..] {
+                [] => {
+                    println!("  No more candidates for {score_name} :(");
+                    print_reasons();
+                    bail!("No more candidates");
+                }
+                [determined] => {
+                    println!("  Internal level determined! {score_name}: {determined}");
+                    print_reasons();
+                }
+                _ => {}
+            }
         }
         Ok(())
     }
@@ -193,6 +203,20 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
                 }
             })),
         }
+    }
+}
+
+struct ScoreConstantsEntry<'s> {
+    song: &'s Song,
+    candidates: Vec<ScoreConstant>,
+    reasons: Vec<String>,
+}
+impl ScoreConstantsEntry<'_> {
+    fn add_reason(&mut self, reason: impl Display) {
+        self.reasons.push(format!(
+            "Constrained to [{}] {reason}",
+            self.candidates.iter().join_with(", ")
+        ))
     }
 }
 
@@ -249,6 +273,10 @@ fn analyze_new_songs<'s>(
                 ScoreConstant::candidates().filter(|&level| {
                     single_song_rating(level, a, rank_coef(a)).get() as i16 == rating
                 }),
+                lazy_format!(
+                    "beacuse record played at {} determines the single-song rating to be {rating}",
+                    record.played_at().time()
+                ),
             )?;
         }
     }
@@ -277,7 +305,7 @@ fn guess_from_rating_target_order(
     rating_targets: &RatingTargetFile,
     levels: &mut ScoreConstantsStore,
 ) -> anyhow::Result<()> {
-    for list in rating_targets.values() {
+    for (&play_time, list) in rating_targets {
         // Process old songs
         // First, find the sum of single song ratings of old songs
         let mut new_song_raing_sum = 0;
@@ -299,6 +327,7 @@ fn guess_from_rating_target_order(
         let old_target_len = list.target_old().len();
         solve_target_order(
             levels,
+            play_time,
             chain(list.target_old(), list.candidates_old()),
             |i, rating| rating * (i < old_target_len) as usize,
             list.rating()
@@ -315,6 +344,7 @@ fn guess_from_rating_target_order(
         }
         solve_target_order(
             levels,
+            play_time,
             chain(list.target_new().last(), list.candidates_new()),
             |_, _| 0,
             0,
@@ -325,6 +355,7 @@ fn guess_from_rating_target_order(
 
 fn solve_target_order<'a>(
     levels: &mut ScoreConstantsStore,
+    list_time: PlayTime,
     entries: impl Iterator<Item = &'a RatingTargetEntry>,
     score: impl Fn(usize, usize) -> usize,
     sum: usize,
@@ -361,7 +392,11 @@ fn solve_target_order<'a>(
         sum,
     );
     for (&key, res) in keys.iter().zip_eq(res) {
-        levels.set(key, res.iter().map(|x| x.1 .1))?;
+        levels.set(
+            key,
+            res.iter().map(|x| x.1 .1),
+            lazy_format!("by the rating target list on {list_time}"),
+        )?;
     }
     Ok(())
 }
@@ -395,7 +430,7 @@ fn analyze_old_songs(
         let song = levels
             .get(&(icon, score_metadata.generation()))
             .with_context(|| {
-                anyhow!(
+                format!(
                     "Unknown song: {:?} {:?}",
                     record.song_metadata().name(),
                     record.score_metadata().generation()

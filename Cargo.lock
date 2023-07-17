@@ -386,9 +386,9 @@ checksum = "3a68a4904193147e0a8dec3314640e6db742afd5f6e634f428a6af230d9b3591"
 
 [[package]]
 name = "either"
-version = "1.7.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f107b87b6afc2a64fd13cac55fe06d6c8859f12d4b14cbcdd2c67d0976781be"
+checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
 
 [[package]]
 name = "ena"
@@ -926,6 +926,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "112c678d4050afce233f4f2852bb2eb519230b3cf12f33585275537d7e41578d"
 
 [[package]]
+name = "joinery"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57d8bde02bbf44a562cf068a8ff4a68842df387e302a03a4de4a57fcf82ec377"
+
+[[package]]
 name = "js-sys"
 version = "0.3.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -970,6 +976,12 @@ name = "language-tags"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4345964bb142484797b161f473a503a434de77149dd8c7427788c6e13379388"
+
+[[package]]
+name = "lazy_format"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c20af27ff47d964ba51ed586b8e84695261ff364922ad40bcf5a8080e99954d"
 
 [[package]]
 name = "lazy_static"
@@ -1028,6 +1040,7 @@ dependencies = [
  "deranged",
  "derive_more",
  "ego-tree",
+ "either",
  "env_logger 0.10.0",
  "fs-err",
  "getset",
@@ -1035,6 +1048,8 @@ dependencies = [
  "indexmap 2.0.0",
  "inquire",
  "itertools 0.11.0",
+ "joinery",
+ "lazy_format",
  "log",
  "num-format",
  "once_cell",
