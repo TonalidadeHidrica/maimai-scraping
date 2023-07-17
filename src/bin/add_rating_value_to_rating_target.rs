@@ -6,7 +6,7 @@ use clap::Parser;
 use maimai_scraping::{
     fs_json_util::{read_json, write_json},
     maimai::{
-        rating_target_parser::RatingTargetList,
+        rating_target_parser::{RatingTargetFile, RatingTargetList},
         schema::latest::{PlayRecord, PlayTime},
     },
 };
@@ -15,8 +15,7 @@ fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
 
     let records: Vec<PlayRecord> = read_json(opts.records_file)?;
-    let mut rating_targets: BTreeMap<PlayTime, RatingTargetList> =
-        read_json(opts.rating_target_file)?;
+    let mut rating_targets: RatingTargetFile = read_json(opts.rating_target_file)?;
     let records: BTreeMap<_, _> = records
         .into_iter()
         .map(|r| (r.played_at().time(), r))

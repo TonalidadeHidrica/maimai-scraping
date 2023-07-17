@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use anyhow::Context;
 use itertools::{Itertools, PeekingNext};
 use scraper::ElementRef;
@@ -12,7 +14,7 @@ use crate::maimai::{
 
 use super::{
     rating::ScoreLevel,
-    schema::latest::{AchievementValue, RatingValue, ScoreMetadata, SongName},
+    schema::latest::{AchievementValue, PlayTime, RatingValue, ScoreMetadata, SongName},
     song_score_parser::{find_and_parse_score_idx, ScoreIdx},
 };
 
@@ -103,3 +105,5 @@ pub struct RatingTargetEntry {
     achievement: AchievementValue,
     idx: ScoreIdx,
 }
+
+pub type RatingTargetFile = BTreeMap<PlayTime, RatingTargetList>;

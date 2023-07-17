@@ -7,7 +7,7 @@ use maimai_scraping::{
     api::SegaClient,
     fs_json_util::write_json,
     maimai::{
-        rating_target_parser::{self, RatingTargetList},
+        rating_target_parser::{self, RatingTargetFile, RatingTargetList},
         schema::latest::PlayTime,
         Maimai,
     },
@@ -59,9 +59,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn load_from_file(
-    path: impl Into<PathBuf>,
-) -> anyhow::Result<BTreeMap<PlayTime, RatingTargetList>> {
+fn load_from_file(path: impl Into<PathBuf>) -> anyhow::Result<RatingTargetFile> {
     let path = path.into();
     match File::open(&path) {
         Ok(file) => {
