@@ -277,8 +277,9 @@ fn guess_from_rating_target_order(
     rating_targets: &RatingTargetFile,
     levels: &mut ScoreConstantsStore,
 ) -> anyhow::Result<()> {
-    // TODO be careful of version
     for list in rating_targets.values() {
+        // Process old songs
+        // First, find the sum of single song ratings of old songs
         let mut new_song_raing_sum = 0;
         for entry in list.target_new() {
             let Some(key) = levels.key_from_target_entry(entry)? else {
@@ -294,49 +295,73 @@ fn guess_from_rating_target_order(
             }
             new_song_raing_sum += single_song_rating_for_target_entry(levels[0], entry).get();
         }
-        let olds = chain(list.target_old(), list.candidates_old()).collect_vec();
+        // Then, solve the DP
         let old_target_len = list.target_old().len();
-        let mut keys = vec![];
-        for &entry in &olds {
-            let Some(key) = levels.key_from_target_entry(entry)? else {
+        solve_target_order(
+            levels,
+            chain(list.target_old(), list.candidates_old()),
+            |i, rating| rating * (i < old_target_len) as usize,
+            list.rating()
+                .get()
+                .checked_sub(new_song_raing_sum)
+                .context("new_song_raing_sum is greater than rating value")? as usize,
+        )?;
+
+        // Process new songs
+        // candidates > 0 => target > 0 should hold
+        // !(x => y) <=> !(!x || y) <=> x && !y
+        if !list.candidates_new().is_empty() && list.target_new().is_empty() {
+            bail!("Candidates are non-empty, but targets are empty");
+        }
+        solve_target_order(
+            levels,
+            chain(list.target_new().last(), list.candidates_new()),
+            |_, _| 0,
+            0,
+        )?;
+    }
+    Ok(())
+}
+
+fn solve_target_order<'a>(
+    levels: &mut ScoreConstantsStore,
+    entries: impl Iterator<Item = &'a RatingTargetEntry>,
+    score: impl Fn(usize, usize) -> usize,
+    sum: usize,
+) -> anyhow::Result<()> {
+    let entries = entries.collect_vec();
+
+    let mut keys = vec![];
+    for entry in &entries {
+        let Some(key) = levels.key_from_target_entry(entry)? else {
                 println!(
                     "TODO: score cannot be uniquely determined from the song name {:?}",
                     entry.song_name()
                 );
                 return Ok(());
             };
-            if levels.get(key)?.is_none() {
-                bail!("Song not found for {key:?}");
-            }
-            keys.push(key);
+        if levels.get(key)?.is_none() {
+            bail!("Song not found for {key:?}");
         }
-        // println!("{} - {}", list.rating(), new_song_raing_sum);
-        let res = possibilties_from_sum_and_ordering::solve(
-            olds.len(),
-            |i| {
-                let (key, entry) = (keys[i], olds[i]);
-                let levels = levels.get(key).unwrap().unwrap().1.iter();
-                levels.map(move |&level| {
-                    let rating = single_song_rating_for_target_entry(level, entry).get() as usize;
-                    let score = rating * (i < old_target_len) as usize;
-                    (score, ((rating, entry.achievement()), level))
-                })
-            },
-            |x, y| x.1 .0.cmp(&y.1 .0).reverse(),
-            list.rating()
-                .get()
-                .checked_sub(new_song_raing_sum)
-                .context("new_song_raing_sum is greater than rating value")? as usize,
-        );
-        for (&key, res) in keys.iter().zip_eq(res) {
-            levels.set(key, res.iter().map(|x| x.1 .1))?;
-        }
-        // println!(
-        //     "{:?}",
-        //     res.iter()
-        //         .map(|x| x.iter().map(|x| x.1 .0 .0).collect_vec())
-        //         .collect_vec()
-        // );
+        keys.push(key);
+    }
+    // println!("{} - {}", list.rating(), new_song_raing_sum);
+    let res = possibilties_from_sum_and_ordering::solve(
+        entries.len(),
+        |i| {
+            let (key, entry) = (keys[i], entries[i]);
+            let levels = levels.get(key).unwrap().unwrap().1.iter();
+            let score = &score;
+            levels.map(move |&level| {
+                let rating = single_song_rating_for_target_entry(level, entry).get() as usize;
+                (score(i, rating), ((rating, entry.achievement()), level))
+            })
+        },
+        |x, y| x.1 .0.cmp(&y.1 .0).reverse(),
+        sum,
+    );
+    for (&key, res) in keys.iter().zip_eq(res) {
+        levels.set(key, res.iter().map(|x| x.1 .1))?;
     }
     Ok(())
 }
