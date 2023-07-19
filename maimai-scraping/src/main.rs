@@ -7,7 +7,7 @@ use clap::ArgEnum;
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::api::SegaClient;
-use maimai_scraping::data_collector::load_from_file;
+use maimai_scraping::data_collector::load_records_from_file;
 use maimai_scraping::data_collector::update_records;
 use maimai_scraping::fs_json_util::write_json;
 use maimai_scraping::maimai::Maimai;
@@ -53,7 +53,7 @@ where
     T::PlayRecord: Serialize,
     for<'a> T::PlayRecord: Deserialize<'a>,
 {
-    let mut records = load_from_file::<T, _>(path)?;
+    let mut records = load_records_from_file::<T, _>(path)?;
     let (mut client, index) = SegaClient::<T>::new().await?;
     update_records(&mut client, &mut records, index).await?;
     write_json(path, &records.values().collect_vec())?;

@@ -173,20 +173,12 @@ impl<'a, T> LoginForm<'a, T> {
 pub async fn try_login<T: SegaTrait>(client: &reqwest::Client) -> anyhow::Result<CookieStore<T>> {
     let credentials = Credentials::<T>::load()?;
 
-    let login_form = client.get(T::LOGIN_FORM_URL).send().await?;
-    let login_form = Html::parse_document(&login_form.text().await?);
-    let token = login_form
-        .select(T::login_form_token_selector())
-        .next()
-        .ok_or_else(|| anyhow!("The token was not found in the login form."))?
-        .value()
-        .attr("value")
-        .ok_or_else(|| anyhow!("Value was not present in the token element."))?;
+    let token = get_token::<T>(client).await?;
 
     let login_url = T::LOGIN_URL;
     let response = client
         .post(login_url)
-        .form(&LoginForm::new(&credentials, token))
+        .form(&LoginForm::new(&credentials, &token))
         .send()
         .await?;
 
@@ -210,6 +202,20 @@ pub async fn try_login<T: SegaTrait>(client: &reqwest::Client) -> anyhow::Result
         return Err(anyhow!("Desired cookie was not found."));
     }
     Ok(dbg!(cookie_store))
+}
+
+async fn get_token<T: SegaTrait>(client: &reqwest::Client) -> Result<String, anyhow::Error> {
+    let login_form = client.get(T::LOGIN_FORM_URL).send().await?;
+    let login_form = Html::parse_document(&login_form.text().await?);
+    let token = login_form
+        .select(T::login_form_token_selector())
+        .next()
+        .ok_or_else(|| anyhow!("The token was not found in the login form."))?
+        .value()
+        .attr("value")
+        .ok_or_else(|| anyhow!("Value was not present in the token element."))?
+        .to_owned();
+    Ok(token)
 }
 
 #[cfg(test)]

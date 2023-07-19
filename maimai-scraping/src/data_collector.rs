@@ -13,8 +13,8 @@ use serde::Deserialize;
 
 use crate::sega_trait::{Idx, PlayRecordTrait, PlayTime, PlayedAt, SegaTrait};
 
-type RecordMap<T> = BTreeMap<PlayTime<T>, <T as SegaTrait>::PlayRecord>;
-pub fn load_from_file<T, P>(path: P) -> anyhow::Result<RecordMap<T>>
+pub type RecordMap<T> = BTreeMap<PlayTime<T>, <T as SegaTrait>::PlayRecord>;
+pub fn load_records_from_file<T, P>(path: P) -> anyhow::Result<RecordMap<T>>
 where
     T: SegaTrait,
     PlayTime<T>: Ord,
