@@ -7,6 +7,7 @@ pub mod algorithm;
 pub mod api;
 pub mod compare_htmls;
 pub mod cookie_store;
+pub mod data_collector;
 pub mod fs_json_util;
 pub mod maimai;
 pub mod ongeki;

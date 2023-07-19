@@ -2,4 +2,5 @@
 
 members = [
 	"maimai-scraping",
+	"maimai-watcher",
 ]
