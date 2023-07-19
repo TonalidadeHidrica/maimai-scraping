@@ -974,9 +974,9 @@ dependencies = [
 
 [[package]]
 name = "fs-err"
-version = "2.7.0"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bd79fa345a495d3ae89fb7165fec01c0e72f41821d642dda363a1e97975652e"
+checksum = "0845fa252299212f0389d64ba26f34fa32cfe41588355f21ed507c59a0f64541"
 
 [[package]]
 name = "futf"
@@ -1571,6 +1571,7 @@ dependencies = [
  "anyhow",
  "clap 4.3.16",
  "ctrlc",
+ "fs-err",
  "itertools 0.11.0",
  "maimai-scraping",
  "serde",
