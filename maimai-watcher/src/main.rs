@@ -3,13 +3,17 @@ use serde::Deserialize;
 
 #[derive(Clone, Deserialize)]
 struct Config {
+    port: u16,
     route: String,
     user_id: String,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    env_logger::init();
+
     let config: Config = toml::from_str(&fs_err::read_to_string("maimai-watcher/config.toml")?)?;
+    let port = config.port;
     let route = config.route.clone();
     Ok(HttpServer::new(move || {
         App::new()
@@ -18,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
             }))
             .route(&route, web::get().to(webhook))
     })
-    .bind(("0.0.0.0", 15342))?
+    .bind(("0.0.0.0", port))?
     .run()
     .await?)
 }
