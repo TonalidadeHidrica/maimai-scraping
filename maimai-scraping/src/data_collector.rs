@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display},
     io::{self, BufReader},
@@ -6,12 +7,21 @@ use std::{
     time::Duration,
 };
 
-use crate::api::SegaClient;
-use anyhow::anyhow;
+use crate::{
+    api::SegaClient,
+    maimai::{
+        rating_target_parser::{self, RatingTargetFile},
+        schema::latest::PlayTime as MaimaiPlayTime,
+        Maimai,
+    },
+    sega_trait::{Idx, PlayRecordTrait, PlayTime, PlayedAt, SegaTrait},
+};
+use anyhow::{anyhow, bail};
 use fs_err::File;
+use scraper::Html;
 use serde::Deserialize;
-
-use crate::sega_trait::{Idx, PlayRecordTrait, PlayTime, PlayedAt, SegaTrait};
+use tokio::time::sleep;
+use url::Url;
 
 pub type RecordMap<T> = BTreeMap<PlayTime<T>, <T as SegaTrait>::PlayRecord>;
 pub fn load_records_from_file<T, P>(path: P) -> anyhow::Result<RecordMap<T>>
@@ -47,13 +57,14 @@ pub async fn update_records<T>(
     client: &mut SegaClient<T>,
     records: &mut RecordMap<T>,
     index: Vec<(PlayTime<T>, Idx<T>)>,
-) -> anyhow::Result<()>
+) -> anyhow::Result<bool>
 where
     T: SegaTrait,
     Idx<T>: Copy + PartialEq + Display,
     PlayTime<T>: Copy + Ord + Display,
     PlayedAt<T>: Debug,
 {
+    let mut data_downloaded = false;
     // In `index`, newer result is stored first.
     // Since we want to fetch older result as fast as possible,
     // we inspect them in the reverse order.
@@ -61,6 +72,7 @@ where
         println!("Checking idx={}...", idx);
         match records.entry(played_at) {
             Entry::Vacant(entry) => {
+                data_downloaded = true;
                 let record = client.download_record(idx).await?.ok_or_else(|| {
                     anyhow!(
                         "  Once found record has been disappeared: played_at={}, idx={}",
@@ -75,7 +87,7 @@ where
                         idx, played_at, record.time());
                 }
                 entry.insert(record);
-                std::thread::sleep(Duration::from_secs(2));
+                sleep(Duration::from_secs(2)).await;
             }
             Entry::Occupied(entry) => {
                 if entry.get().idx() != idx {
@@ -88,5 +100,57 @@ where
             }
         }
     }
+    Ok(data_downloaded)
+}
+
+pub fn load_targets_from_file(path: impl Into<PathBuf>) -> anyhow::Result<RatingTargetFile> {
+    let path = path.into();
+    match File::open(&path) {
+        Ok(file) => {
+            let res = serde_json::from_reader(BufReader::new(file))?;
+            println!("Successfully loaded data from {:?}.", &path);
+            Ok(res)
+        }
+        Err(e) => match e.kind() {
+            std::io::ErrorKind::NotFound => {
+                println!("The file was not found.");
+                println!("We will create a new file for you and save the data there.");
+                Ok(BTreeMap::new())
+            }
+            _ => bail!("Unexpected I/O Error: {:?}", e),
+        },
+    }
+}
+
+pub async fn update_targets(
+    client: &mut SegaClient<Maimai>,
+    rating_targets: &mut RatingTargetFile,
+    last_played: MaimaiPlayTime,
+) -> anyhow::Result<()> {
+    let last_saved = rating_targets.last_key_value().map(|x| *x.0);
+    if let Some(date) = last_saved {
+        println!("Rating target saved at: {date}");
+    } else {
+        println!("Rating target: not saved");
+    }
+    println!("Latest play at: {last_played}");
+    match last_saved.cmp(&Some(last_played)) {
+        Ordering::Less => println!("Updates needed."),
+        Ordering::Equal => {
+            println!("Already up to date.");
+            return Ok(());
+        }
+        Ordering::Greater => {
+            bail!("What?!  Inconsistent newest records between play records and rating targets!")
+        }
+    };
+
+    let res = client
+        .fetch_authenticated(Url::parse(
+            "https://maimaidx.jp/maimai-mobile/home/ratingTargetMusic/",
+        )?)
+        .await?;
+    let res = rating_target_parser::parse(&Html::parse_document(&res.0.text().await?))?;
+    rating_targets.insert(last_played, res);
     Ok(())
 }
