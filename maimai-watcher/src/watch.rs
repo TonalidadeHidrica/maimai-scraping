@@ -15,12 +15,14 @@ use tokio::{
     spawn,
     sync::mpsc::{self, error::TryRecvError},
 };
+use url::Url;
 
 #[derive(Clone, Deserialize)]
 pub struct Config {
     pub interval: Duration,
     pub records_path: PathBuf,
     pub rating_target_path: PathBuf,
+    pub slack_post_webhook: Option<Url>,
 }
 
 pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
