@@ -10,11 +10,13 @@ use maimai_scraping::{
     fs_json_util::write_json,
     maimai::{rating_target_parser::RatingTargetFile, Maimai},
 };
+use serde::Deserialize;
 use tokio::{
     spawn,
     sync::mpsc::{self, error::TryRecvError},
 };
 
+#[derive(Clone, Deserialize)]
 pub struct Config {
     pub interval: Duration,
     pub records_path: PathBuf,
