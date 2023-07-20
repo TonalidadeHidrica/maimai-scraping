@@ -1,4 +1,4 @@
-use std::{iter::successors, path::PathBuf, thread::sleep, time::Duration};
+use std::{iter::successors, path::PathBuf, time::Duration};
 
 use anyhow::Context;
 use itertools::Itertools;
@@ -15,6 +15,7 @@ use serde::Deserialize;
 use tokio::{
     spawn,
     sync::mpsc::{self, error::TryRecvError},
+    time::sleep,
 };
 use url::Url;
 
@@ -45,7 +46,7 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
             }
             let chunk = Duration::from_millis(250);
             for remaining in successors(Some(config.interval), |x| x.checked_sub(chunk)) {
-                sleep(remaining.min(chunk));
+                sleep(remaining.min(chunk)).await;
                 if !matches!(rx.try_recv(), Err(TryRecvError::Empty)) {
                     break 'outer;
                 }
