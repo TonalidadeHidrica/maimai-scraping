@@ -10,6 +10,7 @@ use crate::sega_trait::PlayTime;
 use crate::sega_trait::SegaTrait;
 use anyhow::anyhow;
 use anyhow::bail;
+use log::info;
 use reqwest::header;
 use reqwest::redirect;
 use reqwest::IntoUrl;
@@ -37,7 +38,7 @@ impl<T: SegaTrait> SegaClient<T> {
                 (client, index.map_err(Some))
             }
             Err(CookieStoreLoadError::NotFound) => {
-                println!("Cookie store was not found.  Trying to log in.");
+                info!("Cookie store was not found.  Trying to log in.");
                 let cookie_store = try_login::<T>(&client).await?;
                 let client = Self {
                     client,
@@ -51,15 +52,15 @@ impl<T: SegaTrait> SegaClient<T> {
             Ok(index) => index, // TODO: a bit redundant
             Err(err) => {
                 if let Some(err) = err {
-                    println!("The stored session seems to be expired.  Trying to log in.");
-                    println!("    Detail: {:?}", err);
+                    info!("The stored session seems to be expired.  Trying to log in.");
+                    info!("    Detail: {:?}", err);
                 }
                 client.cookie_store = try_login::<T>(&client.client).await?;
                 // return Ok(());
                 client.download_record_index().await?
             }
         };
-        println!("Successfully logged in.");
+        info!("Successfully logged in.");
 
         Ok((client, index))
     }

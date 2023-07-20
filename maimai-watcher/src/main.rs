@@ -1,5 +1,8 @@
+use std::path::PathBuf;
+
 use actix_web::{middleware::Logger, web, App, HttpServer, Responder};
 use anyhow::bail;
+use clap::Parser;
 use log::{error, info};
 use maimai_watcher::{
     slack::webhook_send,
@@ -7,6 +10,12 @@ use maimai_watcher::{
 };
 use serde::Deserialize;
 use tokio::sync::Mutex;
+
+#[derive(Parser)]
+struct Opts {
+    #[clap(default_value = "ignore/maimai-watcher-config.toml")]
+    config_path: PathBuf,
+}
 
 #[derive(Clone, Deserialize)]
 struct Config {
@@ -20,7 +29,8 @@ struct Config {
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    let config: Config = toml::from_str(&fs_err::read_to_string("maimai-watcher/config.toml")?)?;
+    let opts = Opts::parse();
+    let config: Config = toml::from_str(&fs_err::read_to_string(opts.config_path)?)?;
     let port = config.port;
     let route = config.route.clone();
     Ok(HttpServer::new(move || {
@@ -44,8 +54,10 @@ struct State {
 
 async fn webhook(state: web::Data<State>, info: web::Form<SlashCommand>) -> impl Responder {
     let client = reqwest::Client::new();
+    let url = state.config.watch_config.slack_post_webhook.clone();
     if let Err(e) = webhook_impl(state, info, &client).await {
         error!("{e}");
+        webhook_send(&client, &url, e.to_string()).await;
     };
     "done"
 }

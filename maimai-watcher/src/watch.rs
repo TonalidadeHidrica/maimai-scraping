@@ -2,6 +2,7 @@ use std::{iter::successors, path::PathBuf, thread::sleep, time::Duration};
 
 use anyhow::Context;
 use itertools::Itertools;
+use log::error;
 use maimai_scraping::{
     api::SegaClient,
     data_collector::{
@@ -34,12 +35,18 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
     spawn(async move {
         'outer: while let Err(TryRecvError::Empty) = rx.try_recv() {
             if let Err(e) = run(&config, &mut records, &mut rating_targets).await {
-                println!("{e}");
+                error!("{e}");
+                webhook_send(
+                    &reqwest::Client::new(),
+                    &config.slack_post_webhook,
+                    e.to_string(),
+                )
+                .await;
             }
             let chunk = Duration::from_millis(250);
             for remaining in successors(Some(config.interval), |x| x.checked_sub(chunk)) {
                 sleep(remaining.min(chunk));
-                if rx.try_recv().is_ok() {
+                if !matches!(rx.try_recv(), Err(TryRecvError::Empty)) {
                     break 'outer;
                 }
             }
