@@ -1,5 +1,6 @@
 use actix_web::{middleware::Logger, web, App, HttpServer, Responder};
 use anyhow::bail;
+use log::info;
 use maimai_watcher::watch::{self, WatchHandler};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -59,6 +60,7 @@ async fn webhook_impl(
     if state.config.user_id != info.user_id {
         bail!("You are not authorized to run this command.");
     }
+    info!("Slash command: {info:?}");
 
     let res = if info.text.contains("stop") {
         let mut handler = state.watch_handler.lock().await;
@@ -99,12 +101,12 @@ struct SlashCommand {
 #[derive(Serialize)]
 struct SlashCommandResponse {
     response_type: SlashCommandResponseType,
-    message: String,
+    text: String,
 }
 fn in_channel(message: impl AsRef<str>) -> SlashCommandResponse {
     SlashCommandResponse {
         response_type: SlashCommandResponseType::InChannel,
-        message: message.as_ref().to_owned(),
+        text: message.as_ref().to_owned(),
     }
 }
 
@@ -112,5 +114,6 @@ fn in_channel(message: impl AsRef<str>) -> SlashCommandResponse {
 #[serde(rename_all = "snake_case")]
 enum SlashCommandResponseType {
     InChannel,
+    #[allow(unused)]
     Ephermal,
 }
