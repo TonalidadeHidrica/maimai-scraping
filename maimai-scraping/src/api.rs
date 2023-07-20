@@ -111,6 +111,10 @@ impl<T: SegaTrait> SegaClient<T> {
             .and_then(|x| Url::parse(x.to_str().ok()?).ok());
         Ok((response, location))
     }
+
+    pub fn reqwest(&self) -> &reqwest::Client {
+        &self.client
+    }
 }
 
 fn reqwest_client<T: SegaTrait>() -> reqwest::Result<reqwest::Client> {

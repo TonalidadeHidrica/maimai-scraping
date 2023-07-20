@@ -18,6 +18,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail};
 use fs_err::File;
+use log::{info, trace, warn};
 use scraper::Html;
 use serde::Deserialize;
 use tokio::time::sleep;
@@ -35,7 +36,7 @@ where
     match File::open(&path) {
         Ok(file) => {
             let reader = BufReader::new(file);
-            println!("Successfully loaded data from {:?}.", &path);
+            info!("Successfully loaded data from {:?}.", &path);
             let records: Vec<T::PlayRecord> = serde_json::from_reader(reader)?;
             Ok(records
                 .into_iter()
@@ -44,8 +45,8 @@ where
         }
         Err(e) => match e.kind() {
             io::ErrorKind::NotFound => {
-                println!("The file was not found.");
-                println!("We will create a new file for you and save the data there.");
+                info!("The file was not found.");
+                info!("We will create a new file for you and save the data there.");
                 Ok(BTreeMap::new())
             }
             _ => Err(anyhow!("Unexpected I/O Error: {:?}", e)),
@@ -53,26 +54,26 @@ where
     }
 }
 
-pub async fn update_records<T>(
+pub async fn update_records<'m, T>(
     client: &mut SegaClient<T>,
-    records: &mut RecordMap<T>,
+    records: &'m mut RecordMap<T>,
     index: Vec<(PlayTime<T>, Idx<T>)>,
-) -> anyhow::Result<bool>
+) -> anyhow::Result<Vec<&'m T::PlayRecord>>
 where
     T: SegaTrait,
     Idx<T>: Copy + PartialEq + Display,
     PlayTime<T>: Copy + Ord + Display,
     PlayedAt<T>: Debug,
 {
-    let mut data_downloaded = false;
+    let mut inserted = vec![];
     // In `index`, newer result is stored first.
     // Since we want to fetch older result as fast as possible,
     // we inspect them in the reverse order.
     for (played_at, idx) in index.into_iter().rev() {
-        println!("Checking idx={}...", idx);
+        trace!("Checking idx={}...", idx);
         match records.entry(played_at) {
             Entry::Vacant(entry) => {
-                data_downloaded = true;
+                inserted.push(played_at);
                 let record = client.download_record(idx).await?.ok_or_else(|| {
                     anyhow!(
                         "  Once found record has been disappeared: played_at={}, idx={}",
@@ -80,9 +81,9 @@ where
                         idx
                     )
                 })?;
-                println!("  Downloaded record {:?}", record.played_at());
+                info!("  Downloaded record {:?}", record.played_at());
                 if played_at != record.time() {
-                    println!(
+                    warn!(
                         "  Record has been updated at idx={}.  Probably there was a data loss.  Expected: {}, found: {}", 
                         idx, played_at, record.time());
                 }
@@ -91,16 +92,13 @@ where
             }
             Entry::Occupied(entry) => {
                 if entry.get().idx() != idx {
-                    println!(
-                        "  The currently obtained idx is different from recorded: got {}",
-                        idx,
-                    );
-                    println!("  Played at: {:?}", entry.get().played_at());
+                    warn!("  The currently obtained idx is different from recorded: got {idx}",);
+                    warn!("  Played at: {:?}", entry.get().played_at());
                 }
             }
         }
     }
-    Ok(data_downloaded)
+    Ok(inserted.iter().map(|d| &records[d]).collect())
 }
 
 pub fn load_targets_from_file(path: impl Into<PathBuf>) -> anyhow::Result<RatingTargetFile> {

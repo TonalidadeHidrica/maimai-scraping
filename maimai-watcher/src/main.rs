@@ -62,9 +62,8 @@ async fn webhook_impl(
 
     macro_rules! post {
         ($message: literal) => {
-            if let Some(url) = &state.config.watch_config.slack_post_webhook {
-                webhook_send(client, url, $message).await
-            }
+            let url = &state.config.watch_config.slack_post_webhook;
+            webhook_send(client, url, $message).await
         };
     }
     if info.text.contains("stop") {

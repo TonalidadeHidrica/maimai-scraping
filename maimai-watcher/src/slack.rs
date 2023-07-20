@@ -28,7 +28,8 @@ struct WebhookPost<'a> {
     text: &'a str,
 }
 
-pub async fn webhook_send(client: &reqwest::Client, url: &Url, message: impl AsRef<str>) {
+pub async fn webhook_send(client: &reqwest::Client, url: &Option<Url>, message: impl AsRef<str>) {
+    let Some(url) = url else { return };
     if let Err(e) = client
         .post(url.clone())
         .json(&WebhookPost {
