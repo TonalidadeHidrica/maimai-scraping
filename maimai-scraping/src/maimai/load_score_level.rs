@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use anyhow::{anyhow, bail};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
@@ -30,6 +33,18 @@ where
         }
     }
     Ok(map)
+}
+pub fn make_hash_multimap<K, V, I>(elems: I) -> HashMap<K, HashSet<V>>
+where
+    K: std::hash::Hash + std::cmp::Eq,
+    V: std::hash::Hash + std::cmp::Eq,
+    I: IntoIterator<Item = (K, V)>,
+{
+    let mut map = HashMap::<_, HashSet<V>>::new();
+    for (k, v) in elems {
+        map.entry(k).or_default().insert(v);
+    }
+    map
 }
 
 #[derive(Debug, Deserialize)]

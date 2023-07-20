@@ -22,6 +22,8 @@ use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use strum::IntoEnumIterator;
 
+use super::load_score_level::{self, make_hash_multimap};
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 struct ScoreKey<'a> {
     icon: &'a SongIcon,
@@ -41,17 +43,18 @@ impl<'a> From<&'a PlayRecord> for ScoreKey<'a> {
 pub struct ScoreConstantsStore<'s, 'r> {
     pub updated: bool,
     constants: HashMap<ScoreKey<'s>, ScoreConstantsEntry<'s>>,
-    removed_songs: HashMap<&'s SongIcon, &'r RemovedSong>,
+    removed_songs: HashMap<&'r SongIcon, &'r RemovedSong>,
     song_name_to_icon: HashMap<&'s SongName, HashSet<&'s SongIcon>>,
     pub show_details: bool,
 }
 impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
-    pub fn new(
-        map: HashMap<(&'s SongIcon, ScoreGeneration), &'s Song>,
-        removed_songs: HashMap<&'s SongIcon, &'r RemovedSong>,
-        song_name_to_icon: HashMap<&'s SongName, HashSet<&'s SongIcon>>,
-    ) -> Self {
-        Self {
+    pub fn new(levels: &'s [Song], removed_songs: &'r [RemovedSong]) -> anyhow::Result<Self> {
+        let song_name_to_icon =
+            make_hash_multimap(levels.iter().map(|song| (song.song_name(), song.icon())));
+        let removed_songs = load_score_level::make_map(removed_songs, |r| r.icon())?;
+        let map = load_score_level::make_map(levels, |song| (song.icon(), song.generation()))?;
+
+        Ok(Self {
             updated: false,
             constants: map
                 .into_iter()
@@ -85,7 +88,7 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
             removed_songs,
             song_name_to_icon,
             show_details: false,
-        }
+        })
     }
 
     pub fn reset(&mut self) {

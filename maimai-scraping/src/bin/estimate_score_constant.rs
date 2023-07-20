@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 use clap::Parser;
 use maimai_scraping::{
@@ -13,7 +10,6 @@ use maimai_scraping::{
         schema::latest::PlayRecord,
     },
 };
-use tap::Tap;
 
 #[derive(Parser)]
 struct Opts {
@@ -33,17 +29,9 @@ fn main() -> anyhow::Result<()> {
     let rating_targets: RatingTargetFile = read_json(opts.rating_target_file)?;
 
     let levels = load_score_level::load(opts.level_file)?;
-    let song_name_to_icon = HashMap::<_, HashSet<_>>::new().tap_mut(|map| {
-        for song in &levels {
-            map.entry(song.song_name()).or_default().insert(song.icon());
-        }
-    });
-
     let removed_songs: Vec<RemovedSong> = read_json(opts.removed_songs)?;
-    let removed_songs = load_score_level::make_map(&removed_songs, |r| r.icon())?;
+    let mut levels = ScoreConstantsStore::new(&levels, &removed_songs)?;
 
-    let levels = load_score_level::make_map(&levels, |song| (song.icon(), song.generation()))?;
-    let mut levels = ScoreConstantsStore::new(levels, removed_songs, song_name_to_icon);
     levels.show_details = opts.details;
     if opts.details {
         println!("New songs");
