@@ -10,6 +10,7 @@ async fn main() -> anyhow::Result<()> {
         interval: Duration::from_secs(30),
         records_path: opts.records_path,
         rating_target_path: opts.rating_target_path,
+        slack_post_webhook: None,
     })
     .await?;
 

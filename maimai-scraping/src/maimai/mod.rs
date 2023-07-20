@@ -1,3 +1,4 @@
+pub mod estimate_rating;
 pub mod load_score_level;
 pub mod play_record_parser;
 pub mod rating;
