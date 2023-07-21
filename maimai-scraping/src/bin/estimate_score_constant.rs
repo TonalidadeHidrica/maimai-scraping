@@ -47,6 +47,8 @@ fn main() -> anyhow::Result<()> {
             break;
         }
     }
+    // drop(records);
+    // println!("{}", levels.updated);
 
     Ok(())
 }
