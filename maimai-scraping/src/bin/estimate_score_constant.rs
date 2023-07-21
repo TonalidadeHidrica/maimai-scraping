@@ -4,7 +4,7 @@ use clap::Parser;
 use maimai_scraping::{
     fs_json_util::read_json,
     maimai::{
-        estimate_rating::{analyze_new_songs, guess_from_rating_target_order, ScoreConstantsStore},
+        estimate_rating::ScoreConstantsStore,
         load_score_level::{self, RemovedSong},
         rating_target_parser::RatingTargetFile,
         schema::latest::PlayRecord,
@@ -36,13 +36,13 @@ fn main() -> anyhow::Result<()> {
     if opts.details {
         println!("New songs");
     }
-    analyze_new_songs(&records, &mut levels)?;
+    levels.analyze_new_songs(&records)?;
     for i in 1.. {
         if opts.details {
             println!("Iteration {i}");
         }
         levels.reset();
-        guess_from_rating_target_order(&rating_targets, &mut levels)?;
+        levels.guess_from_rating_target_order(&rating_targets)?;
         if !levels.updated {
             break;
         }
