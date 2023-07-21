@@ -41,9 +41,9 @@ fn main() -> anyhow::Result<()> {
         if opts.details {
             println!("Iteration {i}");
         }
-        levels.reset();
+        let before_len = levels.events().len();
         levels.guess_from_rating_target_order(&rating_targets)?;
-        if !levels.updated {
+        if before_len == levels.events().len() {
             break;
         }
     }

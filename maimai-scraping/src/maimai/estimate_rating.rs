@@ -18,6 +18,7 @@ use crate::{
 };
 use anyhow::{bail, Context};
 use either::Either;
+use getset::Getters;
 use hashbrown::{HashMap, HashSet};
 use itertools::{chain, Itertools};
 use joinery::JoinableIterator;
@@ -27,7 +28,7 @@ use strum::IntoEnumIterator;
 use super::load_score_level::{self, make_hash_multimap};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-struct ScoreKey<'a> {
+pub struct ScoreKey<'a> {
     icon: &'a SongIcon,
     generation: ScoreGeneration,
     difficulty: ScoreDifficulty,
@@ -41,9 +42,20 @@ impl<'a> From<&'a PlayRecord> for ScoreKey<'a> {
         }
     }
 }
+impl<'a> ScoreKey<'a> {
+    fn with<'b>(&self, icon: &'b SongIcon) -> ScoreKey<'b> {
+        ScoreKey {
+            icon,
+            generation: self.generation,
+            difficulty: self.difficulty,
+        }
+    }
+}
 
+#[derive(Getters)]
 pub struct ScoreConstantsStore<'s, 'r> {
-    pub updated: bool,
+    #[getset(get = "pub")]
+    events: Vec<(ScoreKey<'s>, String)>,
     constants: HashMap<ScoreKey<'s>, ScoreConstantsEntry<'s>>,
     removed_songs: HashMap<&'r SongIcon, &'r RemovedSong>,
     song_name_to_icon: HashMap<&'s SongName, HashSet<&'s SongIcon>>,
@@ -56,45 +68,44 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
         let removed_songs = load_score_level::make_map(removed_songs, |r| r.icon())?;
         let map = load_score_level::make_map(levels, |song| (song.icon(), song.generation()))?;
 
+        let mut events = vec![];
+        let mut constants = HashMap::new();
+        for ((icon, generation), song) in map {
+            for difficulty in ScoreDifficulty::iter() {
+                let key = ScoreKey {
+                    icon,
+                    generation,
+                    difficulty,
+                };
+                let (candidates, reason) = match song.levels().get(difficulty) {
+                    None => continue,
+                    Some(InternalScoreLevel::Unknown(level)) => {
+                        let levels = level.score_constant_candidates().collect();
+                        let reason = lazy_format!("because this score's level is {level}");
+                        (levels, Either::Left(reason))
+                    }
+                    Some(InternalScoreLevel::Known(level)) => {
+                        (vec![level], Either::Right("as it is already known"))
+                    }
+                };
+                let mut entry = ScoreConstantsEntry {
+                    song,
+                    candidates,
+                    reasons: vec![],
+                };
+                entry.reasons.push(events.len());
+                events.push((key, entry.make_reason(reason)));
+                constants.insert(key, entry);
+            }
+        }
+
         Ok(Self {
-            updated: false,
-            constants: map
-                .into_iter()
-                .flat_map(|((icon, generation), song)| {
-                    ScoreDifficulty::iter().filter_map(move |difficulty| {
-                        let key = ScoreKey {
-                            icon,
-                            generation,
-                            difficulty,
-                        };
-                        let (candidates, reason) = match song.levels().get(difficulty)? {
-                            InternalScoreLevel::Unknown(level) => {
-                                let levels = level.score_constant_candidates().collect();
-                                let reason = lazy_format!("because this score's level is {level}");
-                                (levels, Either::Left(reason))
-                            }
-                            InternalScoreLevel::Known(level) => {
-                                (vec![level], Either::Right("as it is already known"))
-                            }
-                        };
-                        let mut entry = ScoreConstantsEntry {
-                            song,
-                            candidates,
-                            reasons: vec![],
-                        };
-                        entry.add_reason(reason);
-                        Some((key, entry))
-                    })
-                })
-                .collect(),
+            events,
+            constants,
             removed_songs,
             song_name_to_icon,
             show_details: false,
         })
-    }
-
-    pub fn reset(&mut self) {
-        self.updated = false;
     }
 
     fn get(&self, key: ScoreKey) -> anyhow::Result<Option<(&'s Song, &[ScoreConstant])>> {
@@ -129,10 +140,12 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
         entry.candidates.retain(|x| new.contains(x));
 
         if entry.candidates.len() < old_len {
-            self.updated = true;
-            entry.add_reason(reason);
+            entry.reasons.push(self.events.len());
+            self.events
+                .push((key.with(entry.song.icon()), entry.make_reason(reason)));
             let print_reasons = || {
-                for reason in &entry.reasons {
+                for &i in &entry.reasons {
+                    let (_, reason) = &self.events[i];
                     println!("    - {reason}");
                 }
             };
@@ -187,14 +200,14 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
 struct ScoreConstantsEntry<'s> {
     song: &'s Song,
     candidates: Vec<ScoreConstant>,
-    reasons: Vec<String>,
+    reasons: Vec<usize>,
 }
 impl ScoreConstantsEntry<'_> {
-    fn add_reason(&mut self, reason: impl Display) {
-        self.reasons.push(format!(
+    fn make_reason(&mut self, reason: impl Display) -> String {
+        format!(
             "Constrained to [{}] {reason}",
             self.candidates.iter().join_with(", ")
-        ))
+        )
     }
 }
 
