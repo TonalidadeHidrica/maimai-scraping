@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeSet, HashMap, HashSet},
-    fmt::Display,
-};
+use std::{collections::BTreeSet, fmt::Display};
 
 use crate::{
     algorithm::possibilties_from_sum_and_ordering,
@@ -17,6 +14,7 @@ use crate::{
 };
 use anyhow::{bail, Context};
 use either::Either;
+use hashbrown::{HashMap, HashSet};
 use itertools::{chain, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
@@ -204,7 +202,7 @@ pub fn analyze_new_songs<'s>(
         let Some((song, _)) = levels.get(score_key)? else { continue };
         let delta = record.rating_result().delta();
         if song.version() == version && delta > 0 {
-            use std::collections::hash_map::Entry::*;
+            use hashbrown::hash_map::Entry::*;
             let rating = match s2r.entry(score_key) {
                 Occupied(mut s2r_entry) => {
                     // println!("  Song list does not change, just updating score (delta={delta})");
@@ -376,7 +374,7 @@ pub fn analyze_old_songs(
 ) -> anyhow::Result<()> {
     let mut best = HashMap::<_, &PlayRecord>::new();
     for record in records {
-        use std::collections::hash_map::Entry::*;
+        use hashbrown::hash_map::Entry::*;
         match best.entry((record.song_metadata().cover_art(), record.score_metadata())) {
             Occupied(mut old) => {
                 if old.get().achievement_result().value() < record.achievement_result().value() {

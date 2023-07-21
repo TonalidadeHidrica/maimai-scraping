@@ -1,11 +1,9 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 use anyhow::{anyhow, bail};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use getset::{CopyGetters, Getters};
+use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
