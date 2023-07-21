@@ -127,11 +127,13 @@ pub struct SongMetadata {
     Hash,
     Debug,
     derive_more::From,
+    derive_more::AsRef,
     derive_more::FromStr,
     derive_more::Display,
     Serialize,
     Deserialize,
 )]
+#[as_ref(forward)]
 pub struct SongName(String);
 
 #[derive(

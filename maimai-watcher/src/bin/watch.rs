@@ -11,6 +11,8 @@ async fn main() -> anyhow::Result<()> {
         records_path: opts.records_path,
         rating_target_path: opts.rating_target_path,
         slack_post_webhook: None,
+        levels_path: opts.levels_path,
+        removed_songs_path: opts.removed_songs_path,
     })
     .await?;
 
@@ -30,4 +32,6 @@ async fn main() -> anyhow::Result<()> {
 struct Opts {
     records_path: PathBuf,
     rating_target_path: PathBuf,
+    levels_path: PathBuf,
+    removed_songs_path: PathBuf,
 }

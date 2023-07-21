@@ -25,7 +25,10 @@ use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use strum::IntoEnumIterator;
 
-use super::load_score_level::{self, make_hash_multimap};
+use super::{
+    load_score_level::{self, make_hash_multimap},
+    schema::latest::ScoreMetadata,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct ScoreKey<'a> {
@@ -49,6 +52,12 @@ impl<'a> ScoreKey<'a> {
             generation: self.generation,
             difficulty: self.difficulty,
         }
+    }
+    pub fn score_metadata(&self) -> ScoreMetadata {
+        ScoreMetadata::builder()
+            .generation(self.generation)
+            .difficulty(self.difficulty)
+            .build()
     }
 }
 
@@ -108,7 +117,7 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
         })
     }
 
-    fn get(&self, key: ScoreKey) -> anyhow::Result<Option<(&'s Song, &[ScoreConstant])>> {
+    pub fn get(&self, key: ScoreKey) -> anyhow::Result<Option<(&'s Song, &[ScoreConstant])>> {
         if self.removed_songs.contains_key(key.icon) {
             return Ok(None);
         }
@@ -220,14 +229,39 @@ fn single_song_rating_for_target_entry(
 }
 
 impl<'s> ScoreConstantsStore<'s, '_> {
-    pub fn analyze_new_songs(&mut self, records: &[PlayRecord]) -> anyhow::Result<()> {
+    pub fn do_everything<'r>(
+        &mut self,
+        records: impl IntoIterator<Item = &'r PlayRecord>,
+        rating_targets: &RatingTargetFile,
+    ) -> anyhow::Result<()> {
+        if self.show_details {
+            println!("New songs");
+        }
+        self.analyze_new_songs(records)?;
+        for i in 1.. {
+            if self.show_details {
+                println!("Iteration {i}");
+            }
+            let before_len = self.events().len();
+            self.guess_from_rating_target_order(rating_targets)?;
+            if before_len == self.events().len() {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn analyze_new_songs<'r>(
+        &mut self,
+        records: impl IntoIterator<Item = &'r PlayRecord>,
+    ) -> anyhow::Result<()> {
         let version = MaimaiVersion::latest();
         let start_time: PlayTime = version.start_time().into();
         let mut r2s = BTreeSet::<(i16, _)>::new();
         let mut s2r = HashMap::<_, i16>::new();
         let mut key_to_record = HashMap::new();
         for record in records
-            .iter()
+            .into_iter()
             .filter(|r| start_time <= r.played_at().time())
         {
             let score_key = ScoreKey::from(record);

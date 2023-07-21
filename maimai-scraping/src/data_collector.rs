@@ -58,7 +58,7 @@ pub async fn update_records<'m, T>(
     client: &mut SegaClient<T>,
     records: &'m mut RecordMap<T>,
     index: Vec<(PlayTime<T>, Idx<T>)>,
-) -> anyhow::Result<Vec<&'m T::PlayRecord>>
+) -> anyhow::Result<Vec<PlayTime<T>>>
 where
     T: SegaTrait,
     Idx<T>: Copy + PartialEq + Display,
@@ -98,7 +98,7 @@ where
             }
         }
     }
-    Ok(inserted.iter().map(|d| &records[d]).collect())
+    Ok(inserted)
 }
 
 pub fn load_targets_from_file(path: impl Into<PathBuf>) -> anyhow::Result<RatingTargetFile> {

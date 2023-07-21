@@ -146,3 +146,14 @@ impl Display for ScoreLevel {
         write!(f, "{}{}", self.level, if self.plus { "+" } else { "" })
     }
 }
+
+impl From<ScoreConstant> for ScoreLevel {
+    fn from(value: ScoreConstant) -> Self {
+        let value = value.0;
+        let level = value / 10;
+        Self {
+            level,
+            plus: (7..=14).contains(&level) && value % 10 >= 7,
+        }
+    }
+}

@@ -33,20 +33,7 @@ fn main() -> anyhow::Result<()> {
     let mut levels = ScoreConstantsStore::new(&levels, &removed_songs)?;
 
     levels.show_details = opts.details;
-    if opts.details {
-        println!("New songs");
-    }
-    levels.analyze_new_songs(&records)?;
-    for i in 1.. {
-        if opts.details {
-            println!("Iteration {i}");
-        }
-        let before_len = levels.events().len();
-        levels.guess_from_rating_target_order(&rating_targets)?;
-        if before_len == levels.events().len() {
-            break;
-        }
-    }
+    levels.do_everything(&records, &rating_targets)?;
 
     Ok(())
 }

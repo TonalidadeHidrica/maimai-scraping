@@ -1,15 +1,23 @@
-use std::{iter::successors, path::PathBuf, time::Duration};
+use std::{fmt::Display, iter::successors, path::PathBuf, time::Duration};
 
 use anyhow::Context;
 use itertools::Itertools;
+use lazy_format::lazy_format;
 use log::error;
 use maimai_scraping::{
     api::SegaClient,
     data_collector::{
         load_records_from_file, load_targets_from_file, update_records, update_targets, RecordMap,
     },
-    fs_json_util::write_json,
-    maimai::{rating_target_parser::RatingTargetFile, schema::latest::PlayRecord, Maimai},
+    fs_json_util::{read_json, write_json},
+    maimai::{
+        estimate_rating::{ScoreConstantsStore, ScoreKey},
+        load_score_level::{self, RemovedSong, Song},
+        rating::{ScoreConstant, ScoreLevel},
+        rating_target_parser::RatingTargetFile,
+        schema::latest::{PlayRecord, ScoreMetadata},
+        Maimai,
+    },
 };
 use serde::Deserialize;
 use tokio::{
@@ -26,16 +34,32 @@ pub struct Config {
     pub interval: Duration,
     pub records_path: PathBuf,
     pub rating_target_path: PathBuf,
+    pub levels_path: PathBuf,
+    pub removed_songs_path: PathBuf,
     pub slack_post_webhook: Option<Url>,
 }
 
 pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
     let (tx, mut rx) = mpsc::channel(100);
-    let mut records = load_records_from_file::<Maimai, _>(&config.records_path)?;
-    let mut rating_targets = load_targets_from_file(&config.rating_target_path)?;
+
+    let records = load_records_from_file::<Maimai, _>(&config.records_path)?;
+    let rating_targets = load_targets_from_file(&config.rating_target_path)?;
+
+    let levels = load_score_level::load(&config.levels_path)?;
+    let removed_songs: Vec<RemovedSong> = read_json(&config.removed_songs_path)?;
+
     spawn(async move {
+        let Ok(mut runner) = report_error(
+            &config.slack_post_webhook,
+            Runner::new(&config, records, rating_targets, &levels, &removed_songs)
+                .await
+                .context("Issue in levels or removed_songs"),
+        ).await else {
+            return;
+        };
+
         'outer: while let Err(TryRecvError::Empty) = rx.try_recv() {
-            if let Err(e) = run(&config, &mut records, &mut rating_targets).await {
+            if let Err(e) = runner.run().await {
                 error!("{e}");
                 webhook_send(
                     &reqwest::Client::new(),
@@ -56,53 +80,123 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
     Ok(WatchHandler(tx))
 }
 
-async fn run(
-    config: &Config,
-    records: &mut RecordMap<Maimai>,
-    rating_targets: &mut RatingTargetFile,
-) -> anyhow::Result<()> {
-    let (mut client, index) = SegaClient::<Maimai>::new().await?;
-    let last_played = index.first().context("There is no play yet.")?.0;
-    let inserted_records = update_records(&mut client, records, index).await?;
-    if inserted_records.is_empty() {
-        return Ok(());
+struct Runner<'c, 's, 'r> {
+    config: &'c Config,
+    records: RecordMap<Maimai>,
+    rating_targets: RatingTargetFile,
+    levels_actual: ScoreConstantsStore<'s, 'r>,
+    levels_naive: ScoreConstantsStore<'s, 'r>,
+}
+impl<'c, 's, 'r> Runner<'c, 's, 'r> {
+    async fn new(
+        config: &'c Config,
+        records: RecordMap<Maimai>,
+        rating_targets: RatingTargetFile,
+        levels: &'s [Song],
+        removed_songs: &'r [RemovedSong],
+    ) -> anyhow::Result<Runner<'c, 's, 'r>> {
+        let levels_actual = ScoreConstantsStore::new(levels, removed_songs)?;
+        let levels_naive = ScoreConstantsStore::new(levels, removed_songs)?;
+        let mut ret = Self {
+            config,
+            records,
+            rating_targets,
+            levels_actual,
+            levels_naive,
+        };
+        ret.update_levels().await;
+        Ok(ret)
     }
-    for record in inserted_records {
-        webhook_send(
-            client.reqwest(),
-            &config.slack_post_webhook,
-            make_message(record),
+
+    async fn update_levels(&mut self) {
+        let _ = report_error(
+            &self.config.slack_post_webhook,
+            self.levels_actual
+                .do_everything(self.records.values(), &self.rating_targets)
+                .context("While estimating levels precisely"),
+        )
+        .await;
+        let _ = report_error(
+            &self.config.slack_post_webhook,
+            self.levels_naive
+                .guess_from_rating_target_order(&self.rating_targets)
+                .context("While estimating levels roughly"),
         )
         .await;
     }
-    write_json(&config.records_path, &records.values().collect_vec())?;
-    update_targets(&mut client, rating_targets, last_played).await?;
-    write_json(&config.rating_target_path, &rating_targets)?;
-    webhook_send(
-        client.reqwest(),
-        &config.slack_post_webhook,
-        "Rating target updated",
-    )
-    .await;
-    Ok(())
+
+    async fn run(&mut self) -> anyhow::Result<()> {
+        let config = self.config;
+        let (mut client, index) = SegaClient::<Maimai>::new().await?;
+        let last_played = index.first().context("There is no play yet.")?.0;
+        let inserted_records = update_records(&mut client, &mut self.records, index).await?;
+        if inserted_records.is_empty() {
+            return Ok(());
+        }
+        write_json(&config.records_path, &self.records.values().collect_vec())?;
+        update_targets(&mut client, &mut self.rating_targets, last_played).await?;
+        write_json(&config.rating_target_path, &self.rating_targets)?;
+        webhook_send(
+            client.reqwest(),
+            &config.slack_post_webhook,
+            "Rating target updated",
+        )
+        .await;
+
+        let bef_len = self.levels_actual.events().len();
+        self.update_levels().await;
+
+        for time in inserted_records {
+            let record = &self.records[&time];
+            let key = ScoreKey::from(record);
+            let song_lvs = if let Ok(Some((_, candidates))) = self.levels_naive.get(key) {
+                candidates
+            } else {
+                &[]
+            };
+            webhook_send(
+                client.reqwest(),
+                &config.slack_post_webhook,
+                make_message(record, song_lvs),
+            )
+            .await;
+        }
+
+        for (key, event) in &self.levels_actual.events()[bef_len..] {
+            let song_name = if let Ok(Some((song, _))) = self.levels_actual.get(*key) {
+                song.song_name().as_ref()
+            } else {
+                "(Error: unknown song name)"
+            };
+            let score_kind = describe_score_kind(key.score_metadata());
+            webhook_send(
+                client.reqwest(),
+                &config.slack_post_webhook,
+                format! {"★ {song_name} ({score_kind}): {event}"},
+            )
+            .await;
+        }
+
+        Ok(())
+    }
 }
 
-fn make_message(record: &PlayRecord) -> String {
-    use maimai_scraping::maimai::schema::latest::{
-        AchievementRank::*, FullComboKind::*, ScoreDifficulty::*, ScoreGeneration::*,
-    };
-    let title = record.song_metadata().name();
-    let gen = match record.score_metadata().generation() {
-        Standard => "STD",
-        Deluxe => "DX",
-    };
-    let dif = match record.score_metadata().difficulty() {
-        Basic => "Bas",
-        Advanced => "Adv",
-        Expert => "Exp",
-        Master => "Mas",
-        ReMaster => "ReMas",
-    };
+async fn report_error<T>(url: &Option<Url>, result: anyhow::Result<T>) -> anyhow::Result<T> {
+    if let Err(e) = &result {
+        error!("{e}");
+        webhook_send(&reqwest::Client::new(), url, e.to_string()).await;
+    }
+    result
+}
+
+fn make_message(record: &PlayRecord, song_lvs: &[ScoreConstant]) -> String {
+    use maimai_scraping::maimai::schema::latest::{AchievementRank::*, FullComboKind::*};
+    let score_kind = describe_score_kind(record.score_metadata());
+    let lv = lazy_format!(match (song_lvs[..]) {
+        [] => "?",
+        [lv] => "{lv}",
+        [lv, ..] => ("{}", ScoreLevel::from(lv)),
+    });
     let rank = match record.achievement_result().rank() {
         D => "D",
         C => "C",
@@ -127,10 +221,26 @@ fn make_message(record: &PlayRecord) -> String {
         AllPerfectPlus => "AP+",
     };
     format!(
-        "{time}　{title} ({gen} {dif})　{rank}({ach}) {fc}",
+        "{time}　{title} ({score_kind} Lv.{lv})　{rank}({ach}) {fc}",
+        title = record.song_metadata().name(),
         time = record.played_at().time(),
         ach = record.achievement_result().value(),
     )
+}
+fn describe_score_kind<'a>(metadata: ScoreMetadata) -> impl Display + 'a {
+    use maimai_scraping::maimai::schema::latest::{ScoreDifficulty::*, ScoreGeneration::*};
+    let gen = match metadata.generation() {
+        Standard => "STD",
+        Deluxe => "DX",
+    };
+    let dif = match metadata.difficulty() {
+        Basic => "Bas",
+        Advanced => "Adv",
+        Expert => "Exp",
+        Master => "Mas",
+        ReMaster => "ReMas",
+    };
+    lazy_format!("{gen} {dif}")
 }
 
 pub struct WatchHandler(mpsc::Sender<()>);
