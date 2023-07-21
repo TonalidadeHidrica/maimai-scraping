@@ -23,20 +23,20 @@ struct Opts {
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
 
-    let (w, h) = (1280., 960.0);
+    let (w, h) = (2560., 1920.0);
     let mut document = Document::new().set("viewBox", (0, 0, w, h));
 
     let margin = 30.0;
     let x_range = margin..w - margin;
-    let x = |x: AchievementValue| map_float(x.get() as f64 / 10000., 90.0..101., x_range.clone());
+    let x = |x: AchievementValue| map_float(x.get() as f64 / 10000., 80.0..101., x_range.clone());
     let y_range = h - margin..margin;
-    let y = |y: u16| map_float(y as f64, 200.0..337., y_range.clone());
+    let y = |y: u16| map_float(y as f64, 100.0..337., y_range.clone());
 
     let mut value_drawn = vec![false; 350];
     let mut percent_drawn = vec![BTreeMap::<usize, f64>::new(); 350];
 
     for score_constant in ScoreConstant::candidates().rev() {
-        let v = (90_0000..=101_0000)
+        let v = (80_0000..=101_0000)
             .map(|i| {
                 let a = AchievementValue::try_from(i).unwrap();
                 (a, single_song_rating(score_constant, a, rank_coef(a)))

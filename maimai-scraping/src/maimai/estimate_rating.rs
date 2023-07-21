@@ -23,11 +23,12 @@ use hashbrown::{HashMap, HashSet};
 use itertools::{chain, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
+use log::warn;
 use strum::IntoEnumIterator;
 
 use super::{
     load_score_level::{self, make_hash_multimap},
-    schema::latest::ScoreMetadata,
+    schema::latest::{AchievementRank, ScoreMetadata},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -147,6 +148,7 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
 
         let new: BTreeSet<_> = new.collect();
         entry.candidates.retain(|x| new.contains(x));
+        // println!("new = {new:?}");
 
         if entry.candidates.len() < old_len {
             entry.reasons.push(self.events.len());
@@ -231,19 +233,20 @@ fn single_song_rating_for_target_entry(
 impl<'s> ScoreConstantsStore<'s, '_> {
     pub fn do_everything<'r>(
         &mut self,
-        records: impl IntoIterator<Item = &'r PlayRecord>,
+        records: impl IntoIterator<Item = &'r PlayRecord> + Clone,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
         if self.show_details {
             println!("New songs");
         }
-        self.analyze_new_songs(records)?;
+        self.analyze_new_songs(records.clone())?;
         for i in 1.. {
             if self.show_details {
                 println!("Iteration {i}");
             }
             let before_len = self.events().len();
             self.guess_from_rating_target_order(rating_targets)?;
+            self.records_not_in_targets(records.clone(), rating_targets)?;
             if before_len == self.events().len() {
                 break;
             }
@@ -305,9 +308,9 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                         single_song_rating(level, a, rank_coef(a)).get() as i16 == rating
                     }),
                     lazy_format!(
-                    "beacuse record played at {} determines the single-song rating to be {rating}",
-                    record.played_at().time()
-                ),
+                        "beacuse record played at {} determines the single-song rating to be {rating}",
+                        record.played_at().time()
+                    ),
                 )?;
             }
         }
@@ -334,13 +337,13 @@ impl<'s> ScoreConstantsStore<'s, '_> {
             let mut new_song_raing_sum = 0;
             for entry in list.target_new() {
                 let Some(key) = self.key_from_target_entry(entry)? else {
-                println!(
-                    "TODO: score cannot be uniquely determined from the song name {:?}",
-                    entry.song_name()
-                );
-                return Ok(());
-            };
-                let levels = self.get(key)?.unwrap().1;
+                    println!(
+                        "TODO: score cannot be uniquely determined from the song name {:?}",
+                        entry.song_name()
+                    );
+                    return Ok(());
+                };
+                let levels = self.get(key)?.context("Song must not be removed")?.1;
                 if levels.len() != 1 {
                     panic!("Score constants of new songs must be determined!");
                 }
@@ -419,6 +422,110 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                 res.iter().map(|x| x.1 .1),
                 lazy_format!("by the rating target list on {list_time}"),
             )?;
+        }
+        Ok(())
+    }
+
+    pub fn records_not_in_targets<'r>(
+        &mut self,
+        records: impl IntoIterator<Item = &'r PlayRecord>,
+        rating_targets: &RatingTargetFile,
+    ) -> anyhow::Result<()> {
+        let version = MaimaiVersion::latest();
+        // Assumption: records are in ascending order
+        // (otherwise, this code will be inefficient, if working)
+        let mut last_inspected: Option<(PlayTime, HashSet<ScoreKey>)> = None;
+        'next_record: for record in records {
+            let score_key = ScoreKey::from(record);
+            // Ignore removed songs
+            let Some((song, _)) = self.get(score_key)? else { continue };
+            let Some((&target_time, list)) =
+                    rating_targets.range(record.played_at().time()..).next() else {
+                warn!(
+                    "Rating target not collected for a record played at {}",
+                    record.played_at().time()
+                );
+                continue;
+            };
+            let contained = match last_inspected.as_ref().filter(|l| l.0 == target_time) {
+                Some((_, x)) => x,
+                None => {
+                    let mut set = HashSet::new();
+                    for entry in chain(list.target_new(), list.target_old())
+                        .chain(chain(list.candidates_new(), list.candidates_old()))
+                    {
+                        let Some(key) = self.key_from_target_entry(entry)? else {
+                            println!(
+                                "TODO: score cannot be uniquely determined from the song name {:?}",
+                                entry.song_name()
+                            );
+                            continue 'next_record;
+                        };
+                        set.insert(key);
+                    }
+                    &last_inspected.insert((target_time, set)).1
+                }
+            };
+            if contained.contains(&score_key) {
+                continue;
+            }
+
+            let border_entry = if song.version() == version {
+                list.target_new()
+                    .last()
+                    .context("New songs must be contained (1)")?
+            } else {
+                list.target_old()
+                    .last()
+                    .context("New songs must be contained (1)")?
+            };
+            let min_entry = if song.version() == version {
+                (list.candidates_new().last())
+                    .or_else(|| list.target_new().last())
+                    .context("New songs must be contained")?
+            } else {
+                (list.candidates_old().last())
+                    .or_else(|| list.target_old().last())
+                    .context("Old songs must be contained")?
+            };
+
+            let compute = |entry: &RatingTargetEntry| {
+                // println!("min = {min:?}");
+                let a = entry.achievement();
+                let lvs = &self
+                    .get(
+                        self.key_from_target_entry(entry)?
+                            .context("Must not be removed (1)")?,
+                    )?
+                    .context("Must not be removed (2)")?
+                    .1;
+                // println!("min_constans = {min_constants:?}");
+                let score = lvs
+                    .iter()
+                    .map(|&level| single_song_rating(level, a, rank_coef(a)))
+                    .max()
+                    .context("Empty level candidates")?;
+                anyhow::Ok((score, a))
+            };
+            let border_pair = compute(border_entry)?;
+            let min_pair = compute(min_entry)?;
+
+            let this_a = record.achievement_result().value();
+            let this_sssplus = record.achievement_result().rank() == AchievementRank::SSSPlus;
+            let candidates = ScoreConstant::candidates().filter(|&level| {
+                let this = single_song_rating(level, this_a, rank_coef(this_a));
+                let this_pair = (this, this_a);
+                // println!("{:?} {level} {:?}", (min_entry, min_a), (this, this_a));
+                min_pair >= this_pair || this_sssplus && border_pair >= this_pair
+            });
+            let message = lazy_format!(
+                "because record played at {} achieving {} is not in list at {}, so it's below {:?}",
+                record.played_at().time(),
+                this_a,
+                target_time,
+                if this_sssplus { border_pair } else { min_pair },
+            );
+            self.set(score_key, candidates, message)?;
         }
         Ok(())
     }
