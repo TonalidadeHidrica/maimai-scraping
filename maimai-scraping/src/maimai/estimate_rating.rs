@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     collections::{BTreeSet, HashMap, HashSet},
     fmt::Display,
 };
@@ -25,31 +24,18 @@ use strum::IntoEnumIterator;
 
 use super::load_score_level::{self, make_hash_multimap};
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 struct ScoreKey<'a> {
-    // FIXME We don't want to clone at all
-    icon: Cow<'a, SongIcon>,
+    icon: &'a SongIcon,
     generation: ScoreGeneration,
     difficulty: ScoreDifficulty,
 }
 impl<'a> From<&'a PlayRecord> for ScoreKey<'a> {
     fn from(record: &'a PlayRecord) -> Self {
         Self {
-            icon: Cow::Borrowed(record.song_metadata().cover_art()),
+            icon: record.song_metadata().cover_art(),
             generation: record.score_metadata().generation(),
             difficulty: record.score_metadata().difficulty(),
-        }
-    }
-}
-impl<'a> ScoreKey<'a> {
-    fn to_static(&self) -> ScoreKey<'static> {
-        ScoreKey {
-            icon: match self.icon {
-                Cow::Borrowed(icon) => Cow::Owned(icon.clone()),
-                Cow::Owned(ref x) => Cow::Owned(x.clone()),
-            },
-            generation: self.generation,
-            difficulty: self.difficulty,
         }
     }
 }
@@ -75,7 +61,7 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
                 .flat_map(|((icon, generation), song)| {
                     ScoreDifficulty::iter().filter_map(move |difficulty| {
                         let key = ScoreKey {
-                            icon: Cow::Borrowed(icon),
+                            icon,
                             generation,
                             difficulty,
                         };
@@ -109,8 +95,8 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
         self.updated = false;
     }
 
-    fn get(&self, key: ScoreKey) -> anyhow::Result<Option<(&'s Song, &'s [ScoreConstant])>> {
-        if self.removed_songs.contains_key(key.icon.as_ref()) {
+    fn get(&self, key: ScoreKey<'s>) -> anyhow::Result<Option<(&'s Song, &[ScoreConstant])>> {
+        if self.removed_songs.contains_key(key.icon) {
             return Ok(None);
         }
         match self.constants.get(&key) {
@@ -121,11 +107,11 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
 
     fn set(
         &mut self,
-        key: ScoreKey,
+        key: ScoreKey<'s>,
         new: impl Iterator<Item = ScoreConstant>,
         reason: impl Display,
     ) -> anyhow::Result<()> {
-        let entry = self.constants.get_mut(&key.to_static()).unwrap();
+        let entry = self.constants.get_mut(&key).unwrap();
         let old_len = entry.candidates.len();
 
         let new: BTreeSet<_> = new.collect();
@@ -178,7 +164,7 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
             Some(icons) => Ok((icons.len() == 1).then(|| {
                 let m = entry.score_metadata();
                 ScoreKey {
-                    icon: Cow::Borrowed(*icons.iter().next().unwrap()),
+                    icon: icons.iter().next().unwrap(),
                     generation: m.generation(),
                     difficulty: m.difficulty(),
                 }
@@ -201,8 +187,8 @@ impl ScoreConstantsEntry<'_> {
     }
 }
 
-pub fn analyze_new_songs<'s, 'r: 's>(
-    records: &'r [PlayRecord],
+pub fn analyze_new_songs<'s>(
+    records: &'s [PlayRecord],
     levels: &mut ScoreConstantsStore<'s, '_>,
 ) -> anyhow::Result<()> {
     let version = MaimaiVersion::latest();
@@ -215,17 +201,17 @@ pub fn analyze_new_songs<'s, 'r: 's>(
         .filter(|r| start_time <= r.played_at().time())
     {
         let score_key = ScoreKey::from(record);
-        let Some((song, _)) = levels.get(score_key.clone())? else { continue };
+        let Some((song, _)) = levels.get(score_key)? else { continue };
         let delta = record.rating_result().delta();
         if song.version() == version && delta > 0 {
             use std::collections::hash_map::Entry::*;
-            let rating = match s2r.entry(score_key.clone()) {
+            let rating = match s2r.entry(score_key) {
                 Occupied(mut s2r_entry) => {
                     // println!("  Song list does not change, just updating score (delta={delta})");
                     let rating = s2r_entry.get_mut();
-                    assert!(r2s.remove(&(*rating, score_key.clone())));
+                    assert!(r2s.remove(&(*rating, score_key)));
                     *rating += delta;
-                    assert!(r2s.insert((*rating, score_key.clone())));
+                    assert!(r2s.insert((*rating, score_key)));
                     *rating
                 }
                 Vacant(s2r_entry) => {
@@ -234,23 +220,23 @@ pub fn analyze_new_songs<'s, 'r: 's>(
                         let (removed_rating, removed_key) = r2s.pop_first().unwrap();
                         // println!("    Removed={}", removed_rating);
                         let new_rating = removed_rating + delta;
-                        assert!(r2s.insert((new_rating, score_key.clone())));
+                        assert!(r2s.insert((new_rating, score_key)));
                         s2r_entry.insert(new_rating);
                         assert!(s2r.remove(&removed_key).is_some());
                         new_rating
                     } else {
                         // Just insert the new song
                         s2r_entry.insert(delta);
-                        assert!(r2s.insert((delta, score_key.clone())));
+                        assert!(r2s.insert((delta, score_key)));
                         delta
                     }
                 }
             };
-            key_to_record.insert(score_key.clone(), record);
+            key_to_record.insert(score_key, record);
 
             let a = record.achievement_result().value();
             levels.set(
-                score_key.clone(),
+                score_key,
                 ScoreConstant::candidates().filter(|&level| {
                     single_song_rating(level, a, rank_coef(a)).get() as i16 == rating
                 }),
@@ -298,7 +284,7 @@ pub fn guess_from_rating_target_order(
                 );
                 return Ok(());
             };
-            let levels = levels.get(key.clone())?.unwrap().1;
+            let levels = levels.get(key)?.unwrap().1;
             if levels.len() != 1 {
                 panic!("Score constants of new songs must be determined!");
             }
@@ -352,7 +338,7 @@ fn solve_target_order<'a>(
                 );
                 return Ok(());
             };
-        if levels.get(&key)?.is_none() {
+        if levels.get(key)?.is_none() {
             bail!("Song not found for {key:?}");
         }
         keys.push(key);
@@ -361,7 +347,7 @@ fn solve_target_order<'a>(
     let res = possibilties_from_sum_and_ordering::solve(
         entries.len(),
         |i| {
-            let (key, entry) = (&keys[i], entries[i]);
+            let (key, entry) = (keys[i], entries[i]);
             let levels = levels.get(key).unwrap().unwrap().1.iter();
             let score = &score;
             levels.map(move |&level| {
@@ -372,9 +358,9 @@ fn solve_target_order<'a>(
         |x, y| x.1 .0.cmp(&y.1 .0).reverse(),
         sum,
     );
-    for (key, res) in keys.iter().zip_eq(res) {
+    for (&key, res) in keys.iter().zip_eq(res) {
         levels.set(
-            key.clone(),
+            key,
             res.iter().map(|x| x.1 .1),
             lazy_format!("by the rating target list on {list_time}"),
         )?;
