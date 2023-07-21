@@ -1,4 +1,8 @@
-use std::{collections::BTreeSet, fmt::Display};
+use std::{
+    collections::BTreeSet,
+    fmt::Display,
+    hash::{BuildHasher, Hash, Hasher},
+};
 
 use crate::{
     algorithm::possibilties_from_sum_and_ordering,
@@ -93,23 +97,32 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
         self.updated = false;
     }
 
-    fn get(&self, key: ScoreKey<'s>) -> anyhow::Result<Option<(&'s Song, &[ScoreConstant])>> {
+    fn get(&self, key: ScoreKey) -> anyhow::Result<Option<(&'s Song, &[ScoreConstant])>> {
         if self.removed_songs.contains_key(key.icon) {
             return Ok(None);
         }
-        match self.constants.get(&key) {
-            Some(entry) => Ok(Some((entry.song, &entry.candidates))),
+        let hash = compute_hash(self.constants.hasher(), &key);
+        match self.constants.raw_entry().from_hash(hash, |x| x == &key) {
+            Some((_, entry)) => Ok(Some((entry.song, &entry.candidates))),
             None => bail!("No score constant entry was found for {key:?}"),
         }
     }
 
     fn set(
         &mut self,
-        key: ScoreKey<'s>,
+        key: ScoreKey,
         new: impl Iterator<Item = ScoreConstant>,
         reason: impl Display,
     ) -> anyhow::Result<()> {
-        let entry = self.constants.get_mut(&key).unwrap();
+        let hash = compute_hash(self.constants.hasher(), &key);
+        let hashbrown::hash_map::RawEntryMut::Occupied(mut entry) = self
+            .constants
+            .raw_entry_mut()
+            .from_hash(hash, |x| x == &key)
+        else {
+           bail!("No score constant entry was found for {key:?}")
+        };
+        let entry = entry.get_mut();
         let old_len = entry.candidates.len();
 
         let new: BTreeSet<_> = new.collect();
@@ -445,4 +458,10 @@ pub fn analyze_old_songs(
     // }
 
     Ok(())
+}
+
+fn compute_hash<K: Hash + ?Sized, S: BuildHasher>(hash_builder: &S, key: &K) -> u64 {
+    let mut state = hash_builder.build_hasher();
+    key.hash(&mut state);
+    state.finish()
 }
