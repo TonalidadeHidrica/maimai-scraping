@@ -509,9 +509,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.16"
+version = "4.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74bb1b4028935821b2d6b439bba2e970bdcf740832732437ead910c632e30d7d"
+checksum = "5fd304a20bff958a57f04c4e96a2e7594cc4490a0e809cbd48bb6437edaa452d"
 dependencies = [
  "clap_builder",
  "clap_derive 4.3.12",
@@ -520,9 +520,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.3.16"
+version = "4.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ae467cbb0111869b765e13882a1dbbd6cb52f58203d8b80c44f667d4dd19843"
+checksum = "01c6a3f08f1fe5662a35cfe393aec09c4df95f60ee93b7556505260f75eee9e1"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1537,6 +1537,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e72f7deb758fea9ea7d290aebfa788763d0bffae12caa6406a25baaf8fa68a8"
 
 [[package]]
+name = "maimai-rating-target-viewer"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "anyhow",
+ "clap 4.3.19",
+ "env_logger 0.10.0",
+ "itertools 0.11.0",
+ "lazy_format",
+ "maimai-scraping",
+ "tokio",
+]
+
+[[package]]
 name = "maimai-scraping"
 version = "0.1.0"
 dependencies = [
@@ -1583,7 +1597,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "anyhow",
- "clap 4.3.16",
+ "clap 4.3.19",
  "ctrlc",
  "env_logger 0.10.0",
  "fs-err",

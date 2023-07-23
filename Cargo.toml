@@ -3,4 +3,5 @@
 members = [
 	"maimai-scraping",
 	"maimai-watcher",
+	"rating-target-viewer",
 ]
