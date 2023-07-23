@@ -140,14 +140,21 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
             return Ok(());
         }
         write_json(&config.records_path, &self.records.values().collect_vec())?;
-        update_targets(&mut client, &mut self.rating_targets, last_played).await?;
-        write_json(&config.rating_target_path, &self.rating_targets)?;
-        webhook_send(
-            client.reqwest(),
-            &config.slack_post_webhook,
-            "Rating target updated",
-        )
-        .await;
+        let update_targets_res = update_targets(&mut client, &mut self.rating_targets, last_played)
+            .await
+            .context("Rating target not available");
+        if report_error(&config.slack_post_webhook, update_targets_res)
+            .await
+            .is_ok()
+        {
+            write_json(&config.rating_target_path, &self.rating_targets)?;
+            webhook_send(
+                client.reqwest(),
+                &config.slack_post_webhook,
+                "Rating target updated",
+            )
+            .await;
+        }
 
         let bef_len = self.levels_actual.events().len();
         self.update_levels().await;
