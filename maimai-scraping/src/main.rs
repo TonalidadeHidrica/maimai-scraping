@@ -54,7 +54,7 @@ where
     for<'a> T::PlayRecord: Deserialize<'a>,
 {
     let mut records = load_records_from_file::<T, _>(path)?;
-    let (mut client, index) = SegaClient::<T>::new().await?;
+    let (mut client, index) = SegaClient::<T>::new_with_default_path().await?;
     update_records(&mut client, &mut records, index).await?;
     write_json(path, &records.values().collect_vec())?;
     println!("Successfully saved data to {:?}.", path);

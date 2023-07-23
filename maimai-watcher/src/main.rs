@@ -1,7 +1,7 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf, time::Duration};
 
 use actix_web::{middleware::Logger, web, App, HttpServer, Responder};
-use anyhow::bail;
+use anyhow::{bail, Context};
 use clap::Parser;
 use log::{error, info};
 use maimai_watcher::{
@@ -10,6 +10,7 @@ use maimai_watcher::{
 };
 use serde::Deserialize;
 use tokio::sync::Mutex;
+use url::Url;
 
 #[derive(Parser)]
 struct Opts {
@@ -20,9 +21,22 @@ struct Opts {
 #[derive(Clone, Deserialize)]
 struct Config {
     port: u16,
-    route: String,
-    user_id: String,
-    watch_config: watch::Config,
+    webhook_endpoint: String,
+    interval: Duration,
+    levels_path: PathBuf,
+    removed_songs_path: PathBuf,
+    slack_post_webhook: Option<Url>,
+    users: HashMap<UserId, UserConfig>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, Deserialize)]
+struct UserId(String);
+#[derive(Clone, Deserialize)]
+struct UserConfig {
+    slack_user_id: String,
+    credentials_path: PathBuf,
+    cookie_store_path: PathBuf,
+    records_path: PathBuf,
+    rating_target_path: PathBuf,
 }
 
 #[tokio::main]
@@ -32,12 +46,20 @@ async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let config: Config = toml::from_str(&fs_err::read_to_string(opts.config_path)?)?;
     let port = config.port;
-    let route = config.route.clone();
+    let route = config.webhook_endpoint.clone();
     Ok(HttpServer::new(move || {
+        let mut slack_id_to_user_id = HashMap::<_, Vec<_>>::new();
+        for (id, config) in &config.users {
+            slack_id_to_user_id
+                .entry(config.slack_user_id.clone())
+                .or_default()
+                .push(id.clone());
+        }
         App::new()
             .app_data(web::Data::new(State {
+                slack_id_to_user_id,
                 config: config.clone(),
-                watch_handler: Mutex::new(None),
+                watch_handler: Mutex::new(HashMap::new()),
             }))
             .route(&route, web::post().to(webhook))
             .wrap(Logger::default())
@@ -49,12 +71,13 @@ async fn main() -> anyhow::Result<()> {
 
 struct State {
     config: Config,
-    watch_handler: Mutex<Option<WatchHandler>>,
+    slack_id_to_user_id: HashMap<String, Vec<UserId>>,
+    watch_handler: Mutex<HashMap<UserId, WatchHandler>>,
 }
 
 async fn webhook(state: web::Data<State>, info: web::Form<SlashCommand>) -> impl Responder {
     let client = reqwest::Client::new();
-    let url = state.config.watch_config.slack_post_webhook.clone();
+    let url = state.config.slack_post_webhook.clone();
     if let Err(e) = webhook_impl(state, info, &client).await {
         error!("{e}");
         webhook_send(&client, &url, e.to_string()).await;
@@ -67,32 +90,55 @@ async fn webhook_impl(
     info: web::Form<SlashCommand>,
     client: &reqwest::Client,
 ) -> anyhow::Result<()> {
-    if state.config.user_id != info.user_id {
-        bail!("You are not authorized to run this command.");
-    }
     info!("Slash command: {info:?}");
+
+    let [user_id] = &state
+        .slack_id_to_user_id
+        .get(&info.user_id)
+        .context("You are not authorized to run this command.")?[..]
+    else {
+        bail!("Multiple accounts are possible.  Choose an account.")
+    };
+    let user_config = &state.config.users[user_id];
 
     macro_rules! post {
         ($message: literal) => {
-            let url = &state.config.watch_config.slack_post_webhook;
+            let url = &state.config.slack_post_webhook;
             webhook_send(client, url, $message).await
         };
     }
+    use std::collections::hash_map::Entry::*;
     if info.text.contains("stop") {
-        let mut handler = state.watch_handler.lock().await;
-        if let Some(handler) = handler.take() {
-            handler.stop().await?;
-            post!("Stopped!");
-        } else {
-            post!("Watcher is not running!");
+        let mut map = state.watch_handler.lock().await;
+        match map.entry(user_id.clone()) {
+            Occupied(entry) => {
+                entry.remove().stop().await?;
+                post!("Stopped!");
+            }
+            Vacant(_) => {
+                post!("Watcher is not running!");
+            }
         }
     } else if info.text.contains("start") {
-        let mut handler = state.watch_handler.lock().await;
-        if handler.is_some() {
-            post!("Watcher is already running!");
-        } else {
-            *handler = Some(watch::watch(state.config.watch_config.clone()).await?);
-            post!("Started!");
+        let mut map = state.watch_handler.lock().await;
+        match map.entry(user_id.clone()) {
+            Occupied(_) => {
+                post!("Watcher is already running!");
+            }
+            Vacant(entry) => {
+                let config = watch::Config {
+                    interval: state.config.interval,
+                    credentials_path: user_config.credentials_path.clone(),
+                    cookie_store_path: user_config.cookie_store_path.clone(),
+                    records_path: user_config.records_path.clone(),
+                    rating_target_path: user_config.rating_target_path.clone(),
+                    levels_path: state.config.levels_path.clone(),
+                    removed_songs_path: state.config.removed_songs_path.clone(),
+                    slack_post_webhook: state.config.slack_post_webhook.clone(),
+                };
+                entry.insert(watch::watch(config).await?);
+                post!("Started!");
+            }
         }
     } else {
         bail!("Invalid command: {:?}", info.text)

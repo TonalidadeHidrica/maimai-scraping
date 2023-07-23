@@ -1,30 +1,18 @@
 use std::{
     fmt::Debug,
     io::{self, BufReader, BufWriter},
-    marker::PhantomData,
+    path::PathBuf,
 };
 
 use fs_err::File;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
-use crate::sega_trait::SegaTrait;
-
-#[derive(Serialize, Deserialize)]
-pub struct CookieStore<T> {
+#[derive(Default, Serialize, Deserialize)]
+pub struct CookieStore {
     pub user_id: UserId,
-    #[serde(skip)]
-    _phantom: PhantomData<fn() -> T>,
 }
-impl<T> Default for CookieStore<T> {
-    fn default() -> Self {
-        Self {
-            user_id: UserId::default(),
-            _phantom: Default::default(),
-        }
-    }
-}
-impl<T> Debug for CookieStore<T> {
+impl Debug for CookieStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CookieStore")
             .field("user_id", &self.user_id)
@@ -33,13 +21,10 @@ impl<T> Debug for CookieStore<T> {
 }
 
 #[derive(Debug, TypedBuilder, Serialize, Deserialize)]
-pub struct Credentials<T> {
+pub struct Credentials {
     pub user_name: UserName,
     pub password: Password,
     pub aime_idx: Option<AimeIdx>,
-    #[serde(skip)]
-    #[builder(default)]
-    _phantom: PhantomData<fn() -> T>,
 }
 
 #[derive(Default, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
@@ -56,15 +41,13 @@ pub struct Password(String);
 )]
 pub struct AimeIdx(u8);
 
-impl<T: SegaTrait> CookieStore<T> {
-    pub fn load() -> Result<Self, CookieStoreLoadError> {
-        Ok(serde_json::from_reader(BufReader::new(File::open(
-            T::COOKIE_STORE_PATH,
-        )?))?)
+impl CookieStore {
+    pub fn load(path: impl Into<PathBuf>) -> Result<Self, CookieStoreLoadError> {
+        Ok(serde_json::from_reader(BufReader::new(File::open(path)?))?)
     }
 
-    pub fn save(&self) -> std::io::Result<()> {
-        let writer = BufWriter::new(File::create(T::COOKIE_STORE_PATH)?);
+    pub fn save(&self, path: impl Into<PathBuf>) -> std::io::Result<()> {
+        let writer = BufWriter::new(File::create(path)?);
         serde_json::to_writer(writer, self)?;
         Ok(())
     }
@@ -88,15 +71,13 @@ impl From<io::Error> for CookieStoreLoadError {
     }
 }
 
-impl<T: SegaTrait> Credentials<T> {
-    pub fn load() -> anyhow::Result<Self> {
-        Ok(serde_json::from_reader(BufReader::new(File::open(
-            T::CREDENTIALS_PATH,
-        )?))?)
+impl Credentials {
+    pub fn load(path: impl Into<PathBuf>) -> anyhow::Result<Self> {
+        Ok(serde_json::from_reader(BufReader::new(File::open(path)?))?)
     }
 
-    pub fn save(&self) -> std::io::Result<()> {
-        let writer = BufWriter::new(File::create(T::CREDENTIALS_PATH)?);
+    pub fn save(&self, path: impl Into<PathBuf>) -> std::io::Result<()> {
+        let writer = BufWriter::new(File::create(path)?);
         serde_json::to_writer(writer, self)?;
         Ok(())
     }

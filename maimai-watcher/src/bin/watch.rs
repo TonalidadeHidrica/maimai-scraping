@@ -1,6 +1,7 @@
 use std::{path::PathBuf, sync::mpsc, time::Duration};
 
 use clap::Parser;
+use maimai_scraping::{maimai::Maimai, sega_trait::SegaTrait};
 use maimai_watcher::watch;
 
 #[tokio::main]
@@ -13,6 +14,8 @@ async fn main() -> anyhow::Result<()> {
         slack_post_webhook: None,
         levels_path: opts.levels_path,
         removed_songs_path: opts.removed_songs_path,
+        credentials_path: PathBuf::from(Maimai::CREDENTIALS_PATH),
+        cookie_store_path: PathBuf::from(Maimai::COOKIE_STORE_PATH),
     })
     .await?;
 

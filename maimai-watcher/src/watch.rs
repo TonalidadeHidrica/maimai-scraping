@@ -32,6 +32,8 @@ use crate::slack::webhook_send;
 #[derive(Clone, Deserialize)]
 pub struct Config {
     pub interval: Duration,
+    pub credentials_path: PathBuf,
+    pub cookie_store_path: PathBuf,
     pub records_path: PathBuf,
     pub rating_target_path: PathBuf,
     pub levels_path: PathBuf,
@@ -127,7 +129,11 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
 
     async fn run(&mut self) -> anyhow::Result<()> {
         let config = self.config;
-        let (mut client, index) = SegaClient::<Maimai>::new().await?;
+        let (mut client, index) = SegaClient::<Maimai>::new(
+            &self.config.credentials_path,
+            &self.config.cookie_store_path,
+        )
+        .await?;
         let last_played = index.first().context("There is no play yet.")?.0;
         let inserted_records = update_records(&mut client, &mut self.records, index).await?;
         if inserted_records.is_empty() {

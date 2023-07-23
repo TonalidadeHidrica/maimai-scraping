@@ -55,7 +55,7 @@ where
 }
 
 pub async fn update_records<'m, T>(
-    client: &mut SegaClient<T>,
+    client: &mut SegaClient<'_, T>,
     records: &'m mut RecordMap<T>,
     index: Vec<(PlayTime<T>, Idx<T>)>,
 ) -> anyhow::Result<Vec<PlayTime<T>>>
@@ -121,7 +121,7 @@ pub fn load_targets_from_file(path: impl Into<PathBuf>) -> anyhow::Result<Rating
 }
 
 pub async fn update_targets(
-    client: &mut SegaClient<Maimai>,
+    client: &mut SegaClient<'_, Maimai>,
     rating_targets: &mut RatingTargetFile,
     last_played: MaimaiPlayTime,
 ) -> anyhow::Result<()> {

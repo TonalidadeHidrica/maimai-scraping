@@ -18,7 +18,7 @@ struct Opts {
 async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let mut rating_targets = load_targets_from_file(&opts.rating_target_file)?;
-    let (mut client, index) = SegaClient::<Maimai>::new().await?;
+    let (mut client, index) = SegaClient::<Maimai>::new_with_default_path().await?;
     let last_played = index.first().context("There is no play yet.")?.0;
     update_targets(&mut client, &mut rating_targets, last_played).await?;
     write_json(&opts.rating_target_file, &rating_targets)?;
