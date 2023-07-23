@@ -28,8 +28,9 @@ struct Config {
     slack_post_webhook: Option<Url>,
     users: HashMap<UserId, UserConfig>,
 }
-#[derive(Clone, PartialEq, Eq, Hash, Deserialize)]
-struct UserId(String);
+// #[derive(Clone, PartialEq, Eq, Hash, Deserialize)]
+// struct UserId(String);
+type UserId = String;
 #[derive(Clone, Deserialize)]
 struct UserConfig {
     slack_user_id: String,

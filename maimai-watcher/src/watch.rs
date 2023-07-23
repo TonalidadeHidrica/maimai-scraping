@@ -29,7 +29,7 @@ use url::Url;
 
 use crate::slack::webhook_send;
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     pub interval: Duration,
     pub credentials_path: PathBuf,
