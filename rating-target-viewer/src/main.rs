@@ -77,9 +77,9 @@ async fn get(data: web::Data<Data>, play_time: web::Path<PlayTime>) -> HttpRespo
         date = play_time,
         rating = data.rating(),
         target_new = make(data.target_new()),
-        target_old = make(data.target_new()),
+        target_old = make(data.target_old()),
         candidates_new = make(data.candidates_new()),
-        candidates_old = make(data.candidates_new()),
+        candidates_old = make(data.candidates_old()),
     );
     HttpResponse::Ok()
         .content_type(ContentType::html())
