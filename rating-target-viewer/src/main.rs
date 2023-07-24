@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use actix_web::{
     get, http::header::ContentType, middleware::Logger, web, App, HttpResponse, HttpServer,
 };
+use chrono::NaiveDateTime;
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::{
@@ -41,9 +42,9 @@ struct Data {
     rating_targets: RatingTargetFile,
 }
 
-#[get("{time}/home/ratingTargetMusic/")]
-async fn get(data: web::Data<Data>, play_time: web::Path<PlayTime>) -> HttpResponse {
-    let Some(data) = data.rating_targets.get(&play_time) else {
+#[get("/entry/{time}")]
+async fn get(web_data: web::Data<Data>, play_time: web::Path<PlayTime>) -> HttpResponse {
+    let Some(data) = web_data.rating_targets.get(&play_time) else {
         return HttpResponse::NotFound().body(format!("No data found: {play_time:?}"))
     };
     let make = |entry: &RatingTargetEntry| {
@@ -72,6 +73,16 @@ async fn get(data: web::Data<Data>, play_time: web::Path<PlayTime>) -> HttpRespo
         )
     };
     let make = |entries: &[RatingTargetEntry]| entries.iter().map(make).join("");
+    let choices = web_data
+        .rating_targets
+        .keys()
+        .map(|&time| {
+            format!(
+                r#"<li><a href="/entry/{:?}">{time}</a></li>"#,
+                NaiveDateTime::from(time),
+            )
+        })
+        .join("");
     let html = format!(
         include_str!("rating_target_template.html"),
         date = play_time,
@@ -80,6 +91,7 @@ async fn get(data: web::Data<Data>, play_time: web::Path<PlayTime>) -> HttpRespo
         target_old = make(data.target_old()),
         candidates_new = make(data.candidates_new()),
         candidates_old = make(data.candidates_old()),
+        choices = choices,
     );
     HttpResponse::Ok()
         .content_type(ContentType::html())
