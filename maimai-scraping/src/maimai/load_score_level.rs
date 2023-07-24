@@ -224,31 +224,32 @@ impl MaimaiVersion {
     pub fn start_date(self) -> NaiveDate {
         use MaimaiVersion::*;
         match self {
-            Maimai => NaiveDate::from_ymd(2012, 7, 12),
-            MaimaiPlus => NaiveDate::from_ymd(2012, 12, 13),
-            Green => NaiveDate::from_ymd(2013, 7, 11),
-            GreenPlus => NaiveDate::from_ymd(2014, 2, 26),
-            Orange => NaiveDate::from_ymd(2014, 9, 18),
-            OrangePlus => NaiveDate::from_ymd(2015, 3, 19),
-            Pink => NaiveDate::from_ymd(2015, 12, 9),
-            PinkPlus => NaiveDate::from_ymd(2016, 6, 30),
-            Murasaki => NaiveDate::from_ymd(2016, 12, 14),
-            MurasakiPlus => NaiveDate::from_ymd(2017, 6, 22),
-            Milk => NaiveDate::from_ymd(2017, 12, 14),
-            MilkPlus => NaiveDate::from_ymd(2018, 6, 21),
-            Finale => NaiveDate::from_ymd(2018, 12, 13),
-            Deluxe => NaiveDate::from_ymd(2019, 7, 11),
-            DeluxePlus => NaiveDate::from_ymd(2020, 1, 23),
-            Splash => NaiveDate::from_ymd(2020, 9, 17),
-            SplashPlus => NaiveDate::from_ymd(2021, 3, 18),
-            Universe => NaiveDate::from_ymd(2021, 9, 16),
-            UniversePlus => NaiveDate::from_ymd(2022, 3, 24),
-            Festival => NaiveDate::from_ymd(2022, 9, 15),
-            FestivalPlus => NaiveDate::from_ymd(2023, 3, 23),
+            Maimai => NaiveDate::from_ymd_opt(2012, 7, 12).unwrap(),
+            MaimaiPlus => NaiveDate::from_ymd_opt(2012, 12, 13).unwrap(),
+            Green => NaiveDate::from_ymd_opt(2013, 7, 11).unwrap(),
+            GreenPlus => NaiveDate::from_ymd_opt(2014, 2, 26).unwrap(),
+            Orange => NaiveDate::from_ymd_opt(2014, 9, 18).unwrap(),
+            OrangePlus => NaiveDate::from_ymd_opt(2015, 3, 19).unwrap(),
+            Pink => NaiveDate::from_ymd_opt(2015, 12, 9).unwrap(),
+            PinkPlus => NaiveDate::from_ymd_opt(2016, 6, 30).unwrap(),
+            Murasaki => NaiveDate::from_ymd_opt(2016, 12, 14).unwrap(),
+            MurasakiPlus => NaiveDate::from_ymd_opt(2017, 6, 22).unwrap(),
+            Milk => NaiveDate::from_ymd_opt(2017, 12, 14).unwrap(),
+            MilkPlus => NaiveDate::from_ymd_opt(2018, 6, 21).unwrap(),
+            Finale => NaiveDate::from_ymd_opt(2018, 12, 13).unwrap(),
+            Deluxe => NaiveDate::from_ymd_opt(2019, 7, 11).unwrap(),
+            DeluxePlus => NaiveDate::from_ymd_opt(2020, 1, 23).unwrap(),
+            Splash => NaiveDate::from_ymd_opt(2020, 9, 17).unwrap(),
+            SplashPlus => NaiveDate::from_ymd_opt(2021, 3, 18).unwrap(),
+            Universe => NaiveDate::from_ymd_opt(2021, 9, 16).unwrap(),
+            UniversePlus => NaiveDate::from_ymd_opt(2022, 3, 24).unwrap(),
+            Festival => NaiveDate::from_ymd_opt(2022, 9, 15).unwrap(),
+            FestivalPlus => NaiveDate::from_ymd_opt(2023, 3, 23).unwrap(),
         }
     }
     pub fn start_time(self) -> NaiveDateTime {
-        self.start_date().and_time(NaiveTime::from_hms(5, 0, 0))
+        self.start_date()
+            .and_time(NaiveTime::from_hms_opt(5, 0, 0).unwrap())
     }
     pub fn latest() -> Self {
         Self::FestivalPlus
