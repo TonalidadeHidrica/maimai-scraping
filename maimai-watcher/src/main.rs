@@ -38,6 +38,7 @@ struct UserConfig {
     cookie_store_path: PathBuf,
     records_path: PathBuf,
     rating_target_path: PathBuf,
+    estimate_internal_levels: bool,
 }
 
 #[tokio::main]
@@ -136,6 +137,7 @@ async fn webhook_impl(
                     levels_path: state.config.levels_path.clone(),
                     removed_songs_path: state.config.removed_songs_path.clone(),
                     slack_post_webhook: state.config.slack_post_webhook.clone(),
+                    estimate_internal_levels: user_config.estimate_internal_levels,
                 };
                 entry.insert(watch::watch(config).await?);
                 post!("Started!");

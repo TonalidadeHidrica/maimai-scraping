@@ -39,6 +39,7 @@ pub struct Config {
     pub levels_path: PathBuf,
     pub removed_songs_path: PathBuf,
     pub slack_post_webhook: Option<Url>,
+    pub estimate_internal_levels: bool,
 }
 
 pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
@@ -157,7 +158,9 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
         }
 
         let bef_len = self.levels_actual.events().len();
-        self.update_levels().await;
+        if self.config.estimate_internal_levels {
+            self.update_levels().await;
+        }
 
         for time in inserted_records {
             let record = &self.records[&time];

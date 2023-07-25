@@ -16,6 +16,7 @@ async fn main() -> anyhow::Result<()> {
         removed_songs_path: opts.removed_songs_path,
         credentials_path: PathBuf::from(Maimai::CREDENTIALS_PATH),
         cookie_store_path: PathBuf::from(Maimai::COOKIE_STORE_PATH),
+        estimate_internal_levels: true,
     })
     .await?;
 
