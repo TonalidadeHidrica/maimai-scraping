@@ -29,9 +29,7 @@ where
 {
     // println!(
     //     "solve({n}, {:?}, .., {sum})",
-    //     (0..n)
-    //         .map(|i| a(i).map(|x| x.0).collect_vec())
-    //         .collect_vec(),
+    //     (0..n).map(|i| a(i).collect_vec()).collect_vec(),
     // );
 
     if n == 0 {

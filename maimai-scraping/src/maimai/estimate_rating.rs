@@ -11,7 +11,10 @@ use crate::{
         rating::{rank_coef, single_song_rating, ScoreConstant},
         rating_target_parser::{RatingTargetEntry, RatingTargetFile},
         schema::{
-            latest::{PlayRecord, PlayTime, ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
+            latest::{
+                AchievementValue, PlayRecord, PlayTime, ScoreDifficulty, ScoreGeneration, SongIcon,
+                SongName,
+            },
             ver_20210316_2338::RatingValue,
         },
     },
@@ -332,101 +335,89 @@ impl<'s> ScoreConstantsStore<'s, '_> {
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
         for (&play_time, list) in rating_targets {
-            // Process old songs
-            // First, find the sum of single song ratings of old songs
-            let mut new_song_raing_sum = 0;
-            for entry in list.target_new() {
-                let Some(key) = self.key_from_target_entry(entry)? else {
-                    println!(
-                        "TODO: score cannot be uniquely determined from the song name {:?}",
-                        entry.song_name()
-                    );
-                    return Ok(());
-                };
-                let levels = self.get(key)?.context("Song must not be removed")?.1;
-                if levels.len() != 1 {
-                    bail!(
-                        "Internal level of a new song is not determined!  {:?} {:?} {:?}",
-                        play_time,
-                        entry.song_name(),
-                        entry.score_metadata()
-                    );
+            let mut sub_list = vec![];
+            #[derive(Clone, Copy, Debug)]
+            struct Entry<'a, 'k> {
+                new: bool,
+                contributes_to_sum: bool,
+                rating_target_entry: &'a RatingTargetEntry,
+                key: ScoreKey<'k>,
+                levels: &'a [ScoreConstant],
+            }
+            for (new, contributes_to_sum, entries) in [
+                (true, true, list.target_new()),
+                (true, false, list.candidates_new()),
+                (false, true, list.target_old()),
+                (false, false, list.candidates_old()),
+            ] {
+                for rating_target_entry in entries {
+                    let Some(key) = self.key_from_target_entry(rating_target_entry)? else {
+                        println!(
+                            "TODO: score cannot be uniquely determined from the song name {:?}",
+                            rating_target_entry.song_name(),
+                        );
+                        return Ok(());
+                    };
+                    let levels = self.get(key)?.context("Song must not be removed")?.1;
+                    sub_list.push(Entry {
+                        new,
+                        contributes_to_sum,
+                        rating_target_entry,
+                        key,
+                        levels,
+                    });
                 }
-                new_song_raing_sum += single_song_rating_for_target_entry(levels[0], entry).get();
             }
-            // Then, solve the DP
-            let old_target_len = list.target_old().len();
-            self.solve_target_order(
-                play_time,
-                chain(list.target_old(), list.candidates_old()),
-                |i, rating| rating * (i < old_target_len) as usize,
-                list.rating()
-                    .get()
-                    .checked_sub(new_song_raing_sum)
-                    .context("new_song_raing_sum is greater than rating value")?
-                    as usize,
-            )?;
-
-            // Process new songs
-            // candidates > 0 => target > 0 should hold
-            // !(x => y) <=> !(!x || y) <=> x && !y
-            if !list.candidates_new().is_empty() && list.target_new().is_empty() {
-                bail!("Candidates are non-empty, but targets are empty");
+            #[derive(Clone, Copy)]
+            struct DpElement<'a, 'k> {
+                level: ScoreConstant,
+                single_song_rating: usize,
+                entry: Entry<'a, 'k>,
             }
-            self.solve_target_order(
-                play_time,
-                chain(list.target_new().last(), list.candidates_new()),
-                |_, _| 0,
-                0,
-            )?;
-        }
-        Ok(())
-    }
-
-    fn solve_target_order<'a>(
-        &mut self,
-        list_time: PlayTime,
-        entries: impl Iterator<Item = &'a RatingTargetEntry>,
-        score: impl Fn(usize, usize) -> usize,
-        sum: usize,
-    ) -> anyhow::Result<()> {
-        let entries = entries.collect_vec();
-
-        let mut keys = vec![];
-        for entry in &entries {
-            let Some(key) = self.key_from_target_entry(entry)? else {
-                println!(
-                    "TODO: score cannot be uniquely determined from the song name {:?}",
-                    entry.song_name()
-                );
-                return Ok(());
-            };
-            if self.get(key)?.is_none() {
-                bail!("Song not found for {key:?}");
+            impl DpElement<'_, '_> {
+                fn tuple(self) -> (bool, usize, AchievementValue) {
+                    (
+                        self.entry.new,
+                        self.single_song_rating,
+                        self.entry.rating_target_entry.achievement(),
+                    )
+                }
             }
-            keys.push(key);
-        }
-        // println!("{} - {}", list.rating(), new_song_raing_sum);
-        let res = possibilties_from_sum_and_ordering::solve(
-            entries.len(),
-            |i| {
-                let (key, entry) = (keys[i], entries[i]);
-                let levels = self.get(key).unwrap().unwrap().1.iter();
-                let score = &score;
-                levels.map(move |&level| {
-                    let rating = single_song_rating_for_target_entry(level, entry).get() as usize;
-                    (score(i, rating), ((rating, entry.achievement()), level))
-                })
-            },
-            |x, y| x.1 .0.cmp(&y.1 .0).reverse(),
-            sum,
-        );
-        for (&key, res) in keys.iter().zip_eq(res) {
-            self.set(
-                key,
-                res.iter().map(|x| x.1 .1),
-                lazy_format!("by the rating target list on {list_time}"),
-            )?;
+            impl std::fmt::Debug for DpElement<'_, '_> {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    let (new, score, a) = self.tuple();
+                    write!(f, "({new}, {score}, {a})")
+                }
+            }
+            let res = possibilties_from_sum_and_ordering::solve(
+                sub_list.len(),
+                |i| {
+                    let entry = sub_list[i];
+                    entry.levels.iter().map(move |&level| {
+                        let single_song_rating =
+                            single_song_rating_for_target_entry(level, entry.rating_target_entry)
+                                .get() as usize;
+                        let score = entry.contributes_to_sum as usize * single_song_rating;
+                        let element = DpElement {
+                            level,
+                            entry,
+                            single_song_rating,
+                        };
+                        (score, element)
+                    })
+                },
+                |(_, x), (_, y)| x.tuple().cmp(&y.tuple()).reverse(),
+                list.rating().get() as usize,
+            );
+            let keys = sub_list.iter().map(|e| e.key).collect_vec();
+            let res = res
+                .iter()
+                .map(|res| res.iter().map(|x| x.1.level).collect_vec())
+                .collect_vec();
+            for (&key, res) in keys.iter().zip(res) {
+                let reason = lazy_format!("by the rating target list on {play_time}");
+                self.set(key, res.into_iter(), reason)?;
+            }
         }
         Ok(())
     }
