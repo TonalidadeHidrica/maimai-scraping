@@ -345,7 +345,12 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                 };
                 let levels = self.get(key)?.context("Song must not be removed")?.1;
                 if levels.len() != 1 {
-                    panic!("Score constants of new songs must be determined!");
+                    bail!(
+                        "Internal level of a new song is not determined!  {:?} {:?} {:?}",
+                        play_time,
+                        entry.song_name(),
+                        entry.score_metadata()
+                    );
                 }
                 new_song_raing_sum += single_song_rating_for_target_entry(levels[0], entry).get();
             }
