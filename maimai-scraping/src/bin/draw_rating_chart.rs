@@ -104,6 +104,14 @@ fn main() -> anyhow::Result<()> {
                         .set("alignment-baseline", "middle")
                         .set("font-size", 6),
                 );
+                document = document.add(
+                    TextElement::new()
+                        .add(TextNode::new(val.to_string()))
+                        .set("x", x_range.end)
+                        .set("y", y_center)
+                        .set("alignment-baseline", "middle")
+                        .set("font-size", 6),
+                );
             }
             if val.get() % 5 == 0 {
                 document = document.add(
