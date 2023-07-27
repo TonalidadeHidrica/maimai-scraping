@@ -334,7 +334,8 @@ pub struct TourMember {
 #[derive(Clone, PartialEq, Eq, Debug, derive_more::FromStr, Serialize, Deserialize)]
 pub struct TourMemberIcon(Url);
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters, Serialize, Deserialize)]
+#[getset(get_copy = "pub")]
 pub struct ValueWithMax<T: PartialOrd> {
     value: T,
     max: T,

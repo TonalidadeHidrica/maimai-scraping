@@ -15,7 +15,10 @@ use maimai_scraping::{
         load_score_level::{self, RemovedSong, Song},
         rating::{ScoreConstant, ScoreLevel},
         rating_target_parser::RatingTargetFile,
-        schema::latest::{PlayRecord, ScoreMetadata},
+        schema::{
+            latest::{LifeResult, PlayRecord, RatingBorderColor, ScoreMetadata},
+            ver_20210316_2338::RatingValue,
+        },
         Maimai,
     },
 };
@@ -236,12 +239,46 @@ fn make_message(record: &PlayRecord, song_lvs: &[ScoreConstant]) -> String {
         AllPerfect => "AP",
         AllPerfectPlus => "AP+",
     };
-    format!(
-        "{time}　{title} ({score_kind} Lv.{lv})　{rank}({ach}) {fc}",
+    let main_line = lazy_format!(
+        "{time}　{title} ({score_kind} Lv.{lv})　{rank}({ach}) {fc}\n",
         title = record.song_metadata().name(),
         time = record.played_at().time(),
         ach = record.achievement_result().value(),
-    )
+    );
+    let rating_line = (record.rating_result().delta() > 0).then(|| {
+        let new = record.rating_result().rating();
+        let delta = record.rating_result().delta();
+        let old = RatingValue::from((new.get() as i16 - delta) as u16);
+        use RatingBorderColor::*;
+        let old_color = match old.get() {
+            15000.. => Rainbow,
+            14500.. => Platinum,
+            14000.. => Gold,
+            13000.. => Silver,
+            12000.. => Bronze,
+            10000.. => Purple,
+            7000.. => Red,
+            4000.. => Orange,
+            2000.. => Green,
+            1000.. => Blue,
+            ..=999 => Normal,
+        };
+        let new_color = record.rating_result().border_color();
+        let color_change = lazy_format!(
+            if old_color != new_color => "　Color changed to {new_color:?}!"
+            else => ""
+        );
+        format!("Rating: {old} => {new} ({delta:+}){color_change}\n")
+    });
+    let rating_line = rating_line.as_deref().unwrap_or("");
+    let life_line = match record.life_result() {
+        LifeResult::Nothing => None,
+        LifeResult::PerfectChallengeResult(res) => Some(("Perfect challenge", res)),
+        LifeResult::CourseResult(res) => Some(("Course", res)),
+    }
+    .map(|(name, res)| format!("{name} life: {}/{}\n", res.val(), res.max()));
+    let life_line = life_line.as_deref().unwrap_or("");
+    format!("{main_line}{rating_line}{life_line}")
 }
 fn describe_score_kind<'a>(metadata: ScoreMetadata) -> impl Display + 'a {
     use maimai_scraping::maimai::schema::latest::{ScoreDifficulty::*, ScoreGeneration::*};
