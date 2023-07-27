@@ -276,7 +276,7 @@ fn make_message(record: &PlayRecord, song_lvs: &[ScoreConstant]) -> String {
         LifeResult::PerfectChallengeResult(res) => Some(("Perfect challenge", res)),
         LifeResult::CourseResult(res) => Some(("Course", res)),
     }
-    .map(|(name, res)| format!("{name} life: {}/{}\n", res.val(), res.max()));
+    .map(|(name, res)| format!("{name} life: {}/{}\n", res.value(), res.max()));
     let life_line = life_line.as_deref().unwrap_or("");
     format!("{main_line}{rating_line}{life_line}")
 }

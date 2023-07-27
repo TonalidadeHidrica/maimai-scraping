@@ -713,7 +713,7 @@ fn parse_matching_rank_img(matching_rank_img: ElementRef) -> anyhow::Result<Matc
 
 fn parse_value_with_max<T>(text: &str) -> anyhow::Result<ValueWithMax<T>>
 where
-    T: PartialOrd + std::fmt::Debug + FromStr,
+    T: PartialOrd + Copy + std::fmt::Debug + FromStr,
     <T as FromStr>::Err: Send + Sync + std::error::Error + 'static,
 {
     let captures = regex!(r"^([0-9,]+)/([0-9,]+)$")

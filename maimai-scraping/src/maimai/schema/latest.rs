@@ -336,12 +336,12 @@ pub struct TourMemberIcon(Url);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters, Serialize, Deserialize)]
 #[getset(get_copy = "pub")]
-pub struct ValueWithMax<T: PartialOrd> {
+pub struct ValueWithMax<T: PartialOrd + Copy> {
     value: T,
     max: T,
 }
 
-impl<T: PartialOrd> ValueWithMax<T> {
+impl<T: PartialOrd + Copy> ValueWithMax<T> {
     pub fn new(value: T, max: T) -> Result<Self, (T, T)> {
         if value <= max {
             Ok(Self { value, max })
