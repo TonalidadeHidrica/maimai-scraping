@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::mpsc, time::Duration};
 
 use clap::Parser;
 use maimai_scraping::{maimai::Maimai, sega_trait::SegaTrait};
-use maimai_watcher::watch;
+use maimai_watcher::watch::{self, TimeoutConfig};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -17,6 +17,7 @@ async fn main() -> anyhow::Result<()> {
         credentials_path: PathBuf::from(Maimai::CREDENTIALS_PATH),
         cookie_store_path: PathBuf::from(Maimai::COOKIE_STORE_PATH),
         estimate_internal_levels: true,
+        timeout_config: TimeoutConfig::indefinite(),
     })
     .await?;
 

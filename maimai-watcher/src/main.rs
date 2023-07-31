@@ -6,7 +6,7 @@ use clap::Parser;
 use log::{error, info};
 use maimai_watcher::{
     slack::webhook_send,
-    watch::{self, WatchHandler},
+    watch::{self, TimeoutConfig, WatchHandler},
 };
 use serde::Deserialize;
 use tokio::sync::Mutex;
@@ -27,6 +27,7 @@ struct Config {
     removed_songs_path: PathBuf,
     slack_post_webhook: Option<Url>,
     users: HashMap<UserId, UserConfig>,
+    timeout_hours: f64,
 }
 // #[derive(Clone, PartialEq, Eq, Hash, Deserialize)]
 // struct UserId(String);
@@ -128,25 +129,38 @@ async fn webhook_impl(
                 post!("Watcher is already running!");
             }
             Vacant(entry) => {
-                let config = watch::Config {
-                    interval: state.config.interval,
-                    credentials_path: user_config.credentials_path.clone(),
-                    cookie_store_path: user_config.cookie_store_path.clone(),
-                    records_path: user_config.records_path.clone(),
-                    rating_target_path: user_config.rating_target_path.clone(),
-                    levels_path: state.config.levels_path.clone(),
-                    removed_songs_path: state.config.removed_songs_path.clone(),
-                    slack_post_webhook: state.config.slack_post_webhook.clone(),
-                    estimate_internal_levels: user_config.estimate_internal_levels,
-                };
+                let timeout = TimeoutConfig::hours(state.config.timeout_hours);
+                let config = watch_config(&state.config, user_config, timeout);
                 entry.insert(watch::watch(config).await?);
                 post!("Started!");
             }
         }
+    } else if info.text.contains("single") {
+        let config = watch_config(&state.config, user_config, TimeoutConfig::single());
+        watch::watch(config).await?;
     } else {
         bail!("Invalid command: {:?}", info.text)
     };
     Ok(())
+}
+
+fn watch_config(
+    state_config: &Config,
+    user_config: &UserConfig,
+    timeout_config: TimeoutConfig,
+) -> watch::Config {
+    watch::Config {
+        interval: state_config.interval,
+        credentials_path: user_config.credentials_path.clone(),
+        cookie_store_path: user_config.cookie_store_path.clone(),
+        records_path: user_config.records_path.clone(),
+        rating_target_path: user_config.rating_target_path.clone(),
+        levels_path: state_config.levels_path.clone(),
+        removed_songs_path: state_config.removed_songs_path.clone(),
+        slack_post_webhook: state_config.slack_post_webhook.clone(),
+        estimate_internal_levels: user_config.estimate_internal_levels,
+        timeout_config,
+    }
 }
 
 #[derive(Deserialize, Debug)]

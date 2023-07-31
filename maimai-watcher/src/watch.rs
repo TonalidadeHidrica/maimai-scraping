@@ -1,4 +1,9 @@
-use std::{fmt::Display, iter::successors, path::PathBuf, time::Duration};
+use std::{
+    fmt::Display,
+    iter::successors,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
 use anyhow::Context;
 use itertools::Itertools;
@@ -22,7 +27,6 @@ use maimai_scraping::{
         Maimai,
     },
 };
-use serde::Deserialize;
 use tokio::{
     spawn,
     sync::mpsc::{self, error::TryRecvError},
@@ -32,7 +36,7 @@ use url::Url;
 
 use crate::slack::webhook_send;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Debug)]
 pub struct Config {
     pub interval: Duration,
     pub credentials_path: PathBuf,
@@ -43,6 +47,33 @@ pub struct Config {
     pub removed_songs_path: PathBuf,
     pub slack_post_webhook: Option<Url>,
     pub estimate_internal_levels: bool,
+    pub timeout_config: TimeoutConfig,
+}
+
+#[derive(Debug)]
+pub struct TimeoutConfig {
+    max_count: usize,
+    max_duration: Duration,
+}
+impl TimeoutConfig {
+    pub fn single() -> Self {
+        Self {
+            max_count: 1,
+            ..Self::indefinite()
+        }
+    }
+    pub fn hours(hours: f64) -> Self {
+        Self {
+            max_duration: Duration::from_secs_f64(hours * 3600.),
+            ..Self::indefinite()
+        }
+    }
+    pub fn indefinite() -> Self {
+        Self {
+            max_count: usize::max_value(),
+            max_duration: Duration::MAX,
+        }
+    }
 }
 
 pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
@@ -64,7 +95,22 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
             return;
         };
 
+        let start_time = Instant::now();
+        let mut count = 0;
         'outer: while let Err(TryRecvError::Empty) = rx.try_recv() {
+            count += 1;
+            if count >= config.timeout_config.max_count {
+                break;
+            } else if (Instant::now() - start_time) >= config.timeout_config.max_duration {
+                webhook_send(
+                    &reqwest::Client::new(),
+                    &config.slack_post_webhook,
+                    "There have been no updates for a while.  Stopping automatically.".to_string(),
+                )
+                .await;
+                break;
+            }
+
             if let Err(e) = runner.run().await {
                 error!("{e}");
                 webhook_send(
