@@ -462,14 +462,29 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                 contained.insert(key);
             }
 
+            let mut best = HashMap::new();
             for &(record, _) in &records {
                 let score_key = ScoreKey::from(record);
-                // Ignore removed songs
-                let Some((song, _)) = self.get(score_key)? else { continue };
-
                 if contained.contains(&score_key) {
                     continue;
                 }
+                let a = |record: &PlayRecord| record.achievement_result().value();
+                use hashbrown::hash_map::Entry::*;
+                match best.entry(score_key) {
+                    Vacant(entry) => {
+                        entry.insert(record);
+                    }
+                    Occupied(mut entry) => {
+                        if a(entry.get()) < a(record) {
+                            *entry.get_mut() = record;
+                        }
+                    }
+                }
+            }
+
+            for (score_key, record) in best {
+                // Ignore removed songs
+                let Some((song, _)) = self.get(score_key)? else { continue };
 
                 let border_entry = if song.version() == version {
                     list.target_new()
