@@ -428,100 +428,106 @@ impl<'s> ScoreConstantsStore<'s, '_> {
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
         let version = MaimaiVersion::latest();
-        // Assumption: records are in ascending order
-        // (otherwise, this code will be inefficient, if working)
-        let mut last_inspected: Option<(PlayTime, HashSet<ScoreKey>)> = None;
-        'next_record: for record in records {
-            let score_key = ScoreKey::from(record);
-            // Ignore removed songs
-            let Some((song, _)) = self.get(score_key)? else { continue };
-            let Some((&target_time, list)) =
-                    rating_targets.range(record.played_at().time()..).next() else {
-                warn!(
-                    "Rating target not collected for a record played at {}",
-                    record.played_at().time()
-                );
-                continue;
-            };
-            let contained = match last_inspected.as_ref().filter(|l| l.0 == target_time) {
-                Some((_, x)) => x,
-                None => {
-                    let mut set = HashSet::new();
-                    for entry in chain(list.target_new(), list.target_old())
-                        .chain(chain(list.candidates_new(), list.candidates_old()))
-                    {
-                        let Some(key) = self.key_from_target_entry(entry)? else {
-                            println!(
-                                "TODO: score cannot be uniquely determined from the song name {:?}",
-                                entry.song_name()
-                            );
-                            continue 'next_record;
-                        };
-                        set.insert(key);
+
+        'next_group: for (_, group) in &records
+            .into_iter()
+            .filter_map(
+                |record| match rating_targets.range(record.played_at().time()..).next() {
+                    None => {
+                        warn!(
+                            "Rating target not collected for a record played at {}",
+                            record.played_at().time()
+                        );
+                        None
                     }
-                    &last_inspected.insert((target_time, set)).1
-                }
-            };
-            if contained.contains(&score_key) {
-                continue;
+                    Some(pair) => Some((record, pair)),
+                },
+            )
+            .group_by(|record| record.1 .0)
+        {
+            let records = group.collect_vec();
+            let (target_time, list) = records[0].1;
+
+            let mut contained = HashSet::new();
+            for entry in chain(list.target_new(), list.target_old())
+                .chain(chain(list.candidates_new(), list.candidates_old()))
+            {
+                let Some(key) = self.key_from_target_entry(entry)? else {
+                    println!(
+                        "TODO: score cannot be uniquely determined from the song name {:?}",
+                        entry.song_name()
+                    );
+                    continue 'next_group;
+                };
+                contained.insert(key);
             }
 
-            let border_entry = if song.version() == version {
-                list.target_new()
-                    .last()
-                    .context("New songs must be contained (1)")?
-            } else {
-                list.target_old()
-                    .last()
-                    .context("New songs must be contained (1)")?
-            };
-            let min_entry = if song.version() == version {
-                (list.candidates_new().last())
-                    .or_else(|| list.target_new().last())
-                    .context("New songs must be contained")?
-            } else {
-                (list.candidates_old().last())
-                    .or_else(|| list.target_old().last())
-                    .context("Old songs must be contained")?
-            };
+            for &(record, _) in &records {
+                let score_key = ScoreKey::from(record);
+                // Ignore removed songs
+                let Some((song, _)) = self.get(score_key)? else { continue };
 
-            let compute = |entry: &RatingTargetEntry| {
-                // println!("min = {min:?}");
-                let a = entry.achievement();
-                let lvs = &self
-                    .get(
-                        self.key_from_target_entry(entry)?
-                            .context("Must not be removed (1)")?,
-                    )?
-                    .context("Must not be removed (2)")?
-                    .1;
-                // println!("min_constans = {min_constants:?}");
-                let score = lvs
-                    .iter()
-                    .map(|&level| single_song_rating(level, a, rank_coef(a)))
-                    .max()
-                    .context("Empty level candidates")?;
-                anyhow::Ok((score, a))
-            };
-            let border_pair = compute(border_entry)?;
-            let min_pair = compute(min_entry)?;
+                if contained.contains(&score_key) {
+                    continue;
+                }
 
-            let this_a = record.achievement_result().value();
-            let this_sssplus = record.achievement_result().rank() == AchievementRank::SSSPlus;
-            let candidates = ScoreConstant::candidates().filter(|&level| {
-                let this = single_song_rating(level, this_a, rank_coef(this_a));
-                let this_pair = (this, this_a);
-                // println!("{:?} {level} {:?}", (min_entry, min_a), (this, this_a));
-                min_pair >= this_pair || this_sssplus && border_pair >= this_pair
-            });
-            let message = lazy_format!(
-                "because record played at {} achieving {} is not in list at {}, so it's below {:?}",
-                record.played_at().time(),
-                this_a,
-                target_time,
-                if this_sssplus { border_pair } else { min_pair },
-            );
-            self.set(score_key, candidates, message)?;
+                let border_entry = if song.version() == version {
+                    list.target_new()
+                        .last()
+                        .context("New songs must be contained (1)")?
+                } else {
+                    list.target_old()
+                        .last()
+                        .context("New songs must be contained (1)")?
+                };
+                let min_entry = if song.version() == version {
+                    (list.candidates_new().last())
+                        .or_else(|| list.target_new().last())
+                        .context("New songs must be contained")?
+                } else {
+                    (list.candidates_old().last())
+                        .or_else(|| list.target_old().last())
+                        .context("Old songs must be contained")?
+                };
+
+                let compute = |entry: &RatingTargetEntry| {
+                    // println!("min = {min:?}");
+                    let a = entry.achievement();
+                    let lvs = &self
+                        .get(
+                            self.key_from_target_entry(entry)?
+                                .context("Must not be removed (1)")?,
+                        )?
+                        .context("Must not be removed (2)")?
+                        .1;
+                    // println!("min_constans = {min_constants:?}");
+                    let score = lvs
+                        .iter()
+                        .map(|&level| single_song_rating(level, a, rank_coef(a)))
+                        .max()
+                        .context("Empty level candidates")?;
+                    anyhow::Ok((score, a))
+                };
+                let border_pair = compute(border_entry)?;
+                let min_pair = compute(min_entry)?;
+
+                let this_a = record.achievement_result().value();
+                let this_sssplus = record.achievement_result().rank() == AchievementRank::SSSPlus;
+                let candidates = ScoreConstant::candidates().filter(|&level| {
+                    let this = single_song_rating(level, this_a, rank_coef(this_a));
+                    let this_pair = (this, this_a);
+                    // println!("{:?} {level} {:?}", (min_entry, min_a), (this, this_a));
+                    min_pair >= this_pair || this_sssplus && border_pair >= this_pair
+                });
+                let message = lazy_format!(
+                    "because record played at {} achieving {} is not in list at {}, so it's below {:?}",
+                    record.played_at().time(),
+                    this_a,
+                    target_time,
+                    if this_sssplus { border_pair } else { min_pair },
+                );
+                self.set(score_key, candidates, message)?;
+            }
         }
         Ok(())
     }
