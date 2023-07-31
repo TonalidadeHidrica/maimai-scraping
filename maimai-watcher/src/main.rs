@@ -50,7 +50,14 @@ async fn main() -> anyhow::Result<()> {
     let config: Config = toml::from_str(&fs_err::read_to_string(opts.config_path)?)?;
     let port = config.port;
     let route = config.webhook_endpoint.clone();
-    Ok(HttpServer::new(move || {
+
+    let reqwest_client = reqwest::Client::new();
+    let url = config.slack_post_webhook.clone();
+    let webhook_send = |message: &'static str| webhook_send(&reqwest_client, &url, message);
+
+    webhook_send("The server has started.").await;
+
+    HttpServer::new(move || {
         let mut slack_id_to_user_id = HashMap::<_, Vec<_>>::new();
         for (id, config) in &config.users {
             slack_id_to_user_id
@@ -69,7 +76,11 @@ async fn main() -> anyhow::Result<()> {
     })
     .bind(("0.0.0.0", port))?
     .run()
-    .await?)
+    .await?;
+
+    webhook_send("The server is about to shut down.").await;
+
+    Ok(())
 }
 
 struct State {
