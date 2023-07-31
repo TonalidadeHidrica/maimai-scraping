@@ -141,13 +141,13 @@ async fn webhook_impl(
             }
             Vacant(entry) => {
                 let timeout = TimeoutConfig::hours(state.config.timeout_hours);
-                let config = watch_config(&state.config, user_config, timeout);
+                let config = watch_config(&state.config, user_config, timeout, false);
                 entry.insert(watch::watch(config).await?);
                 post!("Started!");
             }
         }
     } else if info.text.contains("single") {
-        let config = watch_config(&state.config, user_config, TimeoutConfig::single());
+        let config = watch_config(&state.config, user_config, TimeoutConfig::single(), true);
         watch::watch(config).await?;
     } else {
         bail!("Invalid command: {:?}", info.text)
@@ -159,6 +159,7 @@ fn watch_config(
     state_config: &Config,
     user_config: &UserConfig,
     timeout_config: TimeoutConfig,
+    report_no_updates: bool,
 ) -> watch::Config {
     watch::Config {
         interval: state_config.interval,
@@ -171,6 +172,7 @@ fn watch_config(
         slack_post_webhook: state_config.slack_post_webhook.clone(),
         estimate_internal_levels: user_config.estimate_internal_levels,
         timeout_config,
+        report_no_updates,
     }
 }
 

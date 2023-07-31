@@ -18,6 +18,7 @@ async fn main() -> anyhow::Result<()> {
         cookie_store_path: PathBuf::from(Maimai::COOKIE_STORE_PATH),
         estimate_internal_levels: true,
         timeout_config: TimeoutConfig::indefinite(),
+        report_no_updates: false,
     })
     .await?;
 

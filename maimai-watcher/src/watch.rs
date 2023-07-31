@@ -48,6 +48,7 @@ pub struct Config {
     pub slack_post_webhook: Option<Url>,
     pub estimate_internal_levels: bool,
     pub timeout_config: TimeoutConfig,
+    pub report_no_updates: bool,
 }
 
 #[derive(Debug)]
@@ -97,7 +98,36 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
 
         let start_time = Instant::now();
         let mut count = 0;
-        'outer: while let Err(TryRecvError::Empty) = rx.try_recv() {
+        'outer: while let Err(TryRecvError::Empty | TryRecvError::Disconnected) = rx.try_recv() {
+            match runner.run().await {
+                Err(e) => {
+                    error!("{e}");
+                    webhook_send(
+                        &reqwest::Client::new(),
+                        &config.slack_post_webhook,
+                        e.to_string(),
+                    )
+                    .await;
+                }
+                Ok(updates) => {
+                    if !dbg!(updates) && dbg!(config.report_no_updates) {
+                        webhook_send(
+                            &reqwest::Client::new(),
+                            &config.slack_post_webhook,
+                            "Already up to date.",
+                        )
+                        .await;
+                    }
+                }
+            }
+            let chunk = Duration::from_millis(250);
+            for remaining in successors(Some(config.interval), |x| x.checked_sub(chunk)) {
+                sleep(remaining.min(chunk)).await;
+                if !matches!(rx.try_recv(), Err(TryRecvError::Empty)) {
+                    break 'outer;
+                }
+            }
+
             count += 1;
             if count >= config.timeout_config.max_count {
                 break;
@@ -109,23 +139,6 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
                 )
                 .await;
                 break;
-            }
-
-            if let Err(e) = runner.run().await {
-                error!("{e}");
-                webhook_send(
-                    &reqwest::Client::new(),
-                    &config.slack_post_webhook,
-                    e.to_string(),
-                )
-                .await;
-            }
-            let chunk = Duration::from_millis(250);
-            for remaining in successors(Some(config.interval), |x| x.checked_sub(chunk)) {
-                sleep(remaining.min(chunk)).await;
-                if !matches!(rx.try_recv(), Err(TryRecvError::Empty)) {
-                    break 'outer;
-                }
             }
         }
     });
@@ -177,7 +190,7 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
         .await;
     }
 
-    async fn run(&mut self) -> anyhow::Result<()> {
+    async fn run(&mut self) -> anyhow::Result<bool> {
         let config = self.config;
         let (mut client, index) = SegaClient::<Maimai>::new(
             &self.config.credentials_path,
@@ -187,7 +200,7 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
         let last_played = index.first().context("There is no play yet.")?.0;
         let inserted_records = update_records(&mut client, &mut self.records, index).await?;
         if inserted_records.is_empty() {
-            return Ok(());
+            return Ok(false);
         }
         write_json(&config.records_path, &self.records.values().collect_vec())?;
         let update_targets_res = update_targets(&mut client, &mut self.rating_targets, last_played)
@@ -242,7 +255,7 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
             .await;
         }
 
-        Ok(())
+        Ok(true)
     }
 }
 
