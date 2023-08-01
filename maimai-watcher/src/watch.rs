@@ -174,6 +174,9 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
     }
 
     async fn update_levels(&mut self) {
+        if !self.config.estimate_internal_levels {
+            return;
+        }
         let _ = report_error(
             &self.config.slack_post_webhook,
             self.levels_actual
@@ -220,9 +223,7 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
         }
 
         let bef_len = self.levels_actual.events().len();
-        if self.config.estimate_internal_levels {
-            self.update_levels().await;
-        }
+        self.update_levels().await;
 
         for time in inserted_records {
             let record = &self.records[&time];
