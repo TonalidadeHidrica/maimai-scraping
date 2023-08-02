@@ -7,6 +7,7 @@ pub mod schema;
 pub mod song_score_parser;
 
 use scraper::{Html, Selector};
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 use play_record_parser::parse_record_index;
@@ -14,8 +15,10 @@ use schema::latest::{Idx, PlayRecord, PlayTime, PlayedAt};
 
 use crate::{
     cookie_store::AimeIdx,
-    sega_trait::{PlayRecordTrait, SegaTrait},
+    sega_trait::{PlayRecordTrait, SegaTrait, SegaUserData},
 };
+
+use self::rating_target_parser::RatingTargetFile;
 
 pub struct Maimai;
 impl SegaTrait for Maimai {
@@ -58,6 +61,17 @@ impl SegaTrait for Maimai {
 
     const CREDENTIALS_PATH: &'static str = "./ignore/credentials_maimai.json";
     const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_maimai.json";
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MaimaiUserData {
+    pub records: Vec<PlayRecord>,
+    pub rating_targets: RatingTargetFile,
+}
+impl SegaUserData<Maimai> for MaimaiUserData {
+    fn records(&mut self) -> &mut Vec<PlayRecord> {
+        &mut self.records
+    }
 }
 
 impl PlayRecordTrait for PlayRecord {

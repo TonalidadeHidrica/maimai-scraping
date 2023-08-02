@@ -1,9 +1,10 @@
 use anyhow::Context;
 use scraper::{ElementRef, Html, Selector};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     compare_htmls::elements_are_equivalent,
-    sega_trait::{PlayRecordTrait, SegaTrait},
+    sega_trait::{PlayRecordTrait, SegaTrait, SegaUserData},
 };
 
 use self::{
@@ -77,6 +78,16 @@ impl SegaTrait for Ongeki {
 
     const CREDENTIALS_PATH: &'static str = "./ignore/credentials_ongeki.json";
     const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_ongeki.json";
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct OngekiUserData {
+    pub records: Vec<PlayRecord>,
+}
+impl SegaUserData<Ongeki> for OngekiUserData {
+    fn records(&mut self) -> &mut Vec<PlayRecord> {
+        &mut self.records
+    }
 }
 
 impl PlayRecordTrait for PlayRecord {

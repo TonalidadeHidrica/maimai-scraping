@@ -32,6 +32,10 @@ pub trait SegaTrait: Sized {
     const COOKIE_STORE_PATH: &'static str;
 }
 
+pub trait SegaUserData<T: SegaTrait> {
+    fn records(&mut self) -> &mut Vec<T::PlayRecord>;
+}
+
 pub trait PlayRecordTrait {
     type PlayedAt;
     fn played_at(&self) -> &Self::PlayedAt;
