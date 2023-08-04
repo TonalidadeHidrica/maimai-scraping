@@ -96,7 +96,7 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
             return;
         };
 
-        let start_time = Instant::now();
+        let mut last_update_time = Instant::now();
         let mut count = 0;
         'outer: while let Err(TryRecvError::Empty | TryRecvError::Disconnected) = rx.try_recv() {
             match runner.run().await {
@@ -110,7 +110,9 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
                     .await;
                 }
                 Ok(updates) => {
-                    if !dbg!(updates) && dbg!(config.report_no_updates) {
+                    if updates {
+                        last_update_time = Instant::now();
+                    } else if config.report_no_updates {
                         webhook_send(
                             &reqwest::Client::new(),
                             &config.slack_post_webhook,
@@ -131,7 +133,7 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
             count += 1;
             if count >= config.timeout_config.max_count {
                 break;
-            } else if (Instant::now() - start_time) >= config.timeout_config.max_duration {
+            } else if (Instant::now() - last_update_time) >= config.timeout_config.max_duration {
                 webhook_send(
                     &reqwest::Client::new(),
                     &config.slack_post_webhook,
