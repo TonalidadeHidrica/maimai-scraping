@@ -361,4 +361,8 @@ impl WatchHandler {
     pub async fn stop(&self) -> Result<(), mpsc::error::SendError<()>> {
         self.0.send(()).await
     }
+
+    pub fn is_dropped(&self) -> bool {
+        self.0.is_closed()
+    }
 }
