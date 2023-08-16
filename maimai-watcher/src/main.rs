@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, time::Duration};
+use std::{
+    collections::hash_map::{Entry as HMEntry, HashMap},
+    path::PathBuf,
+    time::Duration,
+};
 
 use actix_web::{middleware::Logger, web, App, HttpServer, Responder};
 use anyhow::{bail, Context};
@@ -121,9 +125,10 @@ async fn webhook_impl(
             webhook_send(client, url, $message).await
         };
     }
-    use std::collections::hash_map::Entry::*;
+    use HMEntry::*;
     if info.text.contains("stop") {
         let mut map = state.watch_handler.lock().await;
+        drop_if_closed(map.entry(user_id.clone()));
         match map.entry(user_id.clone()) {
             Occupied(entry) => {
                 entry.remove().stop().await?;
@@ -135,6 +140,7 @@ async fn webhook_impl(
         }
     } else if info.text.contains("start") {
         let mut map = state.watch_handler.lock().await;
+        drop_if_closed(map.entry(user_id.clone()));
         match map.entry(user_id.clone()) {
             Occupied(_) => {
                 post!("Watcher is already running!");
@@ -173,6 +179,14 @@ fn watch_config(
         estimate_internal_levels: user_config.estimate_internal_levels,
         timeout_config,
         report_no_updates,
+    }
+}
+
+fn drop_if_closed<K>(entry: HMEntry<K, WatchHandler>) {
+    if let HMEntry::Occupied(entry) = entry {
+        if entry.get().is_dropped() {
+            entry.remove();
+        }
     }
 }
 
