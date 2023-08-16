@@ -24,7 +24,33 @@ use serde::Deserialize;
 use tokio::time::sleep;
 use url::Url;
 
+pub fn load_data_from_file<T, P>(path: P) -> anyhow::Result<T::UserData>
+where
+    T: SegaTrait,
+    for<'a> T::UserData: Default + Deserialize<'a>,
+    P: Into<PathBuf> + Debug,
+{
+    let path = path.into();
+    match File::open(&path) {
+        Ok(file) => {
+            let res = serde_json::from_reader(BufReader::new(file))?;
+            info!("Successfully loaded data from {:?}.", &path);
+            Ok(res)
+        }
+        Err(e) => match e.kind() {
+            std::io::ErrorKind::NotFound => {
+                info!("The file was not found.");
+                info!("We will create a new file for you and save the data there.");
+                Ok(T::UserData::default())
+            }
+            _ => bail!("Unexpected I/O Error: {:?}", e),
+        },
+    }
+}
+
+#[deprecated]
 pub type RecordMap<T> = BTreeMap<PlayTime<T>, <T as SegaTrait>::PlayRecord>;
+#[deprecated]
 pub fn load_records_from_file<T, P>(path: P) -> anyhow::Result<RecordMap<T>>
 where
     T: SegaTrait,
@@ -101,18 +127,19 @@ where
     Ok(inserted)
 }
 
+#[deprecated]
 pub fn load_targets_from_file(path: impl Into<PathBuf>) -> anyhow::Result<RatingTargetFile> {
     let path = path.into();
     match File::open(&path) {
         Ok(file) => {
             let res = serde_json::from_reader(BufReader::new(file))?;
-            println!("Successfully loaded data from {:?}.", &path);
+            info!("Successfully loaded data from {:?}.", &path);
             Ok(res)
         }
         Err(e) => match e.kind() {
             std::io::ErrorKind::NotFound => {
-                println!("The file was not found.");
-                println!("We will create a new file for you and save the data there.");
+                info!("The file was not found.");
+                info!("We will create a new file for you and save the data there.");
                 Ok(BTreeMap::new())
             }
             _ => bail!("Unexpected I/O Error: {:?}", e),

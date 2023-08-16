@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use scraper::{Html, Selector};
 use url::Url;
 
@@ -10,6 +12,8 @@ pub trait SegaTrait: Sized {
     const ERROR_PATH: &'static str;
     const AIME_SUBMIT_PATH: &'static str;
     const RECORD_URL: &'static str;
+
+    type UserData: SegaUserData<Self>;
 
     // type Idx: Copy;
     // type PlayTime: Ord + Display;
@@ -32,8 +36,9 @@ pub trait SegaTrait: Sized {
     const COOKIE_STORE_PATH: &'static str;
 }
 
+pub type RecordMap<T> = BTreeMap<PlayTime<T>, <T as SegaTrait>::PlayRecord>;
 pub trait SegaUserData<T: SegaTrait> {
-    fn records(&mut self) -> &mut Vec<T::PlayRecord>;
+    fn records_mut(&mut self) -> &mut RecordMap<T>;
 }
 
 pub trait PlayRecordTrait {

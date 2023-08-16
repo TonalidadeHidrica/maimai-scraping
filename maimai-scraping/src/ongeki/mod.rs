@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     compare_htmls::elements_are_equivalent,
-    sega_trait::{PlayRecordTrait, SegaTrait, SegaUserData},
+    sega_trait::{PlayRecordTrait, SegaTrait, SegaUserData, RecordMap},
 };
 
 use self::{
@@ -38,6 +38,8 @@ impl SegaTrait for Ongeki {
     const ERROR_PATH: &'static str = "/ongeki-mobile/error/";
     const AIME_SUBMIT_PATH: &'static str = "/ongeki-mobile/aimeList/submit/";
     const RECORD_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/record/playlog/";
+
+    type UserData = OngekiUserData;
 
     fn play_log_detail_url(idx: Idx) -> String {
         format!(
@@ -82,10 +84,10 @@ impl SegaTrait for Ongeki {
 
 #[derive(Serialize, Deserialize)]
 pub struct OngekiUserData {
-    pub records: Vec<PlayRecord>,
+    pub records: RecordMap<Ongeki>,
 }
 impl SegaUserData<Ongeki> for OngekiUserData {
-    fn records(&mut self) -> &mut Vec<PlayRecord> {
+    fn records_mut(&mut self) -> &mut RecordMap<Ongeki> {
         &mut self.records
     }
 }

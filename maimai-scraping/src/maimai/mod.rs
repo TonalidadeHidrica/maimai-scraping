@@ -15,7 +15,7 @@ use schema::latest::{Idx, PlayRecord, PlayTime, PlayedAt};
 
 use crate::{
     cookie_store::AimeIdx,
-    sega_trait::{PlayRecordTrait, SegaTrait, SegaUserData},
+    sega_trait::{PlayRecordTrait, RecordMap, SegaTrait, SegaUserData},
 };
 
 use self::rating_target_parser::RatingTargetFile;
@@ -25,6 +25,8 @@ impl SegaTrait for Maimai {
     const ERROR_PATH: &'static str = "/maimai-mobile/error/";
     const AIME_SUBMIT_PATH: &'static str = "/maimai-mobile/aimeList/submit/";
     const RECORD_URL: &'static str = "https://maimaidx.jp/maimai-mobile/record/";
+
+    type UserData = MaimaiUserData;
 
     fn play_log_detail_url(idx: Idx) -> String {
         format!(
@@ -65,11 +67,11 @@ impl SegaTrait for Maimai {
 
 #[derive(Serialize, Deserialize)]
 pub struct MaimaiUserData {
-    pub records: Vec<PlayRecord>,
+    pub records: RecordMap<Maimai>,
     pub rating_targets: RatingTargetFile,
 }
 impl SegaUserData<Maimai> for MaimaiUserData {
-    fn records(&mut self) -> &mut Vec<PlayRecord> {
+    fn records_mut(&mut self) -> &mut RecordMap<Maimai> {
         &mut self.records
     }
 }

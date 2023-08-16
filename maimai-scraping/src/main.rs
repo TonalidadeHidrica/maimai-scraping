@@ -7,7 +7,7 @@ use clap::ArgEnum;
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::api::SegaClient;
-use maimai_scraping::data_collector::load_records_from_file;
+use maimai_scraping::data_collector::load_data_from_file;
 use maimai_scraping::data_collector::update_records;
 use maimai_scraping::fs_json_util::write_json;
 use maimai_scraping::maimai::Maimai;
@@ -16,6 +16,7 @@ use maimai_scraping::sega_trait::Idx;
 use maimai_scraping::sega_trait::PlayTime;
 use maimai_scraping::sega_trait::PlayedAt;
 use maimai_scraping::sega_trait::SegaTrait;
+use maimai_scraping::sega_trait::SegaUserData;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -50,13 +51,13 @@ where
     Idx<T>: Copy + PartialEq + Display,
     PlayTime<T>: Copy + Ord + Display,
     PlayedAt<T>: Debug,
-    T::PlayRecord: Serialize,
-    for<'a> T::PlayRecord: Deserialize<'a>,
+    T::UserData: Serialize,
+    for<'a> T::UserData: Deserialize<'a>,
 {
-    let mut records = load_records_from_file::<T, _>(path)?;
+    let mut data = load_data_from_file::<T, _>(path)?;
     let (mut client, index) = SegaClient::<T>::new_with_default_path().await?;
-    update_records(&mut client, &mut records, index).await?;
-    write_json(path, &records.values().collect_vec())?;
+    update_records(&mut client, data.records_mut(), index).await?;
+    write_json(path, &data.records_mut().values().collect_vec())?;
     println!("Successfully saved data to {:?}.", path);
     Ok(())
 }
