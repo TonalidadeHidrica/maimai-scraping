@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::schema::latest::{AchievementValue, RatingValue};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
-pub struct RankCoefficient(u64);
+pub struct RankCoefficient(pub u64);
 
 impl Display for RankCoefficient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
