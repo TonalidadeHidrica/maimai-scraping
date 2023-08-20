@@ -2,10 +2,14 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use fs_err::File;
+use itertools::Itertools;
 use maimai_scraping::maimai::{
     load_score_level,
-    rating::{RankCoefficient, ScoreConstant},
-    schema::latest::{ScoreDifficulty, ScoreGeneration, SongName},
+    rating::{rank_coef, single_song_rating, RankCoefficient, ScoreConstant},
+    schema::{
+        latest::{ScoreDifficulty, ScoreGeneration, SongName},
+        ver_20210316_2338::AchievementValue,
+    },
 };
 use serde::Deserialize;
 
@@ -25,21 +29,34 @@ fn main() -> anyhow::Result<()> {
         .into_deserialize::<Record>();
     for record in table {
         let record = record?;
-        println!("{record:?}");
+        let rank_coef = rank_coef(record.achievement);
+        let candidates = ScoreConstant::candidates()
+            .filter(|&level| {
+                single_song_rating(level, record.achievement, rank_coef).get()
+                    == record.single_score_rating
+            })
+            .collect_vec();
+        if (rank_coef, &candidates[..]) != (record.coefficient, &[record.internal_lv][..]) {
+            println!("Warning: {record:?} => ({rank_coef}, {candidates:?})");
+        }
     }
 
     Ok(())
 }
 
 #[derive(Debug, Deserialize)]
-#[allow(unused)]
 struct Record {
+    #[allow(unused)]
     #[serde(rename = "曲名")]
     song_name: SongName,
+    #[allow(unused)]
     #[serde(rename = "譜面1", deserialize_with = "de::generation")]
     generation: ScoreGeneration,
+    #[allow(unused)]
     #[serde(rename = "譜面2", deserialize_with = "de::difficulty")]
     difficulty: ScoreDifficulty,
+    #[serde(rename = "達成率", deserialize_with = "de::achievement")]
+    achievement: AchievementValue,
     #[serde(rename = "Rate")]
     single_score_rating: u16,
     #[serde(rename = "係数", deserialize_with = "de::rank_coef")]
@@ -52,7 +69,10 @@ mod de {
     use maimai_scraping::maimai::{
         load_score_level::InternalScoreLevel,
         rating::{RankCoefficient, ScoreConstant},
-        schema::latest::{ScoreDifficulty, ScoreGeneration},
+        schema::{
+            latest::{ScoreDifficulty, ScoreGeneration},
+            ver_20210316_2338::AchievementValue,
+        },
     };
     use serde::{de::Error, Deserialize, Deserializer};
 
@@ -83,6 +103,12 @@ mod de {
             "ReMAS" => Ok(ReMaster),
             s => Err(D::Error::custom(format!("Unknown generation: {s:?}"))),
         }
+    }
+
+    pub(super) fn achievement<'de, D: Deserializer<'de>>(
+        d: D,
+    ) -> Result<AchievementValue, D::Error> {
+        AchievementValue::try_from((de_f64(d)? * 10_000.).round() as u32).map_err(D::Error::custom)
     }
 
     pub(super) fn rank_coef<'de, D: Deserializer<'de>>(d: D) -> Result<RankCoefficient, D::Error> {
