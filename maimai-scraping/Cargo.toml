@@ -10,6 +10,7 @@ anyhow = "1.0.37"
 arrayvec = "0.7.2"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = { version = "3.0.0-rc.7", features = ["derive"] }
+csv = "1.2.2"
 deranged = { version = "0.2.1", features = ["serde"] }
 derive_more = "0.99.11"
 ego-tree = "0.6.2"
