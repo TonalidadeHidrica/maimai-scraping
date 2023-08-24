@@ -5,7 +5,6 @@ use std::path::PathBuf;
 
 use clap::ArgEnum;
 use clap::Parser;
-use itertools::Itertools;
 use maimai_scraping::api::SegaClient;
 use maimai_scraping::data_collector::load_data_from_file;
 use maimai_scraping::data_collector::update_records;
@@ -24,7 +23,7 @@ use serde::Serialize;
 struct Opts {
     #[clap(arg_enum)]
     game: Game,
-    json_file: PathBuf,
+    user_data_path: PathBuf,
 }
 #[derive(Clone, ArgEnum)]
 enum Game {
@@ -37,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
 
     let opts = Opts::parse();
-    let path = &opts.json_file;
+    let path = &opts.user_data_path;
 
     match opts.game {
         Game::Maimai => run::<Maimai>(path).await,
@@ -52,12 +51,12 @@ where
     PlayTime<T>: Copy + Ord + Display,
     PlayedAt<T>: Debug,
     T::UserData: Serialize,
-    for<'a> T::UserData: Deserialize<'a>,
+    for<'a> T::UserData: Default + Deserialize<'a>,
 {
     let mut data = load_data_from_file::<T, _>(path)?;
     let (mut client, index) = SegaClient::<T>::new_with_default_path().await?;
     update_records(&mut client, data.records_mut(), index).await?;
-    write_json(path, &data.records_mut().values().collect_vec())?;
+    write_json(path, &data)?;
     println!("Successfully saved data to {:?}.", path);
     Ok(())
 }

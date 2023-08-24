@@ -65,7 +65,7 @@ impl SegaTrait for Maimai {
     const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_maimai.json";
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct MaimaiUserData {
     pub records: RecordMap<Maimai>,
     pub rating_targets: RatingTargetFile,

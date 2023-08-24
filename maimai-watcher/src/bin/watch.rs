@@ -9,8 +9,7 @@ async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let handle = watch::watch(watch::Config {
         interval: Duration::from_secs(30),
-        records_path: opts.records_path,
-        rating_target_path: opts.rating_target_path,
+        maimai_uesr_data_path: opts.maimai_uesr_data_path,
         slack_post_webhook: None,
         levels_path: opts.levels_path,
         removed_songs_path: opts.removed_songs_path,
@@ -36,8 +35,7 @@ async fn main() -> anyhow::Result<()> {
 
 #[derive(Parser)]
 struct Opts {
-    records_path: PathBuf,
-    rating_target_path: PathBuf,
+    maimai_uesr_data_path: PathBuf,
     levels_path: PathBuf,
     removed_songs_path: PathBuf,
 }

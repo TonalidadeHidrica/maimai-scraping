@@ -6,25 +6,21 @@ use std::{
 };
 
 use anyhow::Context;
-use itertools::Itertools;
 use lazy_format::lazy_format;
 use log::error;
 use maimai_scraping::{
     api::SegaClient,
-    data_collector::{
-        load_records_from_file, load_targets_from_file, update_records, update_targets, RecordMap,
-    },
+    data_collector::{load_data_from_file, update_records, update_targets},
     fs_json_util::{read_json, write_json},
     maimai::{
         estimate_rating::{ScoreConstantsStore, ScoreKey},
         load_score_level::{self, RemovedSong, Song},
         rating::{ScoreConstant, ScoreLevel},
-        rating_target_parser::RatingTargetFile,
         schema::{
             latest::{LifeResult, PlayRecord, RatingBorderColor, ScoreMetadata},
             ver_20210316_2338::RatingValue,
         },
-        Maimai,
+        Maimai, MaimaiUserData,
     },
 };
 use tokio::{
@@ -41,8 +37,7 @@ pub struct Config {
     pub interval: Duration,
     pub credentials_path: PathBuf,
     pub cookie_store_path: PathBuf,
-    pub records_path: PathBuf,
-    pub rating_target_path: PathBuf,
+    pub maimai_uesr_data_path: PathBuf,
     pub levels_path: PathBuf,
     pub removed_songs_path: PathBuf,
     pub slack_post_webhook: Option<Url>,
@@ -80,8 +75,7 @@ impl TimeoutConfig {
 pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
     let (tx, mut rx) = mpsc::channel(100);
 
-    let records = load_records_from_file::<Maimai, _>(&config.records_path)?;
-    let rating_targets = load_targets_from_file(&config.rating_target_path)?;
+    let data = load_data_from_file::<Maimai, _>(&config.maimai_uesr_data_path)?;
 
     let levels = load_score_level::load(&config.levels_path)?;
     let removed_songs: Vec<RemovedSong> = read_json(&config.removed_songs_path)?;
@@ -89,7 +83,7 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
     spawn(async move {
         let Ok(mut runner) = report_error(
             &config.slack_post_webhook,
-            Runner::new(&config, records, rating_targets, &levels, &removed_songs)
+            Runner::new(&config, data, &levels, &removed_songs)
                 .await
                 .context("Issue in levels or removed_songs"),
         ).await else {
@@ -149,16 +143,14 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
 
 struct Runner<'c, 's, 'r> {
     config: &'c Config,
-    records: RecordMap<Maimai>,
-    rating_targets: RatingTargetFile,
+    data: MaimaiUserData,
     levels_actual: ScoreConstantsStore<'s, 'r>,
     levels_naive: ScoreConstantsStore<'s, 'r>,
 }
 impl<'c, 's, 'r> Runner<'c, 's, 'r> {
     async fn new(
         config: &'c Config,
-        records: RecordMap<Maimai>,
-        rating_targets: RatingTargetFile,
+        data: MaimaiUserData,
         levels: &'s [Song],
         removed_songs: &'r [RemovedSong],
     ) -> anyhow::Result<Runner<'c, 's, 'r>> {
@@ -166,8 +158,7 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
         let levels_naive = ScoreConstantsStore::new(levels, removed_songs)?;
         let mut ret = Self {
             config,
-            records,
-            rating_targets,
+            data,
             levels_actual,
             levels_naive,
         };
@@ -182,14 +173,14 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
         let _ = report_error(
             &self.config.slack_post_webhook,
             self.levels_actual
-                .do_everything(self.records.values(), &self.rating_targets)
+                .do_everything(self.data.records.values(), &self.data.rating_targets)
                 .context("While estimating levels precisely"),
         )
         .await;
         let _ = report_error(
             &self.config.slack_post_webhook,
             self.levels_naive
-                .guess_from_rating_target_order(&self.rating_targets)
+                .guess_from_rating_target_order(&self.data.rating_targets)
                 .context("While estimating levels roughly"),
         )
         .await;
@@ -203,19 +194,17 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
         )
         .await?;
         let last_played = index.first().context("There is no play yet.")?.0;
-        let inserted_records = update_records(&mut client, &mut self.records, index).await?;
+        let inserted_records = update_records(&mut client, &mut self.data.records, index).await?;
         if inserted_records.is_empty() {
             return Ok(false);
         }
-        write_json(&config.records_path, &self.records.values().collect_vec())?;
-        let update_targets_res = update_targets(&mut client, &mut self.rating_targets, last_played)
-            .await
-            .context("Rating target not available");
-        if report_error(&config.slack_post_webhook, update_targets_res)
-            .await
-            .is_ok()
-        {
-            write_json(&config.rating_target_path, &self.rating_targets)?;
+        write_json(&config.maimai_uesr_data_path, &self.data)?; // Save twice just in case
+        let update_targets_res =
+            update_targets(&mut client, &mut self.data.rating_targets, last_played)
+                .await
+                .context("Rating target not available");
+        let update_targets_res = report_error(&config.slack_post_webhook, update_targets_res).await;
+        if update_targets_res.is_ok() {
             webhook_send(
                 client.reqwest(),
                 &config.slack_post_webhook,
@@ -223,12 +212,13 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
             )
             .await;
         }
+        write_json(&config.maimai_uesr_data_path, &self.data)?; // Save twice just in case
 
         let bef_len = self.levels_actual.events().len();
         self.update_levels().await;
 
         for time in inserted_records {
-            let record = &self.records[&time];
+            let record = &self.data.records[&time];
             let key = ScoreKey::from(record);
             let song_lvs = if let Ok(Some((_, candidates))) = self.levels_naive.get(key) {
                 candidates

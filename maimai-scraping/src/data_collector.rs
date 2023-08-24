@@ -1,8 +1,8 @@
 use std::{
     cmp::Ordering,
-    collections::{btree_map::Entry, BTreeMap},
+    collections::btree_map::Entry,
     fmt::{Debug, Display},
-    io::{self, BufReader},
+    io::BufReader,
     path::PathBuf,
     time::Duration,
 };
@@ -14,7 +14,7 @@ use crate::{
         schema::latest::PlayTime as MaimaiPlayTime,
         Maimai,
     },
-    sega_trait::{Idx, PlayRecordTrait, PlayTime, PlayedAt, SegaTrait},
+    sega_trait::{Idx, PlayRecordTrait, PlayTime, PlayedAt, RecordMap, SegaTrait},
 };
 use anyhow::{anyhow, bail};
 use fs_err::File;
@@ -44,38 +44,6 @@ where
                 Ok(T::UserData::default())
             }
             _ => bail!("Unexpected I/O Error: {:?}", e),
-        },
-    }
-}
-
-#[deprecated]
-pub type RecordMap<T> = BTreeMap<PlayTime<T>, <T as SegaTrait>::PlayRecord>;
-#[deprecated]
-pub fn load_records_from_file<T, P>(path: P) -> anyhow::Result<RecordMap<T>>
-where
-    T: SegaTrait,
-    PlayTime<T>: Ord,
-    for<'a> T::PlayRecord: Deserialize<'a>,
-    P: Into<PathBuf> + Debug,
-{
-    let path = path.into();
-    match File::open(&path) {
-        Ok(file) => {
-            let reader = BufReader::new(file);
-            info!("Successfully loaded data from {:?}.", &path);
-            let records: Vec<T::PlayRecord> = serde_json::from_reader(reader)?;
-            Ok(records
-                .into_iter()
-                .map(|record| (record.time(), record))
-                .collect())
-        }
-        Err(e) => match e.kind() {
-            io::ErrorKind::NotFound => {
-                info!("The file was not found.");
-                info!("We will create a new file for you and save the data there.");
-                Ok(BTreeMap::new())
-            }
-            _ => Err(anyhow!("Unexpected I/O Error: {:?}", e)),
         },
     }
 }
@@ -125,26 +93,6 @@ where
         }
     }
     Ok(inserted)
-}
-
-#[deprecated]
-pub fn load_targets_from_file(path: impl Into<PathBuf>) -> anyhow::Result<RatingTargetFile> {
-    let path = path.into();
-    match File::open(&path) {
-        Ok(file) => {
-            let res = serde_json::from_reader(BufReader::new(file))?;
-            info!("Successfully loaded data from {:?}.", &path);
-            Ok(res)
-        }
-        Err(e) => match e.kind() {
-            std::io::ErrorKind::NotFound => {
-                info!("The file was not found.");
-                info!("We will create a new file for you and save the data there.");
-                Ok(BTreeMap::new())
-            }
-            _ => bail!("Unexpected I/O Error: {:?}", e),
-        },
-    }
 }
 
 pub async fn update_targets(

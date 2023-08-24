@@ -41,8 +41,7 @@ struct UserConfig {
     slack_user_id: String,
     credentials_path: PathBuf,
     cookie_store_path: PathBuf,
-    records_path: PathBuf,
-    rating_target_path: PathBuf,
+    user_data_path: PathBuf,
     estimate_internal_levels: bool,
 }
 
@@ -171,8 +170,7 @@ fn watch_config(
         interval: state_config.interval,
         credentials_path: user_config.credentials_path.clone(),
         cookie_store_path: user_config.cookie_store_path.clone(),
-        records_path: user_config.records_path.clone(),
-        rating_target_path: user_config.rating_target_path.clone(),
+        maimai_uesr_data_path: user_config.user_data_path.clone(),
         levels_path: state_config.levels_path.clone(),
         removed_songs_path: state_config.removed_songs_path.clone(),
         slack_post_webhook: state_config.slack_post_webhook.clone(),

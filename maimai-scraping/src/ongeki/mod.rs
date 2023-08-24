@@ -82,7 +82,7 @@ impl SegaTrait for Ongeki {
     const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_ongeki.json";
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct OngekiUserData {
     pub records: RecordMap<Ongeki>,
 }
