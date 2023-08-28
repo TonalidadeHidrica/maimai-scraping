@@ -84,6 +84,7 @@ impl SegaTrait for Ongeki {
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct OngekiUserData {
+    #[serde(default)]
     #[serde(serialize_with = "record_map_serde::serialize::<_, Ongeki>")]
     #[serde(deserialize_with = "record_map_serde::deserialize::<_, Ongeki>")]
     pub records: RecordMap<Ongeki>,

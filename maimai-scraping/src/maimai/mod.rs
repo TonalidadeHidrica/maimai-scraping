@@ -67,9 +67,11 @@ impl SegaTrait for Maimai {
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct MaimaiUserData {
+    #[serde(default)]
     #[serde(serialize_with = "record_map_serde::serialize::<_, Maimai>")]
     #[serde(deserialize_with = "record_map_serde::deserialize::<_, Maimai>")]
     pub records: RecordMap<Maimai>,
+    #[serde(default)]
     pub rating_targets: RatingTargetFile,
 }
 impl SegaUserData<Maimai> for MaimaiUserData {
