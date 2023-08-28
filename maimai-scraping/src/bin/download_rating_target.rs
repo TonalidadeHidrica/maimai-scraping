@@ -22,6 +22,9 @@ async fn main() -> anyhow::Result<()> {
     let last_played = index.first().context("There is no play yet.")?.0;
     update_targets(&mut client, &mut data.rating_targets, last_played).await?;
     write_json(&opts.maimai_user_data_path, &data)?;
-    println!("Successfully saved data to {:?}", opts.maimai_user_data_path);
+    println!(
+        "Successfully saved data to {:?}",
+        opts.maimai_user_data_path
+    );
     Ok(())
 }

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     compare_htmls::elements_are_equivalent,
-    sega_trait::{PlayRecordTrait, SegaTrait, SegaUserData, RecordMap},
+    sega_trait::{record_map_serde, PlayRecordTrait, RecordMap, SegaTrait, SegaUserData},
 };
 
 use self::{
@@ -84,6 +84,8 @@ impl SegaTrait for Ongeki {
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct OngekiUserData {
+    #[serde(serialize_with = "record_map_serde::serialize::<_, Ongeki>")]
+    #[serde(deserialize_with = "record_map_serde::deserialize::<_, Ongeki>")]
     pub records: RecordMap<Ongeki>,
 }
 impl SegaUserData<Ongeki> for OngekiUserData {

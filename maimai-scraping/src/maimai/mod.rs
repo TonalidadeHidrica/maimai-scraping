@@ -15,7 +15,7 @@ use schema::latest::{Idx, PlayRecord, PlayTime, PlayedAt};
 
 use crate::{
     cookie_store::AimeIdx,
-    sega_trait::{PlayRecordTrait, RecordMap, SegaTrait, SegaUserData},
+    sega_trait::{record_map_serde, PlayRecordTrait, RecordMap, SegaTrait, SegaUserData},
 };
 
 use self::rating_target_parser::RatingTargetFile;
@@ -67,6 +67,8 @@ impl SegaTrait for Maimai {
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct MaimaiUserData {
+    #[serde(serialize_with = "record_map_serde::serialize::<_, Maimai>")]
+    #[serde(deserialize_with = "record_map_serde::deserialize::<_, Maimai>")]
     pub records: RecordMap<Maimai>,
     pub rating_targets: RatingTargetFile,
 }

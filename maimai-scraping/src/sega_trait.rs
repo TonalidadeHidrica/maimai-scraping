@@ -49,3 +49,59 @@ pub trait PlayRecordTrait {
     type Idx;
     fn idx(&self) -> Self::Idx;
 }
+
+pub mod record_map_serde {
+    use serde::{de::SeqAccess, Deserialize};
+    use std::marker::PhantomData;
+
+    use serde::{de::Visitor, ser::SerializeSeq, Deserializer, Serialize, Serializer};
+
+    use super::{PlayRecordTrait, PlayTime, RecordMap, SegaTrait};
+
+    pub fn serialize<S, T>(map: &RecordMap<T>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: SegaTrait,
+        T::PlayRecord: Serialize,
+    {
+        let mut seq = serializer.serialize_seq(Some(map.len()))?;
+        for record in map.values() {
+            seq.serialize_element(record)?;
+        }
+        seq.end()
+    }
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<RecordMap<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: SegaTrait,
+        T::PlayRecord: Deserialize<'de>,
+        PlayTime<T>: Ord,
+    {
+        deserializer.deserialize_seq(MyVisitor::<T>(PhantomData))
+    }
+
+    struct MyVisitor<T>(PhantomData<fn() -> T>);
+    impl<'de, T: SegaTrait> Visitor<'de> for MyVisitor<T>
+    where
+        T::PlayRecord: Deserialize<'de>,
+        PlayTime<T>: Ord,
+    {
+        type Value = RecordMap<T>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a sequence of records")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut map = RecordMap::<T>::new();
+            while let Some(elem) = seq.next_element::<T::PlayRecord>()? {
+                map.insert(elem.time(), elem);
+            }
+            Ok(map)
+        }
+    }
+}
