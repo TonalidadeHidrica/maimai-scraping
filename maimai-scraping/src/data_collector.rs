@@ -9,6 +9,7 @@ use std::{
 
 use crate::{
     api::SegaClient,
+    chrono_util::jst_now,
     maimai::{
         rating_target_parser::{self, RatingTargetFile},
         schema::latest::PlayTime as MaimaiPlayTime,
@@ -99,6 +100,7 @@ pub async fn update_targets(
     client: &mut SegaClient<'_, Maimai>,
     rating_targets: &mut RatingTargetFile,
     last_played: MaimaiPlayTime,
+    force: bool,
 ) -> anyhow::Result<()> {
     let last_saved = rating_targets.last_key_value().map(|x| *x.0);
     if let Some(date) = last_saved {
@@ -107,14 +109,21 @@ pub async fn update_targets(
         println!("Rating target: not saved");
     }
     println!("Latest play at: {last_played}");
-    match last_saved.cmp(&Some(last_played)) {
-        Ordering::Less => println!("Updates needed."),
+    let key_to_store = match last_saved.cmp(&Some(last_played)) {
+        _ if force => {
+            println!("Retrieving data regardless of the ordering between the last saved and played times.");
+            PlayTime::<Maimai>::from(jst_now())
+        }
+        Ordering::Less => {
+            println!("Updates needed.");
+            last_played
+        }
         Ordering::Equal => {
             println!("Already up to date.");
             return Ok(());
         }
         Ordering::Greater => {
-            bail!("What?!  Inconsistent newest records between play records and rating targets!")
+            bail!("What?!  Inconsistent newest records between play records and rating targets!");
         }
     };
 
@@ -124,6 +133,6 @@ pub async fn update_targets(
         )?)
         .await?;
     let res = rating_target_parser::parse(&Html::parse_document(&res.0.text().await?))?;
-    rating_targets.insert(last_played, res);
+    rating_targets.insert(key_to_store, res);
     Ok(())
 }

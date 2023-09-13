@@ -199,10 +199,14 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
             return Ok(false);
         }
         write_json(&config.maimai_uesr_data_path, &self.data)?; // Save twice just in case
-        let update_targets_res =
-            update_targets(&mut client, &mut self.data.rating_targets, last_played)
-                .await
-                .context("Rating target not available");
+        let update_targets_res = update_targets(
+            &mut client,
+            &mut self.data.rating_targets,
+            last_played,
+            false,
+        )
+        .await
+        .context("Rating target not available");
         let update_targets_res = report_error(&config.slack_post_webhook, update_targets_res).await;
         if update_targets_res.is_ok() {
             webhook_send(
