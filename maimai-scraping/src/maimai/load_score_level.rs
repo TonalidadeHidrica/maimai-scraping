@@ -255,7 +255,7 @@ impl MaimaiVersion {
             .and_time(NaiveTime::from_hms_opt(5, 0, 0).unwrap())
     }
     pub fn latest() -> Self {
-        Self::FestivalPlus
+        Self::Buddies
     }
 }
 
