@@ -189,6 +189,7 @@ pub enum MaimaiVersion {
     UniversePlus,
     Festival,
     FestivalPlus,
+    Buddies,
 }
 impl TryFrom<i8> for MaimaiVersion {
     type Error = anyhow::Error;
@@ -216,6 +217,7 @@ impl TryFrom<i8> for MaimaiVersion {
             18 => UniversePlus,
             19 => Festival,
             20 => FestivalPlus,
+            21 => Buddies,
             _ => bail!("Unexpected version: {v}"),
         })
     }
@@ -245,6 +247,7 @@ impl MaimaiVersion {
             UniversePlus => NaiveDate::from_ymd_opt(2022, 3, 24).unwrap(),
             Festival => NaiveDate::from_ymd_opt(2022, 9, 15).unwrap(),
             FestivalPlus => NaiveDate::from_ymd_opt(2023, 3, 23).unwrap(),
+            Buddies => NaiveDate::from_ymd_opt(2023, 9, 14).unwrap(),
         }
     }
     pub fn start_time(self) -> NaiveDateTime {
