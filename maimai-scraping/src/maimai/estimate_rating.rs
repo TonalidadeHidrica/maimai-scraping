@@ -144,7 +144,7 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
             .raw_entry_mut()
             .from_hash(hash, |x| x == &key)
         else {
-           bail!("No score constant entry was found for {key:?}")
+            bail!("No score constant entry was found for {key:?}")
         };
         let entry = entry.get_mut();
         let old_len = entry.candidates.len();
@@ -271,7 +271,9 @@ impl<'s> ScoreConstantsStore<'s, '_> {
             .filter(|r| start_time <= r.played_at().time())
         {
             let score_key = ScoreKey::from(record);
-            let Some((song, _)) = self.get(score_key)? else { continue };
+            let Some((song, _)) = self.get(score_key)? else {
+                continue;
+            };
             let delta = record.rating_result().delta();
             if song.version() == version && delta > 0 {
                 use hashbrown::hash_map::Entry::*;
@@ -484,7 +486,9 @@ impl<'s> ScoreConstantsStore<'s, '_> {
 
             for (score_key, record) in best {
                 // Ignore removed songs
-                let Some((song, _)) = self.get(score_key)? else { continue };
+                let Some((song, _)) = self.get(score_key)? else {
+                    continue;
+                };
 
                 let border_entry = if song.version() == version {
                     list.target_new()

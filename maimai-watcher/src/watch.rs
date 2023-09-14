@@ -86,7 +86,9 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
             Runner::new(&config, data, &levels, &removed_songs)
                 .await
                 .context("Issue in levels or removed_songs"),
-        ).await else {
+        )
+        .await
+        else {
             return;
         };
 

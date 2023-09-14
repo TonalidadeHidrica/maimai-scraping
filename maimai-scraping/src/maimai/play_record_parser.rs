@@ -36,10 +36,10 @@ fn parse_idx_from_playlog_main_container(playlog_top_container: ElementRef) -> a
         .value()
         .attr("value")
         .ok_or_else(|| anyhow!("idx does not have 'value' attr"))?
-        .parse::<u8>()
-        .map_err(|e| anyhow!("Expected integer for idx but found: {}", e))?
-        .try_into()
-        .map_err(|e| anyhow!("Idx out of bounds: {}", e))
+        .parse()
+        // .map_err(|e| anyhow!("Expected integer for idx but found: {}", e))?
+        // .try_into()
+        .map_err(|e| anyhow!("Could not parse Idx: {e:?}"))
 }
 
 pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {

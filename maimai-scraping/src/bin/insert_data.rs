@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
     let mut records = read(&opts.input_file)?;
     let mut inserted = VecDeque::from_iter(read(&opts.insert_file)?);
     let pos = opts.insert_pos;
-    let [before, after, ..] = &records[pos - 1 ..] else {
+    let [before, after, ..] = &records[pos - 1..] else {
         bail!("Can only insert between two elements")
     };
     let Some(first) = inserted.pop_front() else {
@@ -34,7 +34,7 @@ fn main() -> anyhow::Result<()> {
     records.splice(pos..pos, inserted);
 
     for (i, records) in records.iter().enumerate() {
-        assert_eq!((i % 50) as u8, u8::from(records.played_at().idx()));
+        assert_eq!((i % 50) as u8, records.played_at().idx().index());
     }
     println!("Done!");
 

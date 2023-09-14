@@ -3,8 +3,6 @@ use chrono::naive::NaiveDateTime;
 use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
-use std::fmt::Display;
-use std::num::ParseIntError;
 use std::str::FromStr;
 use strum::EnumIter;
 use typed_builder::TypedBuilder;
@@ -53,58 +51,29 @@ pub struct PlayedAt {
 }
 
 // Default is used for Idx(0), which is valid
-#[derive(Clone, Copy, Default, PartialEq, Eq, Debug, CopyGetters, Serialize, Deserialize)]
-#[getset(get_copy = "pub")]
-pub struct Idx {
-    index: u8,
-    timestamp: Option<NaiveDateTime>,
-}
+#[derive(
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Debug,
+    derive_more::Display,
+    derive_more::Into,
+    Serialize,
+    Deserialize,
+)]
+pub struct Idx(u8);
 
-#[derive(PartialEq, Eq, Debug)]
-pub enum IdxParseError {
-    ParseIntError(ParseIntError),
-    IndexOutOfRange(u8),
-    TimestampParseError(chrono::format::ParseError),
-}
-impl FromStr for Idx {
-    type Err = IdxParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (index, timestamp) = match s.split_once(',') {
-            Some((index, timestamp)) => {
-                let timestamp = NaiveDateTime::parse_from_str(timestamp, "%s")
-                    .map_err(IdxParseError::TimestampParseError)?;
-                (index, Some(timestamp))
-            }
-            _ => (s, None),
-        };
-        let index = index.parse().map_err(IdxParseError::ParseIntError)?;
-        let index = match index {
-            0..=49 => Ok(index),
-            _ => Err(IdxParseError::IndexOutOfRange(index)),
-        }?;
-        Ok(Idx { index, timestamp })
-    }
-}
-impl Display for Idx {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.index)?;
-        if let Some(timestamp) = self.timestamp {
-            write!(f, ",{}", timestamp.format("%s"))?;
+impl TryFrom<u8> for Idx {
+    type Error = u8;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0..=49 => Ok(Self(value)),
+            _ => Err(value),
         }
-        Ok(())
     }
 }
-
-// impl TryFrom<u8> for Idx {
-//     type Error = u8;
-//     fn try_from(value: u8) -> Result<Self, Self::Error> {
-//         match value {
-//             0..=49 => Ok(Self(value)),
-//             _ => Err(value),
-//         }
-//     }
-// }
 
 #[derive(
     Clone,
@@ -513,115 +482,4 @@ pub enum LifeResult {
     Nothing,
     PerfectChallengeResult(ValueWithMax<u32>),
     CourseResult(ValueWithMax<u32>),
-}
-
-#[cfg(test)]
-mod tests {
-    use chrono::NaiveDate;
-
-    use super::{Idx, IdxParseError as E};
-
-    #[test]
-    fn parse_idx() {
-        assert_eq!(
-            "0".parse::<Idx>(),
-            Ok(Idx {
-                index: 0,
-                timestamp: None
-            })
-        );
-        assert_eq!(
-            "12".parse::<Idx>(),
-            Ok(Idx {
-                index: 12,
-                timestamp: None
-            })
-        );
-        assert_eq!(
-            "49".parse::<Idx>(),
-            Ok(Idx {
-                index: 49,
-                timestamp: None
-            })
-        );
-        assert_eq!("50".parse::<Idx>(), Err(E::IndexOutOfRange(50)));
-        assert_eq!("255".parse::<Idx>(), Err(E::IndexOutOfRange(255)));
-        assert!(matches!("256".parse::<Idx>(), Err(E::ParseIntError(_))));
-        let timestamp = Some(
-            NaiveDate::from_ymd_opt(2023, 9, 13)
-                .unwrap()
-                .and_hms_opt(16, 55, 3)
-                .unwrap(),
-        );
-        assert_eq!(
-            "0,1694624103".parse::<Idx>(),
-            Ok(Idx {
-                index: 0,
-                timestamp
-            })
-        );
-        assert_eq!(
-            "12,1694624103".parse::<Idx>(),
-            Ok(Idx {
-                index: 12,
-                timestamp
-            })
-        );
-        assert_eq!(
-            "49,1694624103".parse::<Idx>(),
-            Ok(Idx {
-                index: 49,
-                timestamp
-            })
-        );
-        assert_eq!("50,1694624103".parse::<Idx>(), Err(E::IndexOutOfRange(50)));
-        assert_eq!(
-            "255,1694624103".parse::<Idx>(),
-            Err(E::IndexOutOfRange(255))
-        );
-        assert!(matches!(
-            "256,1694624103".parse::<Idx>(),
-            Err(E::ParseIntError(_))
-        ));
-
-        assert!(matches!(
-            "255,abc,def".parse::<Idx>(),
-            Err(E::TimestampParseError(_))
-        ));
-        assert!(matches!("abcdef".parse::<Idx>(), Err(E::ParseIntError(_))));
-    }
-
-    #[test]
-    fn display_idx() {
-        assert_eq!(
-            &Idx {
-                index: 0,
-                timestamp: None
-            }
-            .to_string(),
-            "0"
-        );
-        assert_eq!(
-            &Idx {
-                index: 32,
-                timestamp: None
-            }
-            .to_string(),
-            "32"
-        );
-        let timestamp = Some(
-            NaiveDate::from_ymd_opt(2023, 9, 13)
-                .unwrap()
-                .and_hms_opt(16, 55, 3)
-                .unwrap(),
-        );
-        assert_eq!(
-            &Idx {
-                index: 12,
-                timestamp
-            }
-            .to_string(),
-            "12,1694624103",
-        );
-    }
 }

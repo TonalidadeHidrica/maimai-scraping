@@ -48,7 +48,7 @@ struct Data {
 #[get("/entry/{time}")]
 async fn get(web_data: web::Data<Data>, play_time: web::Path<PlayTime>) -> HttpResponse {
     let Some(data) = web_data.rating_targets.get(&play_time) else {
-        return HttpResponse::NotFound().body(format!("No data found: {play_time:?}"))
+        return HttpResponse::NotFound().body(format!("No data found: {play_time:?}"));
     };
     let make = |entry: &RatingTargetEntry| {
         let m = entry.score_metadata();
