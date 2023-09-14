@@ -19,6 +19,8 @@ pub struct PlayRecord {
     #[getset(get_copy = "pub")]
     score_metadata: ScoreMetadata,
     #[getset(get_copy = "pub")]
+    utage_metadata: Option<UtageMetadata>,
+    #[getset(get_copy = "pub")]
     cleared: bool,
     #[getset(get_copy = "pub")]
     achievement_result: AchievementResult,
@@ -218,6 +220,7 @@ pub enum ScoreDifficulty {
     Expert,
     Master,
     ReMaster,
+    Utage,
 }
 
 impl FromStr for ScoreDifficulty {
@@ -436,6 +439,7 @@ pub struct MatchingResult {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum FullSyncKind {
     Nothing,
+    SyncPlay,
     FullSync,
     FullSyncPlus,
     FullSyncDx,
@@ -513,6 +517,16 @@ pub enum LifeResult {
     Nothing,
     PerfectChallengeResult(ValueWithMax<u32>),
     CourseResult(ValueWithMax<u32>),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, TypedBuilder, CopyGetters, Serialize, Deserialize)]
+pub struct UtageMetadata {
+    kind: UtageKind,
+    buddy: bool,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum UtageKind {
+    Collaborative,
 }
 
 #[cfg(test)]

@@ -124,6 +124,7 @@ impl ScoreLevels {
             Expert => self.expert,
             Master => self.master,
             ReMaster => self.re_master?,
+            Utage => None?, // TODO support utage?
         })
     }
 }

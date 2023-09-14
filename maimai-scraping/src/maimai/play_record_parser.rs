@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use chrono::NaiveDateTime;
 use itertools::Itertools;
 use scraper::{ElementRef, Html};
@@ -21,7 +21,7 @@ pub fn parse_record_index(html: &Html) -> anyhow::Result<Vec<RecordIndexData>> {
             .find_map(ElementRef::wrap)
             .ok_or_else(|| anyhow!("Next sibling was not found."))?;
 
-        let play_date = parse_playlog_top_conatiner(playlog_top_container)?.4;
+        let play_date = parse_playlog_top_conatiner(playlog_top_container)?.5;
         let idx = parse_idx_from_playlog_main_container(playlog_main_container)?;
         res.push((play_date, idx));
     }
@@ -46,7 +46,7 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
     let playlog_top_container = iterate_playlot_top_containers(html)
         .next()
         .ok_or_else(|| anyhow!("Playlog top container was not found."))?;
-    let (difficulty, battle_kind, battle_win_or_lose, track_index, play_date) =
+    let (difficulty, utage_metadata, battle_kind, battle_win_or_lose, track_index, play_date) =
         parse_playlog_top_conatiner(playlog_top_container)?;
 
     let playlog_main_container = playlog_top_container
@@ -64,6 +64,11 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
         matching_rank,
         life_result,
     ) = parse_playlog_main_container(playlog_main_container)?;
+    let generation = match (difficulty, generation) {
+        (_, Some(generation)) => generation,
+        (ScoreDifficulty::Utage, None) => ScoreGeneration::Deluxe, // TODO: is this correct?
+        _ => bail!("Score generation icon not found"),
+    };
 
     let battle_opponent = html
         .select(selector!("#vsUser"))
@@ -138,6 +143,7 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
         .played_at(played_at)
         .song_metadata(song_metadata)
         .score_metadata(score_metadata)
+        .utage_metadata(utage_metadata)
         .cleared(cleared)
         .achievement_result(achievement_result)
         .deluxscore_result(deluxscore_result)
@@ -161,6 +167,7 @@ fn parse_playlog_top_conatiner(
     div: ElementRef,
 ) -> anyhow::Result<(
     ScoreDifficulty,
+    Option<UtageMetadata>,
     Option<BattleKind>,
     Option<BattleWinOrLose>,
     TrackIndex,
@@ -171,6 +178,12 @@ fn parse_playlog_top_conatiner(
             .next()
             .ok_or_else(|| anyhow!("Difficulty image was not found."))?,
     )?;
+
+    let utage_metadata = div
+        .select(selector!("div.playlog_music_kind_icon_utage"))
+        .next()
+        .map(parse_utage_metadata)
+        .transpose()?;
 
     let battle_kind = div
         .select(selector!("img.playlog_vs"))
@@ -199,11 +212,41 @@ fn parse_playlog_top_conatiner(
 
     Ok((
         difficulty,
+        utage_metadata,
         battle_kind,
         battle_win_or_lose,
         track_index,
         play_date,
     ))
+}
+
+pub fn parse_utage_metadata(div: ElementRef) -> anyhow::Result<UtageMetadata> {
+    let utage_back_div = div
+        .select(selector!(
+            r#"img[src="https://maimaidx.jp/maimai-mobile/img/music_utage.png"]"#
+        ))
+        .next()
+        .ok_or_else(|| anyhow!("Utage kind icon not found"))?;
+    let utage_kind = match &utage_back_div
+        .next_siblings()
+        .find_map(ElementRef::wrap)
+        .ok_or_else(|| anyhow!("No succeeding element after utage kind icon found"))?
+        .text()
+        .collect::<String>()[..]
+    {
+        "協" => UtageKind::Collaborative,
+        s => bail!("Unexpected utage kind: {s:?}"),
+    };
+    let buddy = div
+        .select(selector!(
+            r#"img[src="https://maimaidx.jp/maimai-mobile/img/music_utage_buddy.png"]"#
+        ))
+        .next()
+        .is_some();
+    Ok(UtageMetadata::builder()
+        .kind(utage_kind)
+        .buddy(buddy)
+        .build())
 }
 
 pub fn parse_score_generation_img(img: ElementRef) -> anyhow::Result<ScoreGeneration> {
@@ -226,6 +269,7 @@ pub fn parse_playlog_diff(img: ElementRef) -> anyhow::Result<ScoreDifficulty> {
         Some("https://maimaidx.jp/maimai-mobile/img/diff_expert.png") => Ok(Expert),
         Some("https://maimaidx.jp/maimai-mobile/img/diff_master.png") => Ok(Master),
         Some("https://maimaidx.jp/maimai-mobile/img/diff_remaster.png") => Ok(ReMaster),
+        Some("https://maimaidx.jp/maimai-mobile/img/diff_utage.png") => Ok(Utage),
         url => Err(anyhow!("Unexpected difficulty image: {:?}", url)),
     }
 }
@@ -253,7 +297,7 @@ fn parse_playlog_main_container(
 ) -> anyhow::Result<(
     SongMetadata,
     bool,
-    ScoreGeneration,
+    Option<ScoreGeneration>,
     AchievementResult,
     DeluxscoreResult,
     FullComboKind,
@@ -285,12 +329,11 @@ fn parse_playlog_main_container(
         .attr("src")
         .ok_or_else(|| anyhow!("Music img doesn't have src"))?;
 
-    let generation = parse_score_generation_img(
-        playlog_main_container
-            .select(selector!("img.playlog_music_kind_icon"))
-            .next()
-            .ok_or_else(|| anyhow!("Music generation icon not found"))?,
-    )?;
+    let generation = playlog_main_container
+        .select(selector!("img.playlog_music_kind_icon"))
+        .next()
+        .map(parse_score_generation_img)
+        .transpose()?;
 
     let playlog_result_block = playlog_main_container
         .select(selector!(".playlog_result_block"))
@@ -501,6 +544,21 @@ fn parse_achievement_rank(achievement_rank: ElementRef) -> anyhow::Result<Achiev
         "https://maimaidx.jp/maimai-mobile/img/playlog/b.png?ver=1.35" => B,
         "https://maimaidx.jp/maimai-mobile/img/playlog/c.png?ver=1.35" => C,
         "https://maimaidx.jp/maimai-mobile/img/playlog/d.png?ver=1.35" => D,
+        // Ver 1.40
+        "https://maimaidx.jp/maimai-mobile/img/playlog/sssplus.png?ver=1.40" => SSSPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/sss.png?ver=1.40" => SSS,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/ssplus.png?ver=1.40" => SSPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/ss.png?ver=1.40" => SS,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/splus.png?ver=1.40" => SPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/s.png?ver=1.40" => S,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/aaa.png?ver=1.40" => AAA,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/aa.png?ver=1.40" => AA,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/a.png?ver=1.40" => A,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/bbb.png?ver=1.40" => BBB,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/bb.png?ver=1.40" => BB,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/b.png?ver=1.40" => B,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/c.png?ver=1.40" => C,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/d.png?ver=1.40" => D,
         src => return Err(anyhow!("Unknown url: {}", src)),
     };
     Ok(res)
@@ -643,6 +701,12 @@ fn parse_full_combo_img(full_combo_img: ElementRef) -> anyhow::Result<FullComboK
         "https://maimaidx.jp/maimai-mobile/img/playlog/fcplus.png?ver=1.35" => FullComboPlus,
         "https://maimaidx.jp/maimai-mobile/img/playlog/ap.png?ver=1.35" => AllPerfect,
         "https://maimaidx.jp/maimai-mobile/img/playlog/applus.png?ver=1.35" => AllPerfectPlus,
+        // Ver 1.40
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fc_dummy.png?ver=1.40" => Nothing,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fc.png?ver=1.40" => FullCombo,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fcplus.png?ver=1.40" => FullComboPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/ap.png?ver=1.40" => AllPerfect,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/applus.png?ver=1.40" => AllPerfectPlus,
         src => return Err(anyhow!("Unknown src for full combo img: {}", src)),
     };
     Ok(res)
@@ -691,6 +755,13 @@ fn parse_full_sync_img(full_sync_img: ElementRef) -> anyhow::Result<FullSyncKind
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsplus.png?ver=1.35" => FullSyncPlus,
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsd.png?ver=1.35" => FullSyncDx,
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsdplus.png?ver=1.35" => FullSyncDxPlus,
+        // Ver 1.40
+        "https://maimaidx.jp/maimai-mobile/img/playlog/sync_dummy.png?ver=1.40" => Nothing,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/sync.png?ver=1.40" => SyncPlay,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fs.png?ver=1.40" => FullSync,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fsplus.png?ver=1.40" => FullSyncPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fsd.png?ver=1.40" => FullSyncDx,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fsdplus.png?ver=1.40" => FullSyncDxPlus,
         src => return Err(anyhow!("Unknown src for full sync img: {}", src)),
     };
     Ok(res)
@@ -1077,6 +1148,18 @@ fn parse_rating_color(img: ElementRef) -> anyhow::Result<RatingBorderColor> {
         "https://maimaidx.jp/maimai-mobile/img/rating_base_gold.png?ver=1.35" => Gold,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_platinum.png?ver=1.35" => Platinum,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow.png?ver=1.35" => Rainbow,
+        // Ver 1.40
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_normal.png?ver=1.40" => Normal,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_blue.png?ver=1.40" => Blue,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_green.png?ver=1.40" => Green,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_orange.png?ver=1.40" => Orange,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_red.png?ver=1.40" => Red,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_purple.png?ver=1.40" => Purple,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_bronze.png?ver=1.40" => Bronze,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_silver.png?ver=1.40" => Silver,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_gold.png?ver=1.40" => Gold,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_platinum.png?ver=1.40" => Platinum,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow.png?ver=1.40" => Rainbow,
         src => return Err(anyhow!("Unexpected border color: {}", src)),
     };
     Ok(res)
@@ -1141,6 +1224,7 @@ fn parse_matching_div(matching_div: ElementRef) -> anyhow::Result<OtherPlayersLi
                     "playlog_expert_container" => Expert,
                     "playlog_master_container" => Master,
                     "playlog_remaster_container" => ReMaster,
+                    "playlog_utage_container" => Utage,
                     "gray_block" => return Some(None),
                     _ => return None,
                 };
