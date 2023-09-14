@@ -59,6 +59,7 @@ async fn get(web_data: web::Data<Data>, play_time: web::Path<PlayTime>) -> HttpR
             Expert => "expert",
             Master => "master",
             ReMaster => "remaster",
+            Utage => "utage",
         };
         use ScoreGeneration::*;
         let generation = match m.generation() {

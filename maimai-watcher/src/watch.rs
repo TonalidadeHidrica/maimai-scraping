@@ -350,6 +350,7 @@ fn describe_score_kind<'a>(metadata: ScoreMetadata) -> impl Display + 'a {
         Expert => "Exp",
         Master => "Mas",
         ReMaster => "ReMas",
+        Utage => "Utg",
     };
     lazy_format!("{gen} {dif}")
 }
