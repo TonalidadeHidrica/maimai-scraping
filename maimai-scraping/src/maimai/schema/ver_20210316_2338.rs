@@ -89,7 +89,8 @@ impl TryFrom<u32> for AchievementValue {
 
     fn try_from(v: u32) -> Result<Self, u32> {
         match v {
-            0..=101_0000 => Ok(Self(v)),
+            // TODO support utage scores for buddies.  Do we need to define a separate type?
+            0..=202_0000 => Ok(Self(v)),
             _ => Err(v),
         }
     }
