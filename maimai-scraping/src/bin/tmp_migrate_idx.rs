@@ -8,19 +8,24 @@ use serde_json::{Map, Value};
 struct Opts {
     old_file: PathBuf,
     new_file: PathBuf,
+    #[clap(long)]
+    remove_last_fifty: bool,
 }
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let mut data: Value = read_json(opts.old_file)?;
-    for record in data
+    let records = data
         .as_object_mut()
         .unwrap()
         .get_mut("records")
         .unwrap()
         .as_array_mut()
-        .unwrap()
-    {
+        .unwrap();
+    if opts.remove_last_fifty {
+        records.drain(records.len() - 50..);
+    }
+    for record in records {
         let old_idx = record
             .as_object_mut()
             .unwrap()
