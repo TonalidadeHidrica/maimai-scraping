@@ -46,12 +46,12 @@ where
 }
 
 #[derive(Debug, Deserialize)]
-struct SongRaw {
-    dx: u8,
-    v: i8,
-    lv: Vec<f64>,
-    n: String,
-    ico: String,
+pub struct SongRaw {
+    pub dx: u8,
+    pub v: i8,
+    pub lv: Vec<f64>,
+    pub n: String,
+    pub ico: String,
 }
 
 #[allow(unused)]

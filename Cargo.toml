@@ -5,4 +5,5 @@ members = [
 	"maimai-scraping",
 	"maimai-watcher",
 	"rating-target-viewer",
+	"edit-rating-analyzer-js",
 ]
