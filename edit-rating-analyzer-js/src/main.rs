@@ -2,7 +2,16 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Context};
 use clap::Parser;
-use maimai_scraping::maimai::load_score_level::{Song, SongRaw};
+use itertools::{EitherOrBoth, Itertools};
+use maimai_scraping::{
+    data_collector::load_data_from_file,
+    fs_json_util::read_json,
+    maimai::{
+        estimate_rating::ScoreConstantsStore,
+        load_score_level::{self, RemovedSong, Song, SongRaw},
+        Maimai,
+    },
+};
 use rslint_parser::{
     ast::{Expr, ExprOrSpread, LiteralProp, ObjectExpr, ObjectProp, PropName, VarDecl},
     AstNode,
@@ -10,37 +19,24 @@ use rslint_parser::{
 
 #[derive(Parser)]
 struct Opts {
+    maimai_user_data_path: PathBuf,
+    level_file: PathBuf,
+    removed_songs: PathBuf,
     in_lv_js: PathBuf,
 }
 
 fn main() -> anyhow::Result<()> {
-    // let data = load_data_from_file::<Maimai, _>(&opts.maimai_user_data_path)?;
-    // let levels = load_score_level::load(opts.level_file)?;
-    // let removed_songs: Vec<RemovedSong> = read_json(opts.removed_songs)?;
-    // let mut levels = ScoreConstantsStore::new(&levels, &removed_songs)?;
-    // levels.do_everything(data.records.values(), &data.rating_targets)?;
-
     let opts = Opts::parse();
+
+    let data = load_data_from_file::<Maimai, _>(&opts.maimai_user_data_path)?;
+    let levels_original = load_score_level::load(opts.level_file)?;
+    let removed_songs: Vec<RemovedSong> = read_json(opts.removed_songs)?;
+    let mut levels = ScoreConstantsStore::new(&levels_original, &removed_songs)?;
+    levels.do_everything(data.records.values(), &data.rating_targets)?;
+
     let js = std::fs::read_to_string(opts.in_lv_js)?;
     let parse_script = rslint_parser::parse_text(&js, 0);
     let syntax_node = parse_script.syntax();
-    // for child in syntax_node.children_with_tokens() {
-    //     let node = match child {
-    //         SyntaxElement::Node(node) => node,
-    //         SyntaxElement::Token(token) => {
-    //             // print!("{}", token.text());
-    //             continue;
-    //         }
-    //     };
-    //     let Some(var_decl) = node.try_to::<VarDecl>() else {
-    //         // print!("{}", node.text());
-    //         continue;
-    //     };
-    //     println!("{:?}", var_decl.range());
-    //     println!("{:?}", var_decl.text());
-    //     println!("{:?}", var_decl.var_token());
-    //     println!("{:?}", var_decl.var_token().map(|v| v.text_range()));
-    // }
 
     let Expr::ArrayExpr(value) = syntax_node
         .children()
@@ -55,12 +51,22 @@ fn main() -> anyhow::Result<()> {
     else {
         bail!("in_lv is not an array");
     };
+    let mut songs = vec![];
     for value in value.elements() {
         let ExprOrSpread::Expr(Expr::ObjectExpr(obj)) = value else {
             continue;
         };
         let song = parse_song(&obj).with_context(|| format!("While parsing {}", obj.text()))?;
-        println!("{song:?}");
+        songs.push(song);
+    }
+
+    for entry in songs.iter().map(|x| &x.song).zip_longest(&levels_original) {
+        match entry {
+            EitherOrBoth::Both(x, y) if x == y => {}
+            _ => {
+                bail!("There is a difference! {entry:?}");
+            }
+        }
     }
 
     Ok(())

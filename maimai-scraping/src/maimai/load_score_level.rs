@@ -55,7 +55,7 @@ pub struct SongRaw {
 }
 
 #[allow(unused)]
-#[derive(Debug, Getters, CopyGetters)]
+#[derive(Debug, PartialEq, Eq, Getters, CopyGetters)]
 pub struct Song {
     #[getset(get_copy = "pub")]
     generation: ScoreGeneration,
@@ -107,7 +107,7 @@ impl TryFrom<SongRaw> for Song {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct ScoreLevels {
     basic: InternalScoreLevel,
     advanced: InternalScoreLevel,
@@ -129,7 +129,7 @@ impl ScoreLevels {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum InternalScoreLevel {
     Unknown(ScoreLevel),
     Known(ScoreConstant),
