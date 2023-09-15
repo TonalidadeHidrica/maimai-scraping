@@ -270,6 +270,7 @@ impl<'s> ScoreConstantsStore<'s, '_> {
         for record in records
             .into_iter()
             .filter(|r| start_time <= r.played_at().time())
+            .filter(|r| r.score_metadata().difficulty() != ScoreDifficulty::Utage)
         {
             let score_key = ScoreKey::from(record);
             let Some((song, _)) = self.get(score_key)? else {
@@ -437,6 +438,7 @@ impl<'s> ScoreConstantsStore<'s, '_> {
         'next_group: for (_, group) in &records
             .into_iter()
             .filter(|record| start_time <= record.played_at().time())
+            .filter(|r| r.score_metadata().difficulty() != ScoreDifficulty::Utage)
             .filter_map(
                 |record| match rating_targets.range(record.played_at().time()..).next() {
                     None => {
