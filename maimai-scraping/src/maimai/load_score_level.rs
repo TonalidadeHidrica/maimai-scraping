@@ -71,16 +71,17 @@ pub struct Song {
 impl TryFrom<SongRaw> for Song {
     type Error = anyhow::Error;
     fn try_from(song: SongRaw) -> anyhow::Result<Self> {
+        let entry = |index: usize| InternalScoreLevelEntry::new(song.lv[index], index);
         let zero = song.lv[4].abs() < 1e-8;
         let re_master = match song.lv.len() {
             6 => {
                 if !zero {
                     bail!("song.lv[4] is not zero, but there are 6 elements");
                 } else {
-                    Some(song.lv[5].try_into()?)
+                    Some(entry(5)?)
                 }
             }
-            5 => (!zero).then(|| song.lv[4].try_into()).transpose()?,
+            5 => (!zero).then(|| entry(4)).transpose()?,
             _ => bail!("Unexpected length: {:?}", song.lv),
         };
         Ok(Self {
@@ -91,10 +92,10 @@ impl TryFrom<SongRaw> for Song {
             },
             version: song.v.try_into()?,
             levels: ScoreLevels {
-                basic: song.lv[0].try_into()?,
-                advanced: song.lv[1].try_into()?,
-                expert: song.lv[2].try_into()?,
-                master: song.lv[3].try_into()?,
+                basic: entry(0)?,
+                advanced: entry(1)?,
+                expert: entry(2)?,
+                master: entry(3)?,
                 re_master,
             },
             song_name: song.n.into(),
@@ -109,26 +110,52 @@ impl TryFrom<SongRaw> for Song {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct ScoreLevels {
-    basic: InternalScoreLevel,
-    advanced: InternalScoreLevel,
-    expert: InternalScoreLevel,
-    master: InternalScoreLevel,
-    re_master: Option<InternalScoreLevel>,
+    basic: InternalScoreLevelEntry,
+    advanced: InternalScoreLevelEntry,
+    expert: InternalScoreLevelEntry,
+    master: InternalScoreLevelEntry,
+    re_master: Option<InternalScoreLevelEntry>,
 }
 impl ScoreLevels {
     pub fn get(&self, difficulty: ScoreDifficulty) -> Option<InternalScoreLevel> {
         use ScoreDifficulty::*;
         Some(match difficulty {
-            Basic => self.basic,
-            Advanced => self.advanced,
-            Expert => self.expert,
-            Master => self.master,
-            ReMaster => self.re_master?,
+            Basic => self.basic.value,
+            Advanced => self.advanced.value,
+            Expert => self.expert.value,
+            Master => self.master.value,
+            ReMaster => self.re_master?.value,
             Utage => None?, // TODO support utage?
         })
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (ScoreDifficulty, InternalScoreLevelEntry)> {
+        use ScoreDifficulty::*;
+        [
+            (Basic, self.basic),
+            (Advanced, self.advanced),
+            (Expert, self.expert),
+            (Master, self.master),
+        ]
+        .into_iter()
+        .chain(self.re_master.map(|x| (ReMaster, x)))
+    }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters)]
+#[getset(get_copy = "pub")]
+pub struct InternalScoreLevelEntry {
+    value: InternalScoreLevel,
+    index: usize,
+}
+impl InternalScoreLevelEntry {
+    fn new(value: f64, index: usize) -> anyhow::Result<Self> {
+        Ok(Self {
+            value: value.try_into()?,
+            index,
+        })
+    }
+}
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum InternalScoreLevel {
     Unknown(ScoreLevel),
@@ -163,6 +190,10 @@ impl InternalScoreLevel {
             InternalScoreLevel::Unknown(_) => None,
             InternalScoreLevel::Known(x) => Some(x),
         }
+    }
+
+    pub fn is_known(self) -> bool {
+        self.known().is_some()
     }
 }
 

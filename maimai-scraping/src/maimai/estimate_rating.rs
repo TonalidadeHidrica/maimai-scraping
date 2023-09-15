@@ -36,9 +36,9 @@ use super::{
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct ScoreKey<'a> {
-    icon: &'a SongIcon,
-    generation: ScoreGeneration,
-    difficulty: ScoreDifficulty,
+    pub icon: &'a SongIcon,
+    pub generation: ScoreGeneration,
+    pub difficulty: ScoreDifficulty,
 }
 impl<'a> From<&'a PlayRecord> for ScoreKey<'a> {
     fn from(record: &'a PlayRecord) -> Self {

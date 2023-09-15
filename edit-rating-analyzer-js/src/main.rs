@@ -7,7 +7,7 @@ use maimai_scraping::{
     data_collector::load_data_from_file,
     fs_json_util::read_json,
     maimai::{
-        estimate_rating::ScoreConstantsStore,
+        estimate_rating::{ScoreConstantsStore, ScoreKey},
         load_score_level::{self, RemovedSong, Song, SongRaw},
         Maimai,
     },
@@ -28,14 +28,63 @@ struct Opts {
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
 
+    let js = std::fs::read_to_string(&opts.in_lv_js)?;
+    let songs = load_songs(&js)?;
+
     let data = load_data_from_file::<Maimai, _>(&opts.maimai_user_data_path)?;
     let levels_original = load_score_level::load(opts.level_file)?;
     let removed_songs: Vec<RemovedSong> = read_json(opts.removed_songs)?;
     let mut levels = ScoreConstantsStore::new(&levels_original, &removed_songs)?;
     levels.do_everything(data.records.values(), &data.rating_targets)?;
 
-    let js = std::fs::read_to_string(opts.in_lv_js)?;
-    let parse_script = rslint_parser::parse_text(&js, 0);
+    // Assert that the parsed data and generated data coincide
+    for entry in songs.iter().map(|x| &x.song).zip_longest(&levels_original) {
+        match entry {
+            EitherOrBoth::Both(x, y) if x == y => {}
+            _ => {
+                bail!("There is a difference! {entry:?}");
+            }
+        }
+    }
+
+    let mut tasks = vec![];
+    for SongInJs { song, lv_tokens } in &songs {
+        for (difficulty, level) in song.levels().iter() {
+            let (level, index) = (level.value(), level.index());
+            let token = &lv_tokens[index];
+            let key = ScoreKey {
+                icon: song.icon(),
+                generation: song.generation(),
+                difficulty,
+            };
+            let (_, candidates) = levels.get(key)?.context("Entry not found for {key:?}")?;
+            if !level.is_known() && candidates.len() == 1 {
+                tasks.push((token.range(), candidates[0]));
+            }
+        }
+    }
+    tasks.sort_by_key(|x| (x.0.start(), x.0.end()));
+
+    let mut cursor = 0;
+    let mut result = String::with_capacity(js.len());
+    for (range, level) in tasks {
+        let (start, end) = (usize::from(range.start()), usize::from(range.end()));
+        if start < cursor {
+            bail!("Range is overlapping");
+        }
+        result += &js[cursor..start];
+        result += &level.to_string();
+        cursor = end;
+    }
+    result += &js[cursor..];
+
+    std::fs::write(opts.in_lv_js, &result)?;
+
+    Ok(())
+}
+
+fn load_songs(js: &str) -> anyhow::Result<Vec<SongInJs>> {
+    let parse_script = rslint_parser::parse_text(js, 0);
     let syntax_node = parse_script.syntax();
 
     let Expr::ArrayExpr(value) = syntax_node
@@ -51,6 +100,7 @@ fn main() -> anyhow::Result<()> {
     else {
         bail!("in_lv is not an array");
     };
+
     let mut songs = vec![];
     for value in value.elements() {
         let ExprOrSpread::Expr(Expr::ObjectExpr(obj)) = value else {
@@ -59,17 +109,7 @@ fn main() -> anyhow::Result<()> {
         let song = parse_song(&obj).with_context(|| format!("While parsing {}", obj.text()))?;
         songs.push(song);
     }
-
-    for entry in songs.iter().map(|x| &x.song).zip_longest(&levels_original) {
-        match entry {
-            EitherOrBoth::Both(x, y) if x == y => {}
-            _ => {
-                bail!("There is a difference! {entry:?}");
-            }
-        }
-    }
-
-    Ok(())
+    Ok(songs)
 }
 
 fn parse_song(obj: &ObjectExpr) -> anyhow::Result<SongInJs> {
