@@ -180,6 +180,7 @@ pub struct SongName(String);
     Debug,
     derive_more::From,
     derive_more::FromStr,
+    derive_more::Display,
     Serialize,
     Deserialize,
 )]

@@ -26,7 +26,7 @@ use hashbrown::{HashMap, HashSet};
 use itertools::{chain, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
-use log::warn;
+use log::{trace, warn};
 use strum::IntoEnumIterator;
 
 use super::{
@@ -155,8 +155,9 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
 
         if entry.candidates.len() < old_len {
             entry.reasons.push(self.events.len());
-            self.events
-                .push((key.with(entry.song.icon()), entry.make_reason(reason)));
+            let event = (key.with(entry.song.icon()), entry.make_reason(reason));
+            trace!("{event:?}");
+            self.events.push(event);
             let print_reasons = || {
                 for &i in &entry.reasons {
                     let (_, reason) = &self.events[i];
@@ -336,7 +337,8 @@ impl<'s> ScoreConstantsStore<'s, '_> {
         &mut self,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
-        for (&play_time, list) in rating_targets {
+        let start_time: PlayTime = MaimaiVersion::latest().start_time().into();
+        for (&play_time, list) in rating_targets.iter().filter(|p| &start_time <= p.0) {
             let mut sub_list = vec![];
             #[derive(Clone, Copy, Debug)]
             struct Entry<'a, 'k> {
@@ -430,9 +432,11 @@ impl<'s> ScoreConstantsStore<'s, '_> {
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
         let version = MaimaiVersion::latest();
+        let start_time: PlayTime = version.start_time().into();
 
         'next_group: for (_, group) in &records
             .into_iter()
+            .filter(|record| start_time <= record.played_at().time())
             .filter_map(
                 |record| match rating_targets.range(record.played_at().time()..).next() {
                     None => {
@@ -582,9 +586,9 @@ pub fn analyze_old_songs(
             .get(&(icon, score_metadata.generation()))
             .with_context(|| {
                 format!(
-                    "Unknown song: {:?} {:?}",
+                    "Unknown song: {:?} {:?} {icon}",
                     record.song_metadata().name(),
-                    record.score_metadata().generation()
+                    record.score_metadata().generation(),
                 )
             })?;
         let level = song
