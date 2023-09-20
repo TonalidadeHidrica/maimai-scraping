@@ -219,12 +219,22 @@ fn get_user_id<'a>(
     info: &web::Form<SlashCommand>,
     specified_user_id: &'a Option<UserId>,
 ) -> anyhow::Result<(&'a UserId, &'a UserConfig)> {
+    let allowed_users = state
+        .slack_id_to_user_id
+        .get(&info.user_id)
+        .map_or(&[][..], |s| &s[..]);
     let user_id = match specified_user_id.as_ref() {
-        Some(id) => id,
-        None => match state.slack_id_to_user_id.get(&info.user_id).map(|s| &s[..]) {
+        Some(id) => {
+            if allowed_users.iter().any(|a| a == id) {
+                id
+            } else {
+                bail!("You do not have a permission to this account.")
+            }
+        }
+        None => match allowed_users {
             // No associated default user must be present in this phase, as checked on loading
-            None => bail!("No account is associated to your Slack account."),
-            Some([id]) => id,
+            [] => bail!("No account is associated to your Slack account."),
+            [id] => id,
             _ => match state.config.default_users.get(&info.user_id) {
                 Some(id) => id,
                 None => {
