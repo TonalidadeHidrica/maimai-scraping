@@ -11,7 +11,7 @@ use clap::Parser;
 use log::{error, info};
 use maimai_watcher::{
     slack::webhook_send,
-    watch::{self, TimeoutConfig, WatchHandler},
+    watch::{self, TimeoutConfig, UserId, WatchHandler},
 };
 use serde::Deserialize;
 use splitty::split_unquoted_whitespace;
@@ -35,9 +35,6 @@ struct Config {
     users: HashMap<UserId, UserConfig>,
     timeout_hours: f64,
 }
-// #[derive(Clone, PartialEq, Eq, Hash, Deserialize)]
-// struct UserId(String);
-type UserId = String;
 #[derive(Clone, Deserialize)]
 struct UserConfig {
     slack_user_ids: Vec<String>,
@@ -58,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
 
     let reqwest_client = reqwest::Client::new();
     let url = config.slack_post_webhook.clone();
-    let webhook_send = |message: &'static str| webhook_send(&reqwest_client, &url, message);
+    let webhook_send = |message: &'static str| webhook_send(&reqwest_client, &url, None, message);
 
     webhook_send("The server has started.").await;
 
@@ -101,7 +98,7 @@ async fn webhook(state: web::Data<State>, info: web::Form<SlashCommand>) -> impl
     let url = state.config.slack_post_webhook.clone();
     if let Err(e) = webhook_impl(state, info, &client).await {
         error!("{e}");
-        webhook_send(&client, &url, e.to_string()).await;
+        webhook_send(&client, &url, None, e.to_string()).await;
     };
     "done"
 }
@@ -143,9 +140,9 @@ async fn webhook_impl(
     info!("Slash command: {info:?}");
 
     macro_rules! post {
-        ($message: literal) => {
+        ($user_id: expr, $message: literal) => {
             let url = &state.config.slack_post_webhook;
-            webhook_send(client, url, $message).await
+            webhook_send(client, url, $user_id, $message).await
         };
     }
 
@@ -161,10 +158,10 @@ async fn webhook_impl(
             match map.entry(user_id.clone()) {
                 Occupied(entry) => {
                     entry.remove().stop().await?;
-                    post!("Stopped!");
+                    post!(user_id, "Stopped!");
                 }
                 Vacant(_) => {
-                    post!("Watcher is not running!");
+                    post!(user_id, "Watcher is not running!");
                 }
             }
         }
@@ -174,19 +171,26 @@ async fn webhook_impl(
             drop_if_closed(map.entry(user_id.clone()));
             match map.entry(user_id.clone()) {
                 Occupied(_) => {
-                    post!("Watcher is already running!");
+                    post!(user_id, "Watcher is already running!");
                 }
                 Vacant(entry) => {
                     let timeout = TimeoutConfig::hours(state.config.timeout_hours);
-                    let config = watch_config(&state.config, user_config, timeout, false);
+                    let config =
+                        watch_config(user_id.clone(), &state.config, user_config, timeout, false);
                     entry.insert(watch::watch(config).await?);
-                    post!("Started!");
+                    post!(user_id, "Started!");
                 }
             }
         }
         slash_command::Sub::Single(sub_args) => {
-            let (_, user_config) = get_user_id(&state, &info, &sub_args.user_id)?;
-            let config = watch_config(&state.config, user_config, TimeoutConfig::single(), true);
+            let (user_id, user_config) = get_user_id(&state, &info, &sub_args.user_id)?;
+            let config = watch_config(
+                user_id.clone(),
+                &state.config,
+                user_config,
+                TimeoutConfig::single(),
+                true,
+            );
             watch::watch(config).await?;
         }
     };
@@ -217,12 +221,14 @@ fn get_user_id<'a>(
 }
 
 fn watch_config(
+    user_id: UserId,
     state_config: &Config,
     user_config: &UserConfig,
     timeout_config: TimeoutConfig,
     report_no_updates: bool,
 ) -> watch::Config {
     watch::Config {
+        user_id,
         interval: state_config.interval,
         credentials_path: user_config.credentials_path.clone(),
         cookie_store_path: user_config.cookie_store_path.clone(),

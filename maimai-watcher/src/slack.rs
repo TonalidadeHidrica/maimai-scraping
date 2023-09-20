@@ -2,6 +2,8 @@ use log::error;
 use serde::Serialize;
 use url::Url;
 
+use crate::watch::UserId;
+
 #[allow(unused)]
 #[derive(Serialize)]
 struct SlashCommandResponse {
@@ -26,14 +28,24 @@ fn in_channel(message: impl AsRef<str>) -> SlashCommandResponse {
 #[derive(Serialize)]
 struct WebhookPost<'a> {
     text: &'a str,
+    username: String,
 }
 
-pub async fn webhook_send(client: &reqwest::Client, url: &Option<Url>, message: impl AsRef<str>) {
+pub async fn webhook_send(
+    client: &reqwest::Client,
+    url: &Option<Url>,
+    user_id: impl Into<Option<&UserId>>,
+    message: impl AsRef<str>,
+) {
     let Some(url) = url else { return };
     if let Err(e) = client
         .post(url.clone())
         .json(&WebhookPost {
             text: message.as_ref(),
+            username: match user_id.into() {
+                None => "maimai-watcher".to_owned(),
+                Some(user_id) => format!("maimai-watcher ({user_id})"),
+            },
         })
         .send()
         .await

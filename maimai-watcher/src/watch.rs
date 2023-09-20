@@ -32,8 +32,14 @@ use url::Url;
 
 use crate::slack::webhook_send;
 
+// TODO use netype instead of alias!
+// #[derive(Clone, PartialEq, Eq, Hash, Deserialize)]
+// struct UserId(String);
+pub type UserId = String;
+
 #[derive(Debug)]
 pub struct Config {
+    pub user_id: UserId,
     pub interval: Duration,
     pub credentials_path: PathBuf,
     pub cookie_store_path: PathBuf,
@@ -83,6 +89,7 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
     spawn(async move {
         let Ok(mut runner) = report_error(
             &config.slack_post_webhook,
+            &config.user_id,
             Runner::new(&config, data, &levels, &removed_songs)
                 .await
                 .context("Issue in levels or removed_songs"),
@@ -101,6 +108,7 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
                     webhook_send(
                         &reqwest::Client::new(),
                         &config.slack_post_webhook,
+                        &config.user_id,
                         e.to_string(),
                     )
                     .await;
@@ -112,6 +120,7 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
                         webhook_send(
                             &reqwest::Client::new(),
                             &config.slack_post_webhook,
+                            &config.user_id,
                             "Already up to date.",
                         )
                         .await;
@@ -133,6 +142,7 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
                 webhook_send(
                     &reqwest::Client::new(),
                     &config.slack_post_webhook,
+                    &config.user_id,
                     "There have been no updates for a while.  Stopping automatically.".to_string(),
                 )
                 .await;
@@ -174,6 +184,7 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
         }
         let _ = report_error(
             &self.config.slack_post_webhook,
+            &self.config.user_id,
             self.levels_actual
                 .do_everything(self.data.records.values(), &self.data.rating_targets)
                 .context("While estimating levels precisely"),
@@ -181,6 +192,7 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
         .await;
         let _ = report_error(
             &self.config.slack_post_webhook,
+            &self.config.user_id,
             self.levels_naive
                 .guess_from_rating_target_order(&self.data.rating_targets)
                 .context("While estimating levels roughly"),
@@ -209,11 +221,17 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
         )
         .await
         .context("Rating target not available");
-        let update_targets_res = report_error(&config.slack_post_webhook, update_targets_res).await;
+        let update_targets_res = report_error(
+            &config.slack_post_webhook,
+            &config.user_id,
+            update_targets_res,
+        )
+        .await;
         if update_targets_res.is_ok() {
             webhook_send(
                 client.reqwest(),
                 &config.slack_post_webhook,
+                &config.user_id,
                 "Rating target updated",
             )
             .await;
@@ -234,6 +252,7 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
             webhook_send(
                 client.reqwest(),
                 &config.slack_post_webhook,
+                &config.user_id,
                 make_message(record, song_lvs),
             )
             .await;
@@ -249,6 +268,7 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
             webhook_send(
                 client.reqwest(),
                 &config.slack_post_webhook,
+                &config.user_id,
                 format! {"★ {song_name} ({score_kind}): {event}"},
             )
             .await;
@@ -258,10 +278,14 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
     }
 }
 
-async fn report_error<T>(url: &Option<Url>, result: anyhow::Result<T>) -> anyhow::Result<T> {
+async fn report_error<T>(
+    url: &Option<Url>,
+    user_id: &UserId,
+    result: anyhow::Result<T>,
+) -> anyhow::Result<T> {
     if let Err(e) = &result {
         error!("{e}");
-        webhook_send(&reqwest::Client::new(), url, e.to_string()).await;
+        webhook_send(&reqwest::Client::new(), url, user_id, e.to_string()).await;
     }
     result
 }

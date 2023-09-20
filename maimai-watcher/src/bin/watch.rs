@@ -8,6 +8,7 @@ use maimai_watcher::watch::{self, TimeoutConfig};
 async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let handle = watch::watch(watch::Config {
+        user_id: "[[[test]]]".into(),
         interval: Duration::from_secs(30),
         maimai_uesr_data_path: opts.maimai_uesr_data_path,
         slack_post_webhook: None,
