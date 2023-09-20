@@ -6,7 +6,7 @@ use std::{
 };
 
 use actix_web::{middleware::Logger, web, App, HttpServer, Responder};
-use anyhow::bail;
+use anyhow::{bail, Context};
 use clap::Parser;
 use log::{error, info};
 use maimai_watcher::{
@@ -153,7 +153,7 @@ async fn webhook_impl(
     use HMEntry::*;
     match args.sub {
         slash_command::Sub::Stop(sub_args) => {
-            let user_id = get_user_id(&state, &info, &sub_args.user_id)?;
+            let (user_id, _) = get_user_id(&state, &info, &sub_args.user_id)?;
             let mut map = state.watch_handler.lock().await;
             drop_if_closed(map.entry(user_id.clone()));
             match map.entry(user_id.clone()) {
@@ -167,8 +167,7 @@ async fn webhook_impl(
             }
         }
         slash_command::Sub::Start(sub_args) => {
-            let user_id = get_user_id(&state, &info, &sub_args.user_id)?;
-            let user_config = &state.config.users[user_id];
+            let (user_id, user_config) = get_user_id(&state, &info, &sub_args.user_id)?;
             let mut map = state.watch_handler.lock().await;
             drop_if_closed(map.entry(user_id.clone()));
             match map.entry(user_id.clone()) {
@@ -184,8 +183,7 @@ async fn webhook_impl(
             }
         }
         slash_command::Sub::Single(sub_args) => {
-            let user_id = get_user_id(&state, &info, &sub_args.user_id)?;
-            let user_config = &state.config.users[user_id];
+            let (_, user_config) = get_user_id(&state, &info, &sub_args.user_id)?;
             let config = watch_config(&state.config, user_config, TimeoutConfig::single(), true);
             watch::watch(config).await?;
         }
@@ -197,8 +195,8 @@ fn get_user_id<'a>(
     state: &'a web::Data<State>,
     info: &web::Form<SlashCommand>,
     specified_user_id: &'a Option<UserId>,
-) -> anyhow::Result<&'a UserId> {
-    Ok(match specified_user_id.as_ref() {
+) -> anyhow::Result<(&'a UserId, &'a UserConfig)> {
+    let user_id = match specified_user_id.as_ref() {
         Some(id) => id,
         None => match state.slack_id_to_user_id.get(&info.user_id).map(|s| &s[..]) {
             None => bail!("No account is associated to your Slack account."),
@@ -207,7 +205,13 @@ fn get_user_id<'a>(
                 "Multiple accounts are associated to your Slack account.  You must explicitly specify the account."
             ),
         },
-    })
+    };
+    let user_config = &state
+        .config
+        .users
+        .get(user_id)
+        .with_context(|| format!("Account not found: {user_id:?}"))?;
+    Ok((user_id, user_config))
 }
 
 fn watch_config(
