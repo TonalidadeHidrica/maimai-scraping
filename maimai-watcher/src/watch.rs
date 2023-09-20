@@ -10,7 +10,7 @@ use lazy_format::lazy_format;
 use log::error;
 use maimai_scraping::{
     api::SegaClient,
-    data_collector::{load_data_from_file, update_records, update_targets},
+    data_collector::{load_or_create_user_data, update_records, update_targets},
     fs_json_util::{read_json, write_json},
     maimai::{
         estimate_rating::{ScoreConstantsStore, ScoreKey},
@@ -81,7 +81,7 @@ impl TimeoutConfig {
 pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
     let (tx, mut rx) = mpsc::channel(100);
 
-    let data = load_data_from_file::<Maimai, _>(&config.maimai_uesr_data_path)?;
+    let data = load_or_create_user_data::<Maimai, _>(&config.maimai_uesr_data_path)?;
 
     let levels = load_score_level::load(&config.levels_path)?;
     let removed_songs: Vec<RemovedSong> = read_json(&config.removed_songs_path)?;

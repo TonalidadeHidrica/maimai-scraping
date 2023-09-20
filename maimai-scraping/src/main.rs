@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use clap::ArgEnum;
 use clap::Parser;
 use maimai_scraping::api::SegaClient;
-use maimai_scraping::data_collector::load_data_from_file;
+use maimai_scraping::data_collector::load_or_create_user_data;
 use maimai_scraping::data_collector::update_records;
 use maimai_scraping::fs_json_util::write_json;
 use maimai_scraping::maimai::Maimai;
@@ -53,7 +53,7 @@ where
     T::UserData: Serialize,
     for<'a> T::UserData: Default + Deserialize<'a>,
 {
-    let mut data = load_data_from_file::<T, _>(path)?;
+    let mut data = load_or_create_user_data::<T, _>(path)?;
     let (mut client, index) = SegaClient::<T>::new_with_default_path().await?;
     update_records(&mut client, data.records_mut(), index).await?;
     write_json(path, &data)?;

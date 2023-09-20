@@ -4,12 +4,11 @@ use anyhow::{bail, Context};
 use clap::Parser;
 use itertools::{EitherOrBoth, Itertools};
 use maimai_scraping::{
-    data_collector::load_data_from_file,
     fs_json_util::read_json,
     maimai::{
         estimate_rating::{ScoreConstantsStore, ScoreKey},
         load_score_level::{self, RemovedSong, Song, SongRaw},
-        Maimai,
+        MaimaiUserData,
     },
 };
 use rslint_parser::{
@@ -31,7 +30,7 @@ fn main() -> anyhow::Result<()> {
     let js = std::fs::read_to_string(&opts.in_lv_js)?;
     let songs = load_songs(&js)?;
 
-    let data = load_data_from_file::<Maimai, _>(&opts.maimai_user_data_path)?;
+    let data: MaimaiUserData = read_json(&opts.maimai_user_data_path)?;
     let levels_original = load_score_level::load(opts.level_file)?;
     let removed_songs: Vec<RemovedSong> = read_json(opts.removed_songs)?;
     let mut levels = ScoreConstantsStore::new(&levels_original, &removed_songs)?;

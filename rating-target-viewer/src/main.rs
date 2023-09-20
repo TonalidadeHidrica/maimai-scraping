@@ -7,11 +7,11 @@ use chrono::NaiveDateTime;
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::{
-    data_collector::load_data_from_file,
+    fs_json_util::read_json,
     maimai::{
         rating_target_parser::{RatingTargetEntry, RatingTargetFile},
         schema::latest::{PlayTime, ScoreDifficulty, ScoreGeneration},
-        Maimai,
+        MaimaiUserData,
     },
 };
 
@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
 
     let opts = Opts::parse();
     Ok(HttpServer::new(move || {
-        let rating_targets = load_data_from_file::<Maimai, _>(&opts.maimai_user_data_path)
+        let rating_targets = read_json::<_, MaimaiUserData>(&opts.maimai_user_data_path)
             .unwrap()
             .rating_targets;
         App::new()

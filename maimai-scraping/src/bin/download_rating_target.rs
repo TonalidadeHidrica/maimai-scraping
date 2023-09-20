@@ -4,7 +4,7 @@ use anyhow::Context;
 use clap::Parser;
 use maimai_scraping::{
     api::SegaClient,
-    data_collector::{load_data_from_file, update_targets},
+    data_collector::{load_or_create_user_data, update_targets},
     fs_json_util::write_json,
     maimai::Maimai,
 };
@@ -19,7 +19,7 @@ struct Opts {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let mut data = load_data_from_file::<Maimai, _>(&opts.maimai_user_data_path)?;
+    let mut data = load_or_create_user_data::<Maimai, _>(&opts.maimai_user_data_path)?;
     let (mut client, index) = SegaClient::<Maimai>::new_with_default_path().await?;
     let last_played = index.first().context("There is no play yet.")?.0;
     update_targets(

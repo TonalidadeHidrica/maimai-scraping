@@ -25,7 +25,7 @@ use serde::Deserialize;
 use tokio::time::sleep;
 use url::Url;
 
-pub fn load_data_from_file<T, P>(path: P) -> anyhow::Result<T::UserData>
+pub fn load_or_create_user_data<T, P>(path: P) -> anyhow::Result<T::UserData>
 where
     T: SegaTrait,
     for<'a> T::UserData: Default + Deserialize<'a>,

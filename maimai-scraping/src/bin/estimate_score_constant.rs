@@ -2,12 +2,11 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use maimai_scraping::{
-    data_collector::load_data_from_file,
     fs_json_util::read_json,
     maimai::{
         estimate_rating::ScoreConstantsStore,
         load_score_level::{self, RemovedSong},
-        Maimai,
+        MaimaiUserData,
     },
 };
 
@@ -24,7 +23,7 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let opts = Opts::parse();
-    let data = load_data_from_file::<Maimai, _>(&opts.maimai_user_data_path)?;
+    let data: MaimaiUserData = read_json(&opts.maimai_user_data_path)?;
 
     let levels = load_score_level::load(opts.level_file)?;
     let removed_songs: Vec<RemovedSong> = read_json(opts.removed_songs)?;
