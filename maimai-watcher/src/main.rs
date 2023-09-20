@@ -1,5 +1,6 @@
 use std::{
     collections::hash_map::{Entry as HMEntry, HashMap},
+    iter::once,
     path::PathBuf,
     time::Duration,
 };
@@ -156,7 +157,7 @@ async fn webhook_impl(
     }
 
     let args = slash_command::Opts::try_parse_from(
-        split_unquoted_whitespace(&info.text).unwrap_quotes(true),
+        once("maimai-watcher").chain(split_unquoted_whitespace(&info.text).unwrap_quotes(true)),
     )?;
     use HMEntry::*;
     match args.sub {
