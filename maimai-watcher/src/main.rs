@@ -40,7 +40,7 @@ struct Config {
 type UserId = String;
 #[derive(Clone, Deserialize)]
 struct UserConfig {
-    slack_user_id: String,
+    slack_user_ids: Vec<String>,
     credentials_path: PathBuf,
     cookie_store_path: PathBuf,
     user_data_path: PathBuf,
@@ -65,10 +65,12 @@ async fn main() -> anyhow::Result<()> {
     HttpServer::new(move || {
         let mut slack_id_to_user_id = HashMap::<_, Vec<_>>::new();
         for (id, config) in &config.users {
-            slack_id_to_user_id
-                .entry(config.slack_user_id.clone())
-                .or_default()
-                .push(id.clone());
+            for slack_id in &config.slack_user_ids {
+                slack_id_to_user_id
+                    .entry(slack_id.clone())
+                    .or_default()
+                    .push(id.clone());
+            }
         }
         App::new()
             .app_data(web::Data::new(State {
