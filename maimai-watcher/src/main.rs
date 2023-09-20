@@ -78,8 +78,8 @@ async fn main() -> anyhow::Result<()> {
         }
         let mut invalid = false;
         for pair in &config.default_users {
-            if slack_id_user_id_pairs.contains(&pair) {
-                println!("Invalid default user (not in permission list): {pair:?}");
+            if !slack_id_user_id_pairs.contains(&pair) {
+                error!("Invalid default user (not in permission list): {pair:?}");
                 invalid = true;
             }
         }
