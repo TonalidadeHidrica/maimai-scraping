@@ -6,7 +6,7 @@ use std::{
 };
 
 use actix_web::{middleware::Logger, web, App, HttpServer, Responder};
-use anyhow::{bail, Context};
+use anyhow::bail;
 use clap::Parser;
 use log::{error, info};
 use maimai_watcher::{
@@ -140,15 +140,6 @@ async fn webhook_impl(
 ) -> anyhow::Result<()> {
     info!("Slash command: {info:?}");
 
-    let [user_id] = &state
-        .slack_id_to_user_id
-        .get(&info.user_id)
-        .context("You are not authorized to run this command.")?[..]
-    else {
-        bail!("Multiple accounts are possible.  Choose an account.")
-    };
-    let user_config = &state.config.users[user_id];
-
     macro_rules! post {
         ($message: literal) => {
             let url = &state.config.slack_post_webhook;
@@ -161,7 +152,8 @@ async fn webhook_impl(
     )?;
     use HMEntry::*;
     match args.sub {
-        slash_command::Sub::Stop(_args) => {
+        slash_command::Sub::Stop(sub_args) => {
+            let user_id = get_user_id(&state, &info, &sub_args.user_id)?;
             let mut map = state.watch_handler.lock().await;
             drop_if_closed(map.entry(user_id.clone()));
             match map.entry(user_id.clone()) {
@@ -174,7 +166,9 @@ async fn webhook_impl(
                 }
             }
         }
-        slash_command::Sub::Start(_args) => {
+        slash_command::Sub::Start(sub_args) => {
+            let user_id = get_user_id(&state, &info, &sub_args.user_id)?;
+            let user_config = &state.config.users[user_id];
             let mut map = state.watch_handler.lock().await;
             drop_if_closed(map.entry(user_id.clone()));
             match map.entry(user_id.clone()) {
@@ -189,12 +183,31 @@ async fn webhook_impl(
                 }
             }
         }
-        slash_command::Sub::Single(_args) => {
+        slash_command::Sub::Single(sub_args) => {
+            let user_id = get_user_id(&state, &info, &sub_args.user_id)?;
+            let user_config = &state.config.users[user_id];
             let config = watch_config(&state.config, user_config, TimeoutConfig::single(), true);
             watch::watch(config).await?;
         }
     };
     Ok(())
+}
+
+fn get_user_id<'a>(
+    state: &'a web::Data<State>,
+    info: &web::Form<SlashCommand>,
+    specified_user_id: &'a Option<UserId>,
+) -> anyhow::Result<&'a UserId> {
+    Ok(match specified_user_id.as_ref() {
+        Some(id) => id,
+        None => match state.slack_id_to_user_id.get(&info.user_id).map(|s| &s[..]) {
+            None => bail!("No account is associated to your Slack account."),
+            Some([id]) => id,
+            _ => bail!(
+                "Multiple accounts are associated to your Slack account.  You must explicitly specify the account."
+            ),
+        },
+    })
 }
 
 fn watch_config(
