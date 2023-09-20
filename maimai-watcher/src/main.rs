@@ -13,6 +13,7 @@ use maimai_watcher::{
     watch::{self, TimeoutConfig, WatchHandler},
 };
 use serde::Deserialize;
+use splitty::split_unquoted_whitespace;
 use tokio::sync::Mutex;
 use url::Url;
 
@@ -102,6 +103,35 @@ async fn webhook(state: web::Data<State>, info: web::Form<SlashCommand>) -> impl
     "done"
 }
 
+mod slash_command {
+    use super::UserId;
+    use clap::{Args, Parser, Subcommand};
+
+    #[derive(Parser)]
+    pub struct Opts {
+        #[clap(subcommand)]
+        pub sub: Sub,
+    }
+    #[derive(Subcommand)]
+    pub enum Sub {
+        Stop(Stop),
+        Start(Start),
+        Single(Single),
+    }
+    #[derive(Args)]
+    pub struct Stop {
+        pub user_id: Option<UserId>,
+    }
+    #[derive(Args)]
+    pub struct Start {
+        pub user_id: Option<UserId>,
+    }
+    #[derive(Args)]
+    pub struct Single {
+        pub user_id: Option<UserId>,
+    }
+}
+
 async fn webhook_impl(
     state: web::Data<State>,
     info: web::Form<SlashCommand>,
@@ -124,38 +154,44 @@ async fn webhook_impl(
             webhook_send(client, url, $message).await
         };
     }
+
+    let args = slash_command::Opts::try_parse_from(
+        split_unquoted_whitespace(&info.text).unwrap_quotes(true),
+    )?;
     use HMEntry::*;
-    if info.text.contains("stop") {
-        let mut map = state.watch_handler.lock().await;
-        drop_if_closed(map.entry(user_id.clone()));
-        match map.entry(user_id.clone()) {
-            Occupied(entry) => {
-                entry.remove().stop().await?;
-                post!("Stopped!");
-            }
-            Vacant(_) => {
-                post!("Watcher is not running!");
-            }
-        }
-    } else if info.text.contains("start") {
-        let mut map = state.watch_handler.lock().await;
-        drop_if_closed(map.entry(user_id.clone()));
-        match map.entry(user_id.clone()) {
-            Occupied(_) => {
-                post!("Watcher is already running!");
-            }
-            Vacant(entry) => {
-                let timeout = TimeoutConfig::hours(state.config.timeout_hours);
-                let config = watch_config(&state.config, user_config, timeout, false);
-                entry.insert(watch::watch(config).await?);
-                post!("Started!");
+    match args.sub {
+        slash_command::Sub::Stop(_args) => {
+            let mut map = state.watch_handler.lock().await;
+            drop_if_closed(map.entry(user_id.clone()));
+            match map.entry(user_id.clone()) {
+                Occupied(entry) => {
+                    entry.remove().stop().await?;
+                    post!("Stopped!");
+                }
+                Vacant(_) => {
+                    post!("Watcher is not running!");
+                }
             }
         }
-    } else if info.text.contains("single") {
-        let config = watch_config(&state.config, user_config, TimeoutConfig::single(), true);
-        watch::watch(config).await?;
-    } else {
-        bail!("Invalid command: {:?}", info.text)
+        slash_command::Sub::Start(_args) => {
+            let mut map = state.watch_handler.lock().await;
+            drop_if_closed(map.entry(user_id.clone()));
+            match map.entry(user_id.clone()) {
+                Occupied(_) => {
+                    post!("Watcher is already running!");
+                }
+                Vacant(entry) => {
+                    let timeout = TimeoutConfig::hours(state.config.timeout_hours);
+                    let config = watch_config(&state.config, user_config, timeout, false);
+                    entry.insert(watch::watch(config).await?);
+                    post!("Started!");
+                }
+            }
+        }
+        slash_command::Sub::Single(_args) => {
+            let config = watch_config(&state.config, user_config, TimeoutConfig::single(), true);
+            watch::watch(config).await?;
+        }
     };
     Ok(())
 }

@@ -1736,6 +1736,7 @@ dependencies = [
  "maimai-scraping",
  "reqwest",
  "serde",
+ "splitty",
  "tokio",
  "toml",
  "url",
@@ -2767,6 +2768,12 @@ dependencies = [
  "libc",
  "winapi",
 ]
+
+[[package]]
+name = "splitty"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8dae68aa5bd5dc2d3a2137b0f6bcdd8255dce1983dc155fe0246572e179c9c3a"
 
 [[package]]
 name = "stable_deref_trait"
