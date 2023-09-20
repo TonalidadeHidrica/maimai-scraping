@@ -1,5 +1,8 @@
 use std::{
-    collections::hash_map::{Entry as HMEntry, HashMap},
+    collections::{
+        hash_map::{Entry as HMEntry, HashMap},
+        HashSet,
+    },
     iter::once,
     path::PathBuf,
     time::Duration,
@@ -34,6 +37,8 @@ struct Config {
     slack_post_webhook: Option<Url>,
     users: HashMap<UserId, UserConfig>,
     timeout_hours: f64,
+    #[serde(default)]
+    default_users: HashMap<String, UserId>,
 }
 #[derive(Clone, Deserialize)]
 struct UserConfig {
@@ -61,13 +66,25 @@ async fn main() -> anyhow::Result<()> {
 
     HttpServer::new(move || {
         let mut slack_id_to_user_id = HashMap::<_, Vec<_>>::new();
+        let mut slack_id_user_id_pairs = HashSet::new();
         for (id, config) in &config.users {
             for slack_id in &config.slack_user_ids {
                 slack_id_to_user_id
                     .entry(slack_id.clone())
                     .or_default()
                     .push(id.clone());
+                slack_id_user_id_pairs.insert((slack_id, id));
             }
+        }
+        let mut invalid = false;
+        for pair in &config.default_users {
+            if slack_id_user_id_pairs.contains(&pair) {
+                println!("Invalid default user (not in permission list): {pair:?}");
+                invalid = true;
+            }
+        }
+        if invalid {
+            panic!("One or more invalid default user pairs were found.");
         }
         App::new()
             .app_data(web::Data::new(State {
@@ -205,11 +222,17 @@ fn get_user_id<'a>(
     let user_id = match specified_user_id.as_ref() {
         Some(id) => id,
         None => match state.slack_id_to_user_id.get(&info.user_id).map(|s| &s[..]) {
+            // No associated default user must be present in this phase, as checked on loading
             None => bail!("No account is associated to your Slack account."),
             Some([id]) => id,
-            _ => bail!(
-                "Multiple accounts are associated to your Slack account.  You must explicitly specify the account."
-            ),
+            _ => match state.config.default_users.get(&info.user_id) {
+                Some(id) => id,
+                None => {
+                    bail!(
+                        "Multiple accounts are associated to your Slack account.  You must explicitly specify the account."
+                    )
+                }
+            },
         },
     };
     let user_config = &state
