@@ -126,15 +126,8 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
         url: impl IntoUrl,
     ) -> anyhow::Result<(reqwest::Response, Option<Url>)> {
         let response = self
-            .client
-            .get(url)
-            .header(
-                header::COOKIE,
-                format!("userId={}", self.cookie_store.user_id),
-            )
-            .send()
+            .request_authenticated(|client| Ok(client.get(url)))
             .await?;
-        set_and_save_credentials(&mut self.cookie_store, &self.cookie_store_path, &response)?;
         if !response.status().is_success() {
             bail!("Failed to log in: server returned {:?}", response.status());
         }
@@ -143,6 +136,21 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
             .get(header::LOCATION)
             .and_then(|x| Url::parse(x.to_str().ok()?).ok());
         Ok((response, location))
+    }
+
+    pub async fn request_authenticated(
+        &mut self,
+        request_builder: impl FnOnce(&reqwest::Client) -> anyhow::Result<reqwest::RequestBuilder>,
+    ) -> anyhow::Result<reqwest::Response> {
+        let response = request_builder(&self.client)?
+            .header(
+                header::COOKIE,
+                format!("userId={}", self.cookie_store.user_id),
+            )
+            .send()
+            .await?;
+        set_and_save_credentials(&mut self.cookie_store, &self.cookie_store_path, &response)?;
+        Ok(response)
     }
 
     pub fn reqwest(&self) -> &reqwest::Client {

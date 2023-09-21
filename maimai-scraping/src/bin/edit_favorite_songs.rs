@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use maimai_scraping::{
     api::SegaClient,
-    maimai::{parser::favorite_songs, Maimai},
+    maimai::{favorite_songs::SetFavoriteSong, parser::favorite_songs, Maimai},
 };
 use scraper::Html;
 use url::Url;
@@ -29,6 +29,12 @@ async fn main() -> anyhow::Result<()> {
             .text()
             .await?,
     ))?;
-    println!("{page:?}");
+
+    SetFavoriteSong::builder()
+        .token("token".to_owned().into())
+        .music(vec![page.genres[0].songs[42].idx.clone()])
+        .build()
+        .send(&mut client)
+        .await?;
     Ok(())
 }

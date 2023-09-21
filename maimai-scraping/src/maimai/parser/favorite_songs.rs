@@ -1,6 +1,7 @@
 use anyhow::Context;
 use derive_more::From;
 use scraper::ElementRef;
+use serde::Serialize;
 
 use crate::maimai::schema::latest::SongName;
 
@@ -31,7 +32,7 @@ pub struct Genre {
     pub name: GenreName,
     pub songs: Vec<Song>,
 }
-#[derive(Debug, From)]
+#[derive(Debug, From, Serialize)]
 pub struct Token(String);
 #[derive(Debug)]
 pub struct Song {
@@ -41,7 +42,7 @@ pub struct Song {
 }
 #[derive(Debug, From)]
 pub struct GenreName(String);
-#[derive(Debug, From)]
+#[derive(Clone, Debug, From, Serialize)]
 pub struct Idx(String);
 
 fn parse_genre(element: ElementRef) -> anyhow::Result<Genre> {
