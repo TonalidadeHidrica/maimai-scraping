@@ -21,7 +21,7 @@ use crate::{
 };
 use anyhow::{bail, Context};
 use either::Either;
-use getset::Getters;
+use getset::{Getters, CopyGetters};
 use hashbrown::{HashMap, HashSet};
 use itertools::{chain, Itertools};
 use joinery::JoinableIterator;
@@ -210,11 +210,19 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
             })),
         }
     }
+
+    pub fn scores(&self) -> impl Iterator<Item = (&ScoreKey<'s>, &ScoreConstantsEntry<'s>)> {
+        self.constants.iter()
+    }
 }
 
-struct ScoreConstantsEntry<'s> {
+#[derive(Getters, CopyGetters)]
+pub struct ScoreConstantsEntry<'s> {
+    #[getset(get_copy = "pub")]
     song: &'s Song,
+    #[getset(get = "pub")]
     candidates: Vec<ScoreConstant>,
+    #[getset(get = "pub")]
     reasons: Vec<usize>,
 }
 impl ScoreConstantsEntry<'_> {
