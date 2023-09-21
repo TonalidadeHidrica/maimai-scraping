@@ -321,10 +321,10 @@ fn make_message(record: &PlayRecord, song_lvs: &[ScoreConstant]) -> String {
         AllPerfect => "AP",
         AllPerfectPlus => "AP+",
     };
+    let time = (record.played_at().idx().timestamp()).unwrap_or(record.played_at().time().get());
     let main_line = lazy_format!(
         "{time}　{title} ({score_kind} Lv.{lv})　{rank}({ach})　{fc}\n",
         title = record.song_metadata().name(),
-        time = record.played_at().time(),
         ach = record.achievement_result().value(),
     );
     let rating_line = (record.rating_result().delta() > 0).then(|| {
