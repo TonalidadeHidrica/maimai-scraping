@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use clap::Parser;
 use maimai_scraping::{
     fs_json_util::{read_json, write_json},
-    maimai::{rating_target_parser::RatingTargetFile, schema::latest::PlayRecord},
+    maimai::{parser::rating_target::RatingTargetFile, schema::latest::PlayRecord},
 };
 
 fn main() -> anyhow::Result<()> {

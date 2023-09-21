@@ -8,8 +8,8 @@ use crate::{
     algorithm::possibilties_from_sum_and_ordering,
     maimai::{
         load_score_level::{InternalScoreLevel, MaimaiVersion, RemovedSong, Song},
+        parser::rating_target::{RatingTargetEntry, RatingTargetFile},
         rating::{rank_coef, single_song_rating, ScoreConstant},
-        rating_target_parser::{RatingTargetEntry, RatingTargetFile},
         schema::{
             latest::{
                 AchievementValue, PlayRecord, PlayTime, ScoreDifficulty, ScoreGeneration, SongIcon,
@@ -21,7 +21,7 @@ use crate::{
 };
 use anyhow::{bail, Context};
 use either::Either;
-use getset::{Getters, CopyGetters};
+use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
 use itertools::{chain, Itertools};
 use joinery::JoinableIterator;

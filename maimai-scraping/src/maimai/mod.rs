@@ -1,24 +1,21 @@
 pub mod estimate_rating;
 pub mod load_score_level;
-pub mod play_record_parser;
+pub mod parser;
 pub mod rating;
-pub mod rating_target_parser;
 pub mod schema;
-pub mod song_score_parser;
 
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use play_record_parser::parse_record_index;
-use schema::latest::{Idx, PlayRecord, PlayTime, PlayedAt};
-
 use crate::{
     cookie_store::AimeIdx,
+    maimai::{
+        parser::{play_record::parse_record_index, rating_target::RatingTargetFile},
+        schema::latest::{Idx, PlayRecord, PlayTime, PlayedAt},
+    },
     sega_trait::{record_map_serde, PlayRecordTrait, RecordMap, SegaTrait, SegaUserData},
 };
-
-use self::rating_target_parser::RatingTargetFile;
 
 pub struct Maimai;
 impl SegaTrait for Maimai {
@@ -41,7 +38,7 @@ impl SegaTrait for Maimai {
 
     type PlayRecord = PlayRecord;
     fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
-        play_record_parser::parse(html, idx)
+        parser::play_record::parse(html, idx)
     }
 
     fn play_log_detail_not_found(location: &Url) -> bool {

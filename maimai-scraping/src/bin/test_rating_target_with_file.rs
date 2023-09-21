@@ -12,7 +12,7 @@ struct Opts {
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let html = Html::parse_document(&fs_err::read_to_string(opts.input)?);
-    let res = maimai::rating_target_parser::parse(&html)?;
+    let res = maimai::parser::rating_target::parse(&html)?;
     println!("{res:?}");
     Ok(())
 }

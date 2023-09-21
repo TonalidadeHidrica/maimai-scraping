@@ -11,7 +11,7 @@ use crate::{
     api::SegaClient,
     chrono_util::jst_now,
     maimai::{
-        rating_target_parser::{self, RatingTargetFile},
+        parser::{self, rating_target::RatingTargetFile},
         schema::latest::PlayTime as MaimaiPlayTime,
         Maimai,
     },
@@ -132,7 +132,7 @@ pub async fn update_targets(
             "https://maimaidx.jp/maimai-mobile/home/ratingTargetMusic/",
         )?)
         .await?;
-    let res = rating_target_parser::parse(&Html::parse_document(&res.0.text().await?))?;
+    let res = parser::rating_target::parse(&Html::parse_document(&res.0.text().await?))?;
     rating_targets.insert(key_to_store, res);
     Ok(())
 }

@@ -7,16 +7,15 @@ use scraper::ElementRef;
 use serde::{Deserialize, Serialize};
 
 use crate::maimai::{
-    play_record_parser::{parse_playlog_diff, parse_score_generation_img},
-    song_score_parser::{
-        find_and_parse_achievement_value, find_and_parse_score_level, find_and_parse_song_name,
+    parser::{
+        play_record::{parse_playlog_diff, parse_score_generation_img},
+        song_score::{
+            find_and_parse_achievement_value, find_and_parse_score_idx, find_and_parse_score_level,
+            find_and_parse_song_name, ScoreIdx,
+        },
     },
-};
-
-use super::{
     rating::ScoreLevel,
     schema::latest::{AchievementValue, PlayTime, RatingValue, ScoreMetadata, SongName},
-    song_score_parser::{find_and_parse_score_idx, ScoreIdx},
 };
 
 pub fn parse(html: &scraper::Html) -> anyhow::Result<RatingTargetList> {

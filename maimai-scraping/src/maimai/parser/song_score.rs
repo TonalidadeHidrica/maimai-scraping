@@ -4,15 +4,11 @@ use scraper::ElementRef;
 use serde::{Deserialize, Serialize};
 
 use crate::maimai::{
-    play_record_parser::{parse_achievement_txt, parse_deluxscore},
-    schema::latest::ScoreGeneration,
-};
-
-use super::{
+    parser::play_record::{parse_achievement_txt, parse_deluxscore},
     rating::ScoreLevel,
     schema::latest::{
         AchievementRank, AchievementValue, FullComboKind, FullSyncKind, ScoreDifficulty,
-        ScoreMetadata, SongName, ValueWithMax,
+        ScoreGeneration, ScoreMetadata, SongName, ValueWithMax,
     },
 };
 

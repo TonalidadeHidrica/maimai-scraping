@@ -9,7 +9,7 @@ use chrono::NaiveDateTime;
 use itertools::Itertools;
 use scraper::{ElementRef, Html};
 
-use super::schema::latest::*;
+use crate::maimai::schema::latest::*;
 
 pub type RecordIndexData = (PlayTime, Idx);
 

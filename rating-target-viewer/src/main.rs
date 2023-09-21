@@ -9,7 +9,7 @@ use itertools::Itertools;
 use maimai_scraping::{
     fs_json_util::read_json,
     maimai::{
-        rating_target_parser::{RatingTargetEntry, RatingTargetFile},
+        parser::rating_target::{RatingTargetEntry, RatingTargetFile},
         schema::latest::{PlayTime, ScoreDifficulty, ScoreGeneration},
         MaimaiUserData,
     },

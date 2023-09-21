@@ -7,7 +7,7 @@ use scraper::Html;
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let html = Html::parse_document(&fs_err::read_to_string(opts.input_file)?);
-    let res = maimai::song_score_parser::parse(&html, opts.difficulty)?;
+    let res = maimai::parser::song_score::parse(&html, opts.difficulty)?;
     for entry in res {
         println!("{entry:?}");
     }
