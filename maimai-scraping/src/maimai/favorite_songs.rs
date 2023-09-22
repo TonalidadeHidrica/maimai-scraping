@@ -1,3 +1,4 @@
+use anyhow::bail;
 use reqwest::header::{HeaderValue, CONTENT_TYPE};
 use serde::Serialize;
 use typed_builder::TypedBuilder;
@@ -22,21 +23,25 @@ impl SetFavoriteSong {
     }
 
     pub async fn send(&self, client: &mut SegaClient<'_, Maimai>) -> anyhow::Result<()> {
-        client
+        let (_, location) =  client
             .request_authenticated(|client| {
                 Ok(client
-                    .post(
-                        Url::parse(
-                            "https://maimaidx.jp/maimai-mobile/home/userOption/favorite/updateMusic/set",
-                        )?,
-                    )
+                    .post(Url::parse(
+                        "https://maimaidx.jp/maimai-mobile/home/userOption/favorite/updateMusic/set",
+                    )?)
                     .header(
                         CONTENT_TYPE,
                         HeaderValue::from_static("application/x-www-form-urlencoded"),
                     )
                     .body(self.query_string()?))
-            })
+            }, &format!("; _t={}", self.token))
             .await?;
+        let expected_url =
+            Url::parse("https://maimaidx.jp/maimai-mobile/home/userOption/favorite/musicList")
+                .unwrap();
+        if location != Some(expected_url) {
+            bail!("Unexpected redirect to {location:?}");
+        }
         Ok(())
     }
 }

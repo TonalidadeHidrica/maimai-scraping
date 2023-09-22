@@ -1,5 +1,5 @@
 use anyhow::Context;
-use derive_more::From;
+use derive_more::{AsRef, Display, From};
 use scraper::ElementRef;
 use serde::Serialize;
 
@@ -32,7 +32,8 @@ pub struct Genre {
     pub name: GenreName,
     pub songs: Vec<Song>,
 }
-#[derive(Debug, From, Serialize)]
+#[derive(Debug, From, AsRef, Display, Serialize)]
+#[as_ref(forward)]
 pub struct Token(String);
 #[derive(Debug)]
 pub struct Song {

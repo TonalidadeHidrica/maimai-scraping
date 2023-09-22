@@ -16,6 +16,8 @@ struct Opts {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    pretty_env_logger::init();
+
     let opts = Opts::parse();
     let (mut client, _) =
         SegaClient::<Maimai>::new(&opts.credentials_path, &opts.cookie_store_path).await?;
@@ -31,8 +33,8 @@ async fn main() -> anyhow::Result<()> {
     ))?;
 
     SetFavoriteSong::builder()
-        .token("token".to_owned().into())
-        .music(vec![page.genres[0].songs[42].idx.clone()])
+        .token(page.token)
+        .music(vec![page.genres[0].songs[39].idx.clone()])
         .build()
         .send(&mut client)
         .await?;

@@ -125,32 +125,37 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
         &mut self,
         url: impl IntoUrl,
     ) -> anyhow::Result<(reqwest::Response, Option<Url>)> {
-        let response = self
-            .request_authenticated(|client| Ok(client.get(url)))
+        self.request_authenticated(|client| Ok(client.get(url)), "")
+            .await
+    }
+
+    pub async fn request_authenticated(
+        &mut self,
+        request_builder: impl FnOnce(&reqwest::Client) -> anyhow::Result<reqwest::RequestBuilder>,
+        additional_cookie: &str,
+    ) -> anyhow::Result<(reqwest::Response, Option<Url>)> {
+        let response = request_builder(&self.client)?
+            .header(
+                header::COOKIE,
+                format!("userId={}{}", self.cookie_store.user_id, additional_cookie),
+            )
+            .send()
             .await?;
-        if !response.status().is_success() {
-            bail!("Failed to log in: server returned {:?}", response.status());
+        set_and_save_credentials(&mut self.cookie_store, &self.cookie_store_path, &response)?;
+        // HACK: see comments in fn reqwest_client().
+        // Once the issue is resolved, "is_redirection" clause should be removed.
+        // We do not know what is the side effect on other operations by this addition.
+        if !(response.status().is_success() || response.status().is_redirection()) {
+            bail!(
+                "Unexpected error code: server returned {:?}",
+                response.status()
+            );
         }
         let location = response
             .headers()
             .get(header::LOCATION)
             .and_then(|x| Url::parse(x.to_str().ok()?).ok());
         Ok((response, location))
-    }
-
-    pub async fn request_authenticated(
-        &mut self,
-        request_builder: impl FnOnce(&reqwest::Client) -> anyhow::Result<reqwest::RequestBuilder>,
-    ) -> anyhow::Result<reqwest::Response> {
-        let response = request_builder(&self.client)?
-            .header(
-                header::COOKIE,
-                format!("userId={}", self.cookie_store.user_id),
-            )
-            .send()
-            .await?;
-        set_and_save_credentials(&mut self.cookie_store, &self.cookie_store_path, &response)?;
-        Ok(response)
     }
 
     pub fn reqwest(&self) -> &reqwest::Client {
@@ -165,8 +170,20 @@ fn reqwest_client<T: SegaTrait>() -> reqwest::Result<reqwest::Client> {
         // .cookie_provider(jar.clone())
         .connection_verbose(true)
         .redirect(redirect::Policy::custom(|attempt| {
+            #[allow(clippy::if_same_then_else)]
             if attempt.url().path() == T::ERROR_PATH {
                 attempt.error(anyhow!("Redirected to error page"))
+            } else if attempt.url().path() == "/maimai-mobile/home/userOption/favorite/musicList" {
+                // HACK: on redirect, the header may be replaced by the contents on the cookie store.
+                // While we set `userId` cookie by manually editing the header,
+                // this behavior may overwrite and remove the header that we set,
+                // causing a redirect error.
+                // Here, we intentionally stop redirecting on specific path
+                // so that this will never happen.
+                // In future, we must exploit the cookie jar (that is commented out)
+                // so that we can extract the cookie,
+                // or implement a custom cookie store that is capable to do so.
+                attempt.stop()
             } else if attempt
                 .previous()
                 .last()
@@ -251,7 +268,7 @@ async fn try_login<T: SegaTrait>(
     if !set_and_save_credentials(&mut cookie_store, cookie_store_path, &response)? {
         return Err(anyhow!("Desired cookie was not found."));
     }
-    Ok(dbg!(cookie_store))
+    Ok(cookie_store)
 }
 
 async fn get_token<T: SegaTrait>(client: &reqwest::Client) -> Result<String, anyhow::Error> {
