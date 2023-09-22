@@ -3,10 +3,11 @@ use std::path::PathBuf;
 use clap::Parser;
 use maimai_scraping::{
     api::SegaClient,
-    maimai::{favorite_songs::SetFavoriteSong, parser::favorite_songs, Maimai},
+    maimai::{
+        favorite_songs::{fetch_favorite_songs_form, SetFavoriteSong},
+        Maimai,
+    },
 };
-use scraper::Html;
-use url::Url;
 
 #[derive(Parser)]
 struct Opts {
@@ -21,20 +22,10 @@ async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let (mut client, _) =
         SegaClient::<Maimai>::new(&opts.credentials_path, &opts.cookie_store_path).await?;
-    let page = favorite_songs::parse(&Html::parse_document(
-        &client
-            .fetch_authenticated(Url::parse(
-                "https://maimaidx.jp/maimai-mobile/home/userOption/favorite/updateMusic",
-            )?)
-            .await?
-            .0
-            .text()
-            .await?,
-    ))?;
-
+    let page = fetch_favorite_songs_form(&mut client).await?;
     SetFavoriteSong::builder()
-        .token(page.token)
-        .music(vec![page.genres[0].songs[39].idx.clone()])
+        .token(&page.token)
+        .music(vec![&page.genres[0].songs[39].idx])
         .build()
         .send(&mut client)
         .await?;
