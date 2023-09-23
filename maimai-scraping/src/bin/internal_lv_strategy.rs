@@ -84,6 +84,8 @@ async fn main() -> anyhow::Result<()> {
             .build()
             .send(&mut client)
             .await?;
+    } else {
+        println!("WARNING: DRY-RUN!");
     }
 
     Ok(())
