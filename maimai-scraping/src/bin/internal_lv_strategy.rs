@@ -56,14 +56,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let songs = songs(&old, &new, &opts)?;
-    let mut idxs = vec![];
 
     for (i, &(song, key)) in songs.iter().enumerate() {
         println!("{i:>4} {}", display_song(song.song_name(), key));
-    }
-    if idxs.len() > 30 {
-        println!("Only the first 30 of the candidates were added.");
-        idxs.drain(30..);
     }
 
     if !opts.dry_run {
@@ -71,12 +66,17 @@ async fn main() -> anyhow::Result<()> {
             SegaClient::<Maimai>::new(&opts.credentials_path, &opts.cookie_store_path).await?;
         let page = fetch_favorite_songs_form(&mut client).await?;
         let map = song_name_to_idx_map(&page);
+        let mut idxs = vec![];
         for (song, key) in songs {
             match &map.get(song.song_name()).map_or(&[][..], |x| &x[..]) {
                 [] => println!("Song not found: {}", display_song(song.song_name(), key)),
                 [idx] => idxs.push(*idx),
                 idxs => bail!("Multiple candidates are found: {song:?} {idxs:?}"),
             }
+        }
+        if idxs.len() > 30 {
+            println!("Only the first 30 of the candidates will be added.");
+            idxs.drain(30..);
         }
         SetFavoriteSong::builder()
             .token(&page.token)
