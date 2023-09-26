@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{ops::Bound::*, path::PathBuf};
 
 use actix_web::{
     get,
@@ -36,6 +36,8 @@ async fn main() -> anyhow::Result<()> {
             .rating_targets;
         App::new()
             .app_data(web::Data::new(Data { rating_targets }))
+            .service(entry_next)
+            .service(entry_prev)
             .service(get)
             .service(other_paths)
             .wrap(Logger::default())
@@ -106,12 +108,45 @@ async fn get(web_data: web::Data<Data>, play_time: web::Path<PlayTime>) -> HttpR
         .body(html)
 }
 
+#[get("/entry/next/{time}")]
+async fn entry_next(web_data: web::Data<Data>, play_time: web::Path<PlayTime>) -> HttpResponse {
+    let Some((&time, _)) = (web_data
+        .rating_targets
+        .range((Excluded(play_time.into_inner()), Unbounded))
+        .next())
+    .or_else(|| web_data.rating_targets.first_key_value()) else {
+        return rating_target_is_empty();
+    };
+    HttpResponse::Found()
+        .insert_header((header::LOCATION, format!("/entry/{:?}", time.get())))
+        .body(())
+}
+
+#[get("/entry/prev/{time}")]
+async fn entry_prev(web_data: web::Data<Data>, play_time: web::Path<PlayTime>) -> HttpResponse {
+    let Some((&time, _)) = web_data
+        .rating_targets
+        .range(..play_time.into_inner())
+        .last()
+        .or_else(|| web_data.rating_targets.last_key_value())
+    else {
+        return rating_target_is_empty();
+    };
+    HttpResponse::Found()
+        .insert_header((header::LOCATION, format!("/entry/{:?}", time.get())))
+        .body(())
+}
+
 #[get("{_:.*}")]
 async fn other_paths(web_data: web::Data<Data>) -> HttpResponse {
     match web_data.rating_targets.keys().last() {
-        Some(latest) => HttpResponse::MovedPermanently()
+        Some(latest) => HttpResponse::Found()
             .insert_header((header::LOCATION, format!("/entry/{:?}", latest.get())))
             .body(()),
-        None => HttpResponse::NotFound().body("No data yet"),
+        None => rating_target_is_empty(),
     }
+}
+
+fn rating_target_is_empty() -> HttpResponse {
+    HttpResponse::NotFound().body("No data yet")
 }
