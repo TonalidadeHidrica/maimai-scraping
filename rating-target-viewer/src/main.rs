@@ -21,7 +21,7 @@ use maimai_scraping::{
 #[derive(Parser)]
 struct Opts {
     maimai_user_data_path: PathBuf,
-    #[clap(default_value = "19405")]
+    #[arg(default_value = "19405")]
     port: u16,
 }
 

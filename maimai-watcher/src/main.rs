@@ -23,7 +23,7 @@ use url::Url;
 
 #[derive(Parser)]
 struct Opts {
-    #[clap(default_value = "ignore/maimai-watcher-config.toml")]
+    #[arg(default_value = "ignore/maimai-watcher-config.toml")]
     config_path: PathBuf,
 }
 
