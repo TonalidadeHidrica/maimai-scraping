@@ -1,7 +1,10 @@
 use std::path::PathBuf;
 
 use actix_web::{
-    get, http::header::ContentType, middleware::Logger, web, App, HttpResponse, HttpServer,
+    get,
+    http::header::{self, ContentType},
+    middleware::Logger,
+    web, App, HttpResponse, HttpServer,
 };
 use chrono::NaiveDateTime;
 use clap::Parser;
@@ -34,6 +37,7 @@ async fn main() -> anyhow::Result<()> {
         App::new()
             .app_data(web::Data::new(Data { rating_targets }))
             .service(get)
+            .service(other_paths)
             .wrap(Logger::default())
     })
     .bind(("127.0.0.1", opts.port))?
@@ -100,4 +104,14 @@ async fn get(web_data: web::Data<Data>, play_time: web::Path<PlayTime>) -> HttpR
     HttpResponse::Ok()
         .content_type(ContentType::html())
         .body(html)
+}
+
+#[get("{_:.*}")]
+async fn other_paths(web_data: web::Data<Data>) -> HttpResponse {
+    match web_data.rating_targets.keys().last() {
+        Some(latest) => HttpResponse::MovedPermanently()
+            .insert_header((header::LOCATION, format!("/entry/{:?}", latest.get())))
+            .body(()),
+        None => HttpResponse::NotFound().body("No data yet"),
+    }
 }
