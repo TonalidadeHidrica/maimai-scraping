@@ -1,7 +1,10 @@
 use std::{path::PathBuf, sync::mpsc, time::Duration};
 
 use clap::Parser;
-use maimai_scraping::{maimai::Maimai, sega_trait::SegaTrait};
+use maimai_scraping::{
+    maimai::{estimate_rating::EstimatorConfig, Maimai},
+    sega_trait::SegaTrait,
+};
 use maimai_watcher::watch::{self, TimeoutConfig};
 
 #[tokio::main]
@@ -19,6 +22,7 @@ async fn main() -> anyhow::Result<()> {
         estimate_internal_levels: true,
         timeout_config: TimeoutConfig::indefinite(),
         report_no_updates: false,
+        estimator_config: opts.estimator_config,
     })
     .await?;
 
@@ -39,4 +43,6 @@ struct Opts {
     maimai_uesr_data_path: PathBuf,
     levels_path: PathBuf,
     removed_songs_path: PathBuf,
+    #[clap(flatten)]
+    estimator_config: EstimatorConfig,
 }

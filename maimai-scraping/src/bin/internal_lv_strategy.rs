@@ -7,7 +7,7 @@ use maimai_scraping::{
     api::SegaClient,
     fs_json_util::read_json,
     maimai::{
-        estimate_rating::{ScoreConstantsStore, ScoreKey},
+        estimate_rating::{EstimatorConfig, ScoreConstantsStore, ScoreKey},
         favorite_songs::{fetch_favorite_songs_form, song_name_to_idx_map, SetFavoriteSong},
         load_score_level::{self, Song},
         rating::{ScoreConstant, ScoreLevel},
@@ -28,6 +28,8 @@ struct Opts {
     datas: Vec<PathBuf>,
     #[clap(long)]
     dry_run: bool,
+    #[clap(flatten)]
+    estimator_config: EstimatorConfig,
 }
 #[derive(Clone)]
 struct Levels(Vec<ScoreConstant>);
@@ -53,7 +55,11 @@ async fn main() -> anyhow::Result<()> {
     let mut new = ScoreConstantsStore::new(&new, &[])?;
     for data in &opts.datas {
         let data: MaimaiUserData = read_json(data)?;
-        new.do_everything(data.records.values(), &data.rating_targets)?;
+        new.do_everything(
+            opts.estimator_config,
+            data.records.values(),
+            &data.rating_targets,
+        )?;
     }
 
     let songs = songs(&old, &new, &opts)?;

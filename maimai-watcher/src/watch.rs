@@ -14,7 +14,7 @@ use maimai_scraping::{
     fs_json_util::{read_json, write_json},
     maimai::{
         data_collector::update_targets,
-        estimate_rating::{ScoreConstantsStore, ScoreKey},
+        estimate_rating::{EstimatorConfig, ScoreConstantsStore, ScoreKey},
         load_score_level::{self, RemovedSong, Song},
         rating::{ScoreConstant, ScoreLevel},
         schema::{
@@ -51,6 +51,7 @@ pub struct Config {
     pub estimate_internal_levels: bool,
     pub timeout_config: TimeoutConfig,
     pub report_no_updates: bool,
+    pub estimator_config: EstimatorConfig,
 }
 
 #[derive(Debug)]
@@ -187,7 +188,11 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
             &self.config.slack_post_webhook,
             &self.config.user_id,
             self.levels_actual
-                .do_everything(self.data.records.values(), &self.data.rating_targets)
+                .do_everything(
+                    self.config.estimator_config,
+                    self.data.records.values(),
+                    &self.data.rating_targets,
+                )
                 .context("While estimating levels precisely"),
         )
         .await;

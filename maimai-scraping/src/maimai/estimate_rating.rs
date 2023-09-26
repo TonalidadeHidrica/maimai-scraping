@@ -20,6 +20,7 @@ use crate::{
     },
 };
 use anyhow::{bail, Context};
+use clap::Args;
 use either::Either;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
@@ -27,6 +28,7 @@ use itertools::{chain, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::{trace, warn};
+use serde::Deserialize;
 use strum::IntoEnumIterator;
 
 use super::{
@@ -242,16 +244,30 @@ fn single_song_rating_for_target_entry(
     single_song_rating(level, a, rank_coef(a))
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Args)]
+pub struct EstimatorConfig {
+    #[arg(long)]
+    pub new_songs_are_complete: bool,
+    #[arg(long)]
+    pub old_songs_are_complete: bool,
+}
+
 impl<'s> ScoreConstantsStore<'s, '_> {
     pub fn do_everything<'r>(
         &mut self,
+        config: EstimatorConfig,
         records: impl IntoIterator<Item = &'r PlayRecord> + Clone,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
         if self.show_details {
             println!("New songs");
         }
-        self.analyze_new_songs(records.clone())?;
+        if config.new_songs_are_complete {
+            self.determine_by_delta(records.clone(), false)?;
+        }
+        if config.old_songs_are_complete {
+            self.determine_by_delta(records.clone(), true)?;
+        }
         for i in 1.. {
             if self.show_details {
                 println!("Iteration {i}");
@@ -266,15 +282,17 @@ impl<'s> ScoreConstantsStore<'s, '_> {
         Ok(())
     }
 
-    pub fn analyze_new_songs<'r>(
+    fn determine_by_delta<'r>(
         &mut self,
         records: impl IntoIterator<Item = &'r PlayRecord>,
+        analyze_old_songs: bool,
     ) -> anyhow::Result<()> {
         let version = MaimaiVersion::latest();
         let start_time: PlayTime = version.start_time().into();
         let mut r2s = BTreeSet::<(i16, _)>::new();
         let mut s2r = HashMap::<_, i16>::new();
         let mut key_to_record = HashMap::new();
+        let max_count = if analyze_old_songs { 35 } else { 15 };
         for record in records
             .into_iter()
             .filter(|r| start_time <= r.played_at().time())
@@ -285,7 +303,7 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                 continue;
             };
             let delta = record.rating_result().delta();
-            if song.version() == version && delta > 0 {
+            if (analyze_old_songs ^ (song.version() == version)) && delta > 0 {
                 use hashbrown::hash_map::Entry::*;
                 let rating = match s2r.entry(score_key) {
                     Occupied(mut s2r_entry) => {
@@ -297,7 +315,7 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                         *rating
                     }
                     Vacant(s2r_entry) => {
-                        if r2s.len() == 15 {
+                        if r2s.len() == max_count {
                             // println!("  Removing the song with lowest score & inserting new one instead (delta={delta})");
                             let (removed_rating, removed_key) = r2s.pop_first().unwrap();
                             // println!("    Removed={}", removed_rating);

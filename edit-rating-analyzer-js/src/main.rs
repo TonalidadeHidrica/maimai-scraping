@@ -6,7 +6,7 @@ use itertools::{EitherOrBoth, Itertools};
 use maimai_scraping::{
     fs_json_util::read_json,
     maimai::{
-        estimate_rating::{ScoreConstantsStore, ScoreKey},
+        estimate_rating::{EstimatorConfig, ScoreConstantsStore, ScoreKey},
         load_score_level::{self, RemovedSong, Song, SongRaw},
         MaimaiUserData,
     },
@@ -22,6 +22,8 @@ struct Opts {
     level_file: PathBuf,
     removed_songs: PathBuf,
     in_lv_js: PathBuf,
+    #[clap(flatten)]
+    estimator_config: EstimatorConfig,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -34,7 +36,11 @@ fn main() -> anyhow::Result<()> {
     let levels_original = load_score_level::load(opts.level_file)?;
     let removed_songs: Vec<RemovedSong> = read_json(opts.removed_songs)?;
     let mut levels = ScoreConstantsStore::new(&levels_original, &removed_songs)?;
-    levels.do_everything(data.records.values(), &data.rating_targets)?;
+    levels.do_everything(
+        opts.estimator_config,
+        data.records.values(),
+        &data.rating_targets,
+    )?;
 
     // Assert that the parsed data and generated data coincide
     for entry in songs.iter().map(|x| &x.song).zip_longest(&levels_original) {

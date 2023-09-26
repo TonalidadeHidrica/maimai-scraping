@@ -4,7 +4,7 @@ use clap::Parser;
 use maimai_scraping::{
     fs_json_util::read_json,
     maimai::{
-        estimate_rating::ScoreConstantsStore,
+        estimate_rating::{EstimatorConfig, ScoreConstantsStore},
         load_score_level::{self, RemovedSong},
         MaimaiUserData,
     },
@@ -17,6 +17,8 @@ struct Opts {
     removed_songs: PathBuf,
     #[clap(long)]
     details: bool,
+    #[clap(flatten)]
+    estimator_config: EstimatorConfig,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -30,7 +32,11 @@ fn main() -> anyhow::Result<()> {
     let mut levels = ScoreConstantsStore::new(&levels, &removed_songs)?;
 
     levels.show_details = opts.details;
-    levels.do_everything(data.records.values(), &data.rating_targets)?;
+    levels.do_everything(
+        opts.estimator_config,
+        data.records.values(),
+        &data.rating_targets,
+    )?;
 
     Ok(())
 }

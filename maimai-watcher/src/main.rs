@@ -12,6 +12,7 @@ use actix_web::{middleware::Logger, web, App, HttpServer, Responder};
 use anyhow::{bail, Context};
 use clap::Parser;
 use log::{error, info};
+use maimai_scraping::maimai::estimate_rating::EstimatorConfig;
 use maimai_watcher::{
     slack::webhook_send,
     watch::{self, TimeoutConfig, UserId, WatchHandler},
@@ -47,6 +48,7 @@ struct UserConfig {
     cookie_store_path: PathBuf,
     user_data_path: PathBuf,
     estimate_internal_levels: bool,
+    estimator_config: EstimatorConfig,
 }
 
 #[tokio::main]
@@ -272,6 +274,7 @@ fn watch_config(
         estimate_internal_levels: user_config.estimate_internal_levels,
         timeout_config,
         report_no_updates,
+        estimator_config: user_config.estimator_config,
     }
 }
 
