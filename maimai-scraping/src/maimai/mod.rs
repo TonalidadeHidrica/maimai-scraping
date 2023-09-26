@@ -85,7 +85,7 @@ impl PlayRecordTrait for PlayRecord {
     }
     type PlayTime = PlayTime;
     fn time(&self) -> PlayTime {
-        self.played_at().time()
+        (self.idx().timestamp_jst()).unwrap_or(self.played_at().time())
     }
     type Idx = Idx;
     fn idx(&self) -> Idx {

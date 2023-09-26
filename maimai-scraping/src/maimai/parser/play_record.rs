@@ -21,8 +21,12 @@ pub fn parse_record_index(html: &Html) -> anyhow::Result<Vec<RecordIndexData>> {
             .find_map(ElementRef::wrap)
             .ok_or_else(|| anyhow!("Next sibling was not found."))?;
 
-        let play_date = parse_playlog_top_conatiner(playlog_top_container)?.5;
         let idx = parse_idx_from_playlog_main_container(playlog_main_container)?;
+        let play_date = match idx.timestamp_jst() {
+            Some(x) => x,
+            // Support old version where timestamp is not included in idx
+            None => parse_playlog_top_conatiner(playlog_top_container)?.5,
+        };
         res.push((play_date, idx));
     }
     Ok(res)

@@ -1,5 +1,6 @@
 use anyhow::bail;
 use chrono::naive::NaiveDateTime;
+use chrono::FixedOffset;
 use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -7,6 +8,7 @@ use std::fmt::Display;
 use std::num::ParseIntError;
 use std::str::FromStr;
 use strum::EnumIter;
+use thiserror::Error;
 use typed_builder::TypedBuilder;
 use url::Url;
 
@@ -61,12 +63,20 @@ pub struct Idx {
     index: u8,
     timestamp: Option<NaiveDateTime>,
 }
+impl Idx {
+    pub fn timestamp_jst(self) -> Option<PlayTime> {
+        self.timestamp.map(PlayTime::from_utc)
+    }
+}
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Error)]
 pub enum IdxParseError {
-    ParseIntError(ParseIntError),
+    #[error("Value cannot be parsed as an integer: {0}")]
+    ParseIntError(#[from] ParseIntError),
+    #[error("Value is not less than 50: {0}")]
     IndexOutOfRange(u8),
-    TimestampParseError(chrono::format::ParseError),
+    #[error("Error while parsing timestamp: {0}")]
+    TimestampParseError(#[from] chrono::format::ParseError),
 }
 impl FromStr for Idx {
     type Err = IdxParseError;
@@ -74,13 +84,12 @@ impl FromStr for Idx {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (index, timestamp) = match s.split_once(',') {
             Some((index, timestamp)) => {
-                let timestamp = NaiveDateTime::parse_from_str(timestamp, "%s")
-                    .map_err(IdxParseError::TimestampParseError)?;
+                let timestamp = NaiveDateTime::parse_from_str(timestamp, "%s")?;
                 (index, Some(timestamp))
             }
             _ => (s, None),
         };
-        let index = index.parse().map_err(IdxParseError::ParseIntError)?;
+        let index = index.parse()?;
         let index = match index {
             0..=49 => Ok(index),
             _ => Err(IdxParseError::IndexOutOfRange(index)),
@@ -128,6 +137,13 @@ pub struct PlayTime(NaiveDateTime);
 impl PlayTime {
     pub fn get(self) -> NaiveDateTime {
         self.0
+    }
+
+    pub(crate) fn from_utc(time: NaiveDateTime) -> PlayTime {
+        time.and_utc()
+            .with_timezone(&FixedOffset::east_opt(9 * 60 * 60).unwrap())
+            .naive_local()
+            .into()
     }
 }
 
@@ -534,7 +550,7 @@ pub enum UtageKind {
 mod tests {
     use chrono::NaiveDate;
 
-    use super::{Idx, IdxParseError as E};
+    use super::{Idx, IdxParseError as E, PlayTime};
 
     #[test]
     fn parse_idx() {
@@ -638,5 +654,18 @@ mod tests {
             .to_string(),
             "12,1694624103",
         );
+    }
+
+    #[test]
+    fn play_time_from_utc() {
+        let utc = NaiveDate::from_ymd_opt(2023, 9, 13)
+            .unwrap()
+            .and_hms_opt(16, 55, 3)
+            .unwrap();
+        let jst = NaiveDate::from_ymd_opt(2023, 9, 14)
+            .unwrap()
+            .and_hms_opt(1, 55, 3)
+            .unwrap();
+        assert_eq!(PlayTime::from_utc(utc), PlayTime::from(jst));
     }
 }
