@@ -34,7 +34,7 @@ pub async fn update_targets(
     } else {
         info!("Rating target: not saved");
     }
-    println!("Latest play at: {last_played}");
+    info!("Latest play at: {last_played}");
     let key_to_store = match last_saved.cmp(&Some(last_played)) {
         _ if force => {
             warn!("Retrieving data regardless of the ordering between the last saved and played times.");
