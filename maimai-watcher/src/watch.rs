@@ -10,9 +10,10 @@ use lazy_format::lazy_format;
 use log::error;
 use maimai_scraping::{
     api::SegaClient,
-    data_collector::{load_or_create_user_data, update_records, update_targets},
+    data_collector::{load_or_create_user_data, update_records},
     fs_json_util::{read_json, write_json},
     maimai::{
+        data_collector::update_targets,
         estimate_rating::{ScoreConstantsStore, ScoreKey},
         load_score_level::{self, RemovedSong, Song},
         rating::{ScoreConstant, ScoreLevel},

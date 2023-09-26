@@ -3,10 +3,8 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::Parser;
 use maimai_scraping::{
-    api::SegaClient,
-    data_collector::{load_or_create_user_data, update_targets},
-    fs_json_util::write_json,
-    maimai::Maimai,
+    api::SegaClient, data_collector::load_or_create_user_data, fs_json_util::write_json,
+    maimai::data_collector::update_targets, maimai::Maimai,
 };
 
 #[derive(Parser)]

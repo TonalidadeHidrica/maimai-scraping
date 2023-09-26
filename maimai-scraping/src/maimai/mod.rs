@@ -1,3 +1,4 @@
+pub mod data_collector;
 pub mod estimate_rating;
 pub mod favorite_songs;
 pub mod load_score_level;
