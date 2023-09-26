@@ -29,6 +29,7 @@ struct Opts {
     #[clap(long)]
     dry_run: bool,
 }
+#[derive(Clone)]
 struct Levels(Vec<ScoreConstant>);
 impl FromStr for Levels {
     type Err = anyhow::Error;

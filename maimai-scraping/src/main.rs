@@ -3,8 +3,8 @@ use std::fmt::Display;
 use std::path::Path;
 use std::path::PathBuf;
 
-use clap::ArgEnum;
 use clap::Parser;
+use clap::ValueEnum;
 use maimai_scraping::api::SegaClient;
 use maimai_scraping::data_collector::load_or_create_user_data;
 use maimai_scraping::data_collector::update_records;
@@ -21,11 +21,11 @@ use serde::Serialize;
 
 #[derive(Parser)]
 struct Opts {
-    #[clap(arg_enum)]
+    #[arg(value_enum)]
     game: Game,
     user_data_path: PathBuf,
 }
-#[derive(Clone, ArgEnum)]
+#[derive(Clone, ValueEnum)]
 enum Game {
     Ongeki,
     Maimai,
