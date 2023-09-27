@@ -6,12 +6,14 @@ use crate::cookie_store::CookieStore;
 use crate::cookie_store::CookieStoreLoadError;
 use crate::cookie_store::Credentials;
 use crate::cookie_store::Password;
+use crate::cookie_store::PlayerName;
 use crate::cookie_store::SegaId;
 use crate::sega_trait::Idx;
 use crate::sega_trait::PlayTime;
 use crate::sega_trait::SegaTrait;
 use anyhow::anyhow;
 use anyhow::bail;
+use anyhow::Context;
 use log::info;
 use reqwest::header;
 use reqwest::redirect;
@@ -30,10 +32,12 @@ pub struct SegaClient<'p, T: SegaTrait> {
 
 impl<'p, T: SegaTrait> SegaClient<'p, T> {
     pub async fn new_with_default_path(
+        player_name: Option<&PlayerName>,
     ) -> anyhow::Result<(SegaClient<'p, T>, Vec<(PlayTime<T>, Idx<T>)>)> {
         Self::new(
             Path::new(T::CREDENTIALS_PATH),
             Path::new(T::COOKIE_STORE_PATH),
+            player_name,
         )
         .await
     }
@@ -41,6 +45,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
     pub async fn new(
         credentials_path: &'p Path,
         cookie_store_path: &'p Path,
+        player_name: Option<&PlayerName>,
     ) -> anyhow::Result<(SegaClient<'p, T>, Vec<(PlayTime<T>, Idx<T>)>)> {
         let credentials_path = Cow::Borrowed(credentials_path);
         let cookie_store_path = Cow::Borrowed(cookie_store_path);
@@ -63,7 +68,8 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
             Err(CookieStoreLoadError::NotFound) => {
                 info!("Cookie store was not found.  Trying to log in.");
                 let cookie_store =
-                    try_login::<T>(&client, &credentials_path, &cookie_store_path).await?;
+                    try_login::<T>(&client, &credentials_path, &cookie_store_path, player_name)
+                        .await?;
                 let client = Self {
                     client,
                     credentials_path,
@@ -86,6 +92,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
                     &client.client,
                     &client.credentials_path,
                     &client.cookie_store_path,
+                    player_name,
                 )
                 .await?;
                 // return Ok(());
@@ -237,6 +244,7 @@ async fn try_login<T: SegaTrait>(
     client: &reqwest::Client,
     credentials_path: &Path,
     cookie_store_path: &Path,
+    player_name: Option<&PlayerName>,
 ) -> anyhow::Result<CookieStore> {
     let credentials = Credentials::load(credentials_path)?;
 
@@ -255,18 +263,26 @@ async fn try_login<T: SegaTrait>(
 
     let url = response.url().clone();
     if url.as_str() != T::AIME_LIST_URL {
-        return Err(anyhow!(
-            "Error: redirected to unexpected url while logging in: {}",
-            url,
-        ));
+        bail!("Error: redirected to unexpected url while logging in: {url}",);
     }
 
-    let url = T::select_aime_list_url(credentials.aime_idx.unwrap_or_default());
+    let aime_idx = match player_name {
+        None => credentials.aime_idx.unwrap_or_default(),
+        Some(player_name) => dbg!(T::parse_aime_selection_page(&Html::parse_document(
+            &response.text().await?
+        ))?)
+        .into_iter()
+        .find_map(|(aime_idx, name)| (player_name == &name).then_some(aime_idx))
+        .with_context(|| {
+            "No user with player name {player_name:?} was found in the aime selection page"
+        })?,
+    };
+    let url = T::select_aime_list_url(aime_idx);
     let response = client.get(&url).send().await?;
 
     let mut cookie_store = CookieStore::default();
     if !set_and_save_credentials(&mut cookie_store, cookie_store_path, &response)? {
-        return Err(anyhow!("Desired cookie was not found."));
+        bail!("Desired cookie was not found.");
     }
     Ok(cookie_store)
 }

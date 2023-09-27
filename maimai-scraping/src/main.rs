@@ -1,11 +1,12 @@
 use std::fmt::Debug;
 use std::fmt::Display;
-use std::path::Path;
 use std::path::PathBuf;
 
 use clap::Parser;
 use clap::ValueEnum;
+use log::info;
 use maimai_scraping::api::SegaClient;
+use maimai_scraping::cookie_store::PlayerName;
 use maimai_scraping::data_collector::load_or_create_user_data;
 use maimai_scraping::data_collector::update_records;
 use maimai_scraping::fs_json_util::write_json;
@@ -24,6 +25,8 @@ struct Opts {
     #[arg(value_enum)]
     game: Game,
     user_data_path: PathBuf,
+    #[arg(long)]
+    player_name: Option<PlayerName>,
 }
 #[derive(Clone, ValueEnum)]
 enum Game {
@@ -36,15 +39,13 @@ async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
 
     let opts = Opts::parse();
-    let path = &opts.user_data_path;
-
     match opts.game {
-        Game::Maimai => run::<Maimai>(path).await,
-        Game::Ongeki => run::<Ongeki>(path).await,
+        Game::Maimai => run::<Maimai>(&opts).await,
+        Game::Ongeki => run::<Ongeki>(&opts).await,
     }
 }
 
-async fn run<T>(path: &Path) -> anyhow::Result<()>
+async fn run<T>(opts: &Opts) -> anyhow::Result<()>
 where
     T: SegaTrait,
     Idx<T>: Copy + PartialEq + Display,
@@ -53,10 +54,11 @@ where
     T::UserData: Serialize,
     for<'a> T::UserData: Default + Deserialize<'a>,
 {
-    let mut data = load_or_create_user_data::<T, _>(path)?;
-    let (mut client, index) = SegaClient::<T>::new_with_default_path().await?;
+    let mut data = load_or_create_user_data::<T, _>(&opts.user_data_path)?;
+    let (mut client, index) =
+        SegaClient::<T>::new_with_default_path(opts.player_name.as_ref()).await?;
     update_records(&mut client, data.records_mut(), index).await?;
-    write_json(path, &data)?;
-    println!("Successfully saved data to {:?}.", path);
+    write_json(&opts.user_data_path, &data)?;
+    info!("Successfully saved data to {:?}.", opts.user_data_path);
     Ok(())
 }

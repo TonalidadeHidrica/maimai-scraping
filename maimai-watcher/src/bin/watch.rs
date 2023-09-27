@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::mpsc, time::Duration};
 
 use clap::Parser;
 use maimai_scraping::{
+    cookie_store::PlayerName,
     maimai::{estimate_rating::EstimatorConfig, Maimai},
     sega_trait::SegaTrait,
 };
@@ -23,6 +24,7 @@ async fn main() -> anyhow::Result<()> {
         timeout_config: TimeoutConfig::indefinite(),
         report_no_updates: false,
         estimator_config: opts.estimator_config,
+        player_name: opts.player_name,
     })
     .await?;
 
@@ -45,4 +47,6 @@ struct Opts {
     removed_songs_path: PathBuf,
     #[clap(flatten)]
     estimator_config: EstimatorConfig,
+    #[arg(long)]
+    player_name: Option<PlayerName>,
 }

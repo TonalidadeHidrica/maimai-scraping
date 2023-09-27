@@ -1,3 +1,4 @@
+pub mod aime_selection;
 pub mod favorite_songs;
 pub mod play_record;
 pub mod rating_target;

@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use scraper::{Html, Selector};
 use url::Url;
 
-use crate::cookie_store::AimeIdx;
+use crate::cookie_store::{AimeIdx, PlayerName};
 
 pub type Idx<T> = <<T as SegaTrait>::PlayRecord as PlayRecordTrait>::Idx;
 pub type PlayTime<T> = <<T as SegaTrait>::PlayRecord as PlayRecordTrait>::PlayTime;
@@ -31,6 +31,8 @@ pub trait SegaTrait: Sized {
     const LOGIN_URL: &'static str;
     const AIME_LIST_URL: &'static str;
     fn select_aime_list_url(idx: AimeIdx) -> String;
+
+    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>>;
 
     const CREDENTIALS_PATH: &'static str;
     const COOKIE_STORE_PATH: &'static str;

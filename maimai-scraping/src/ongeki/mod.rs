@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     compare_htmls::elements_are_equivalent,
+    cookie_store::{AimeIdx, PlayerName},
     sega_trait::{record_map_serde, PlayRecordTrait, RecordMap, SegaTrait, SegaUserData},
 };
 
@@ -12,6 +13,7 @@ use self::{
     schema::latest::{Idx, PlayRecord, PlayTime, PlayedAt},
 };
 
+pub mod aime_selection_parser;
 pub mod play_record_parser;
 pub mod play_record_reconstructor;
 pub mod schema;
@@ -71,11 +73,14 @@ impl SegaTrait for Ongeki {
     }
     const LOGIN_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/submit/";
     const AIME_LIST_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/aimeList/";
-    fn select_aime_list_url(idx: crate::cookie_store::AimeIdx) -> String {
+    fn select_aime_list_url(idx: AimeIdx) -> String {
         format!(
             "https://ongeki-net.com/ongeki-mobile/aimeList/submit/?idx={}",
             idx,
         )
+    }
+    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>> {
+        aime_selection_parser::parse(html)
     }
 
     const CREDENTIALS_PATH: &'static str = "./ignore/credentials_ongeki.json";

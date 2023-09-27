@@ -38,6 +38,11 @@ pub struct SegaId(String);
 pub struct Password(String);
 
 #[derive(
+    Clone, PartialEq, Eq, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize,
+)]
+pub struct PlayerName(String);
+
+#[derive(
     Clone, Copy, Default, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize,
 )]
 pub struct AimeIdx(u8);
