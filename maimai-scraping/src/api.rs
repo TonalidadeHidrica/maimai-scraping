@@ -6,7 +6,7 @@ use crate::cookie_store::CookieStore;
 use crate::cookie_store::CookieStoreLoadError;
 use crate::cookie_store::Credentials;
 use crate::cookie_store::Password;
-use crate::cookie_store::UserName;
+use crate::cookie_store::SegaId;
 use crate::sega_trait::Idx;
 use crate::sega_trait::PlayTime;
 use crate::sega_trait::SegaTrait;
@@ -214,7 +214,7 @@ pub fn set_and_save_credentials(
 #[derive(Debug, Serialize)]
 struct LoginForm<'a, T> {
     #[serde(rename = "segaId")]
-    sega_id: &'a UserName,
+    sega_id: &'a SegaId,
     password: &'a Password,
     save_cookie: &'static str,
     token: &'a str,
@@ -224,7 +224,7 @@ struct LoginForm<'a, T> {
 impl<'a, T> LoginForm<'a, T> {
     fn new(credentials: &'a Credentials, token: &'a str) -> Self {
         Self {
-            sega_id: &credentials.user_name,
+            sega_id: &credentials.sega_id,
             password: &credentials.password,
             save_cookie: "on",
             token,
@@ -293,10 +293,10 @@ mod tests {
 
     #[test]
     fn test_login_form() {
-        let user_name = "abc".to_owned().into();
+        let sega_id = "abc".to_owned().into();
         let password = "def".to_owned().into();
         let credentials = Credentials::builder()
-            .user_name(user_name)
+            .sega_id(sega_id)
             .password(password)
             .aime_idx(None)
             .build();

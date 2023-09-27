@@ -10,7 +10,7 @@ use typed_builder::TypedBuilder;
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct CookieStore {
-    pub user_id: UserId,
+    pub user_id: UserIdCookie,
 }
 impl Debug for CookieStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -22,16 +22,17 @@ impl Debug for CookieStore {
 
 #[derive(Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct Credentials {
-    pub user_name: UserName,
+    pub sega_id: SegaId,
     pub password: Password,
     pub aime_idx: Option<AimeIdx>,
 }
 
+/// Represents the value of `user_id` cookie, which is used to track user's identity
 #[derive(Default, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
-pub struct UserId(String);
+pub struct UserIdCookie(String);
 
 #[derive(Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
-pub struct UserName(String);
+pub struct SegaId(String);
 
 #[derive(Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
 pub struct Password(String);
