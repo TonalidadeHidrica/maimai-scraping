@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Debug};
 
 use scraper::{Html, Selector};
 use url::Url;
@@ -31,6 +31,7 @@ pub trait SegaTrait: Sized {
     const LOGIN_URL: &'static str;
     const AIME_LIST_URL: &'static str;
     fn select_aime_list_url(idx: AimeIdx) -> String;
+    const HOME_URL: &'static str;
 
     fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>>;
 
@@ -48,7 +49,7 @@ pub trait PlayRecordTrait {
     fn played_at(&self) -> &Self::PlayedAt;
     type PlayTime;
     fn time(&self) -> Self::PlayTime;
-    type Idx;
+    type Idx: Debug;
     fn idx(&self) -> Self::Idx;
 }
 

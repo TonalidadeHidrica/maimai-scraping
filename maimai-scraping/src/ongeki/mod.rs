@@ -82,6 +82,7 @@ impl SegaTrait for Ongeki {
     fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>> {
         aime_selection_parser::parse(html)
     }
+    const HOME_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/home/";
 
     const CREDENTIALS_PATH: &'static str = "./ignore/credentials_ongeki.json";
     const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_ongeki.json";

@@ -43,7 +43,16 @@ pub struct Password(String);
 pub struct PlayerName(String);
 
 #[derive(
-    Clone, Copy, Default, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Debug,
+    derive_more::From,
+    derive_more::Display,
+    Serialize,
+    Deserialize,
 )]
 pub struct AimeIdx(u8);
 
