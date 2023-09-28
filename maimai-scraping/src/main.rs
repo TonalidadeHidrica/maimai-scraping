@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 use std::fmt::Display;
+use std::path::Path;
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -25,6 +26,10 @@ struct Opts {
     #[arg(value_enum)]
     game: Game,
     user_data_path: PathBuf,
+    #[arg(long)]
+    credentials_path: Option<PathBuf>,
+    #[arg(long)]
+    cookie_store_path: Option<PathBuf>,
     #[arg(long)]
     player_name: Option<PlayerName>,
 }
@@ -55,8 +60,16 @@ where
     for<'a> T::UserData: Default + Deserialize<'a>,
 {
     let mut data = load_or_create_user_data::<T, _>(&opts.user_data_path)?;
-    let (mut client, index) =
-        SegaClient::<T>::new_with_default_path(opts.player_name.as_ref()).await?;
+    let (mut client, index) = SegaClient::<T>::new(
+        opts.credentials_path
+            .as_deref()
+            .unwrap_or_else(|| Path::new(T::CREDENTIALS_PATH)),
+        opts.cookie_store_path
+            .as_deref()
+            .unwrap_or_else(|| Path::new(T::COOKIE_STORE_PATH)),
+        opts.player_name.as_ref(),
+    )
+    .await?;
     update_records(&mut client, data.records_mut(), index).await?;
     write_json(&opts.user_data_path, &data)?;
     info!("Successfully saved data to {:?}.", opts.user_data_path);

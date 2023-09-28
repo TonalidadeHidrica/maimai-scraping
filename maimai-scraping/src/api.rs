@@ -268,9 +268,9 @@ async fn try_login<T: SegaTrait>(
 
     let aime_idx = match player_name {
         None => credentials.aime_idx.unwrap_or_default(),
-        Some(player_name) => dbg!(T::parse_aime_selection_page(&Html::parse_document(
-            &response.text().await?
-        ))?)
+        Some(player_name) => T::parse_aime_selection_page(&Html::parse_document(
+            &response.text().await?,
+        ))?
         .into_iter()
         .find_map(|(aime_idx, name)| (player_name == &name).then_some(aime_idx))
         .with_context(|| {
