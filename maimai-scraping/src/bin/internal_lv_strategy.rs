@@ -5,7 +5,7 @@ use clap::Parser;
 use lazy_format::lazy_format;
 use maimai_scraping::{
     api::SegaClient,
-    cookie_store::PlayerName,
+    cookie_store::UserIdentifier,
     fs_json_util::read_json,
     maimai::{
         estimate_rating::{EstimatorConfig, ScoreConstantsStore, ScoreKey},
@@ -31,8 +31,8 @@ struct Opts {
     dry_run: bool,
     #[clap(flatten)]
     estimator_config: EstimatorConfig,
-    #[arg(long)]
-    player_name: Option<PlayerName>,
+    #[clap(flatten)]
+    user_identifier: UserIdentifier,
 }
 #[derive(Clone)]
 struct Levels(Vec<ScoreConstant>);
@@ -75,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
         let (mut client, _) = SegaClient::<Maimai>::new(
             &opts.credentials_path,
             &opts.cookie_store_path,
-            opts.player_name.as_ref(),
+            &opts.user_identifier,
         )
         .await?;
         let page = fetch_favorite_songs_form(&mut client).await?;

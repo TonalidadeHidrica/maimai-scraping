@@ -37,6 +37,19 @@ pub struct SegaId(String);
 #[derive(Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
 pub struct Password(String);
 
+#[derive(Clone, Debug, TypedBuilder, Serialize, Deserialize, clap::Args)]
+pub struct UserIdentifier {
+    #[arg(long)]
+    pub friend_code: Option<FriendCode>,
+    #[arg(long)]
+    pub player_name: Option<PlayerName>,
+}
+
+#[derive(
+    Clone, PartialEq, Eq, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize,
+)]
+pub struct FriendCode(String);
+
 #[derive(
     Clone, PartialEq, Eq, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize,
 )]

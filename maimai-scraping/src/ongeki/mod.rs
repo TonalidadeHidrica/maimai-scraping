@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     compare_htmls::elements_are_equivalent,
-    cookie_store::{AimeIdx, PlayerName},
+    cookie_store::{AimeIdx, FriendCode, PlayerName},
     sega_trait::{record_map_serde, PlayRecordTrait, RecordMap, SegaTrait, SegaUserData},
 };
 
@@ -14,6 +14,7 @@ use self::{
 };
 
 pub mod aime_selection_parser;
+pub mod friend_code_parser;
 pub mod play_record_parser;
 pub mod play_record_reconstructor;
 pub mod schema;
@@ -83,6 +84,11 @@ impl SegaTrait for Ongeki {
         aime_selection_parser::parse(html)
     }
     const HOME_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/home/";
+    const FRIEND_CODE_URL: &'static str =
+        "https://ongeki-net.com/ongeki-mobile/friend/userFriendCode/";
+    fn parse_friend_code_page(html: &Html) -> anyhow::Result<FriendCode> {
+        friend_code_parser::parse(html)
+    }
 
     const CREDENTIALS_PATH: &'static str = "./ignore/credentials_ongeki.json";
     const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_ongeki.json";

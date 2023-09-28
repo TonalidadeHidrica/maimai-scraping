@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{
-    cookie_store::{AimeIdx, PlayerName},
+    cookie_store::{AimeIdx, FriendCode, PlayerName},
     maimai::{
         parser::{play_record::parse_record_index, rating_target::RatingTargetFile},
         schema::latest::{Idx, PlayRecord, PlayTime, PlayedAt},
@@ -63,6 +63,11 @@ impl SegaTrait for Maimai {
         parser::aime_selection::parse(html)
     }
     const HOME_URL: &'static str = "https://maimaidx.jp/maimai-mobile/home/";
+    const FRIEND_CODE_URL: &'static str =
+        "https://maimaidx.jp/maimai-mobile/friend/userFriendCode/";
+    fn parse_friend_code_page(html: &Html) -> anyhow::Result<FriendCode> {
+        parser::friend_code::parse(html)
+    }
 
     const CREDENTIALS_PATH: &'static str = "./ignore/credentials_maimai.json";
     const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_maimai.json";

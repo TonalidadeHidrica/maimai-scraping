@@ -7,7 +7,7 @@ use clap::Parser;
 use clap::ValueEnum;
 use log::info;
 use maimai_scraping::api::SegaClient;
-use maimai_scraping::cookie_store::PlayerName;
+use maimai_scraping::cookie_store::UserIdentifier;
 use maimai_scraping::data_collector::load_or_create_user_data;
 use maimai_scraping::data_collector::update_records;
 use maimai_scraping::fs_json_util::write_json;
@@ -30,8 +30,8 @@ struct Opts {
     credentials_path: Option<PathBuf>,
     #[arg(long)]
     cookie_store_path: Option<PathBuf>,
-    #[arg(long)]
-    player_name: Option<PlayerName>,
+    #[clap(flatten)]
+    user_identifier: UserIdentifier,
 }
 #[derive(Clone, ValueEnum)]
 enum Game {
@@ -67,7 +67,7 @@ where
         opts.cookie_store_path
             .as_deref()
             .unwrap_or_else(|| Path::new(T::COOKIE_STORE_PATH)),
-        opts.player_name.as_ref(),
+        &opts.user_identifier,
     )
     .await?;
     update_records(&mut client, data.records_mut(), index).await?;
