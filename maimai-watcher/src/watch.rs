@@ -10,6 +10,7 @@ use lazy_format::lazy_format;
 use log::error;
 use maimai_scraping::{
     api::SegaClient,
+    cookie_store::UserIdentifier,
     data_collector::{load_or_create_user_data, update_records},
     fs_json_util::{read_json, write_json},
     maimai::{
@@ -52,6 +53,7 @@ pub struct Config {
     pub timeout_config: TimeoutConfig,
     pub report_no_updates: bool,
     pub estimator_config: EstimatorConfig,
+    pub user_identifier: UserIdentifier,
 }
 
 #[derive(Debug)]
@@ -211,6 +213,7 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
         let (mut client, index) = SegaClient::<Maimai>::new(
             &self.config.credentials_path,
             &self.config.cookie_store_path,
+            &self.config.user_identifier,
         )
         .await?;
         let last_played = index.first().context("There is no play yet.")?.0;

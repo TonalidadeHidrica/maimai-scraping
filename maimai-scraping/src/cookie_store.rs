@@ -10,7 +10,7 @@ use typed_builder::TypedBuilder;
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct CookieStore {
-    pub user_id: UserId,
+    pub user_id: UserIdCookie,
 }
 impl Debug for CookieStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -22,22 +22,50 @@ impl Debug for CookieStore {
 
 #[derive(Debug, TypedBuilder, Serialize, Deserialize)]
 pub struct Credentials {
-    pub user_name: UserName,
+    pub sega_id: SegaId,
     pub password: Password,
     pub aime_idx: Option<AimeIdx>,
 }
 
+/// Represents the value of `user_id` cookie, which is used to track user's identity
 #[derive(Default, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
-pub struct UserId(String);
+pub struct UserIdCookie(String);
 
 #[derive(Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
-pub struct UserName(String);
+pub struct SegaId(String);
 
 #[derive(Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
 pub struct Password(String);
 
+#[derive(Clone, Debug, TypedBuilder, Serialize, Deserialize, clap::Args)]
+pub struct UserIdentifier {
+    #[arg(long)]
+    pub friend_code: Option<FriendCode>,
+    #[arg(long)]
+    pub player_name: Option<PlayerName>,
+}
+
 #[derive(
-    Clone, Copy, Default, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize,
+    Clone, PartialEq, Eq, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize,
+)]
+pub struct FriendCode(String);
+
+#[derive(
+    Clone, PartialEq, Eq, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize,
+)]
+pub struct PlayerName(String);
+
+#[derive(
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Debug,
+    derive_more::From,
+    derive_more::Display,
+    Serialize,
+    Deserialize,
 )]
 pub struct AimeIdx(u8);
 

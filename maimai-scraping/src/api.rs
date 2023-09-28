@@ -2,16 +2,21 @@ use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::path::Path;
 
+use crate::cookie_store::AimeIdx;
 use crate::cookie_store::CookieStore;
 use crate::cookie_store::CookieStoreLoadError;
 use crate::cookie_store::Credentials;
 use crate::cookie_store::Password;
-use crate::cookie_store::UserName;
+use crate::cookie_store::PlayerName;
+use crate::cookie_store::SegaId;
+use crate::cookie_store::UserIdentifier;
 use crate::sega_trait::Idx;
 use crate::sega_trait::PlayTime;
 use crate::sega_trait::SegaTrait;
 use anyhow::anyhow;
 use anyhow::bail;
+use itertools::Itertools;
+use log::debug;
 use log::info;
 use reqwest::header;
 use reqwest::redirect;
@@ -22,7 +27,7 @@ use serde::Serialize;
 
 pub struct SegaClient<'p, T: SegaTrait> {
     client: reqwest::Client,
-    credentials_path: Cow<'p, Path>,
+    // credentials_path: Cow<'p, Path>,
     cookie_store: CookieStore,
     cookie_store_path: Cow<'p, Path>,
     _phantom: PhantomData<T>,
@@ -30,10 +35,12 @@ pub struct SegaClient<'p, T: SegaTrait> {
 
 impl<'p, T: SegaTrait> SegaClient<'p, T> {
     pub async fn new_with_default_path(
+        user_identifier: &UserIdentifier,
     ) -> anyhow::Result<(SegaClient<'p, T>, Vec<(PlayTime<T>, Idx<T>)>)> {
         Self::new(
             Path::new(T::CREDENTIALS_PATH),
             Path::new(T::COOKIE_STORE_PATH),
+            user_identifier,
         )
         .await
     }
@@ -41,67 +48,155 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
     pub async fn new(
         credentials_path: &'p Path,
         cookie_store_path: &'p Path,
+        user_identifier: &UserIdentifier,
     ) -> anyhow::Result<(SegaClient<'p, T>, Vec<(PlayTime<T>, Idx<T>)>)> {
-        let credentials_path = Cow::Borrowed(credentials_path);
+        let credentials = Credentials::load(credentials_path)?;
         let cookie_store_path = Cow::Borrowed(cookie_store_path);
+        let cookie_store = CookieStore::load(cookie_store_path.as_ref());
 
         let client = reqwest_client::<T>()?;
+        let make_client = |cookie_store| Self {
+            client,
+            // credentials_path,
+            cookie_store,
+            cookie_store_path,
+            _phantom: PhantomData,
+        };
 
-        let cookie_store = CookieStore::load(cookie_store_path.as_ref());
-        let (mut client, index) = match cookie_store {
+        // Try to log in
+        let mut client = match cookie_store {
             Ok(cookie_store) => {
-                let mut client = Self {
-                    client,
-                    credentials_path,
-                    cookie_store,
-                    cookie_store_path,
-                    _phantom: PhantomData,
-                };
-                let index = client.download_record_index().await;
-                (client, index.map_err(Some))
+                // Why can't we directly access AIME_LIST_URL to determine log-in state?
+                // This is because, even if the cookie is implicitly(*) expired,
+                // we can still access AIME_LIST_URL.
+                // However, unlike normal situation, the request trying to select Aime
+                // does not return new `userId` cookie,
+                // resulting in an wired error, where the cookie is not expired by this operation.
+                // (*) Implicit expiration includes logging in from another account or timeout,
+                // but as already mentioned, the wired error does not seem to count.
+                info!("Cookie store was found.  Trying to use this cookie.");
+                let mut client = make_client(cookie_store);
+                // Check if the cookie is valid and ...
+                if let Ok((response, redirect)) =
+                    client.fetch_authenticated(T::FRIEND_CODE_URL).await
+                {
+                    // if friend code is specified, then we can determine if this is the correct account for sure.
+                    if let Some(expected_friend_code) = user_identifier.friend_code.as_ref() {
+                        if redirect.is_none() {
+                            let friend_code = T::parse_friend_code_page(&Html::parse_document(
+                                &response.text().await?,
+                            ))?;
+                            debug!("Expected {expected_friend_code:?}, found {friend_code:?}");
+                            if &friend_code == expected_friend_code {
+                                let res = client.download_record_index().await?;
+                                return Ok((client, res));
+                            }
+                        } else {
+                            info!("Redirect occurred, so the session has expired.")
+                        }
+                    }
+                }
+                // In other cases, we try to log in from scratch.
+                // Although there's a bit chance of improvement by skipping logging in here,
+                // but it's normal to start over when switching Aime, so we just don't care.
+                client
             }
             Err(CookieStoreLoadError::NotFound) => {
-                info!("Cookie store was not found.  Trying to log in.");
-                let cookie_store =
-                    try_login::<T>(&client, &credentials_path, &cookie_store_path).await?;
-                let client = Self {
-                    client,
-                    credentials_path,
-                    cookie_store,
-                    cookie_store_path,
-                    _phantom: PhantomData,
-                };
-                (client, Err(None))
+                info!("Cookie store was not found.");
+                make_client(Default::default())
             }
-            Err(e) => return Err(anyhow::Error::from(e)),
+            Err(e) => return Err(e.into()),
         };
-        let index = match index {
-            Ok(index) => index, // TODO: a bit redundant
-            Err(err) => {
-                if let Some(err) = err {
-                    info!("The stored session seems to be expired.  Trying to log in.");
-                    info!("    Detail: {:?}", err);
-                }
-                client.cookie_store = try_login::<T>(
-                    &client.client,
-                    &client.credentials_path,
-                    &client.cookie_store_path,
-                )
-                .await?;
-                // return Ok(());
-                client.download_record_index().await?
-            }
-        };
+        let aime_list = client.try_login(&credentials).await?;
         info!("Successfully logged in.");
+        debug!("Available Aimes: {aime_list:?}");
 
-        Ok((client, index))
+        // Determine which Aime to use
+        let candidates = aime_list
+            .into_iter()
+            .filter_map(|(aime_idx, player_name)| {
+                user_identifier
+                    .player_name
+                    .as_ref()
+                    .map_or(true, |expected| &player_name == expected)
+                    .then_some(aime_idx)
+            })
+            .collect_vec();
+        if candidates.len() != 1 {
+            bail!("The Aime matching {user_identifier:?} cannot be uniquely determined");
+        }
+        let aime_idx = candidates[0];
+
+        // Select Aime
+        let url = T::select_aime_list_url(aime_idx);
+        // let (_, location) = client.fetch_authenticated(&url).await?;
+        let response = client.client.get(&url).send().await?;
+        let location = Self::get_location(&response);
+        if !location.as_ref().is_some_and(|x| x.as_str() == T::HOME_URL) {
+            bail!(
+                "Redirected to unexpected url: {:?}",
+                location.as_ref().map(|x| x.as_str())
+            );
+        }
+        // Save the current cookie (cookie is always renewed after redirecting to home)
+        if !set_and_save_credentials(
+            &mut client.cookie_store,
+            &client.cookie_store_path,
+            &response,
+        )? {
+            bail!("Desired cookie was not found.");
+        }
+
+        // Make sure that we are in the correct account.
+        if let Some(expected_friend_code) = user_identifier.friend_code.as_ref() {
+            let (response, _) = client.fetch_authenticated(T::FRIEND_CODE_URL).await?;
+            let friend_code =
+                T::parse_friend_code_page(&Html::parse_document(&response.text().await?))?;
+            if &friend_code != expected_friend_code {
+                bail!("Friend code does not match: expected {expected_friend_code:?}, found {friend_code:?}")
+            }
+        }
+        info!("Successfully chose Aime.");
+
+        let res = client.download_record_index().await?;
+        Ok((client, res))
+    }
+
+    async fn try_login(
+        &mut self,
+        credentials: &Credentials,
+    ) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>> {
+        info!("Trying to log in.");
+        let token = get_token::<T>(&self.client).await?;
+
+        // Submit login form
+        let login_url = T::LOGIN_URL;
+        let response = self
+            .client
+            .post(login_url)
+            .form(&LoginForm::<T>::new(credentials, &token))
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            bail!("Failed to log in: server returned {:?}", response.status());
+        }
+
+        // Make sure that it redirects to aime list
+        let url = response.url().clone();
+        if url.as_str() != T::AIME_LIST_URL {
+            bail!("Error: redirected to unexpected url while logging in: {url}",);
+        }
+
+        T::parse_aime_selection_page(&Html::parse_document(&response.text().await?))
     }
 
     async fn download_record_index(&mut self) -> anyhow::Result<Vec<(PlayTime<T>, Idx<T>)>> {
         let url = T::RECORD_URL;
         let response = self.fetch_authenticated(url).await?.0;
         let document = Html::parse_document(&response.text().await?);
-        T::parse_record_index(&document)
+        let res = T::parse_record_index(&document)?;
+        debug!("Records: {:?}", res.iter().map(|x| &x.1).collect_vec());
+        Ok(res)
     }
 
     pub async fn download_record(&mut self, idx: Idx<T>) -> anyhow::Result<Option<T::PlayRecord>>
@@ -151,11 +246,15 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
                 response.status()
             );
         }
-        let location = response
+        let location = Self::get_location(&response);
+        Ok((response, location))
+    }
+
+    fn get_location(response: &reqwest::Response) -> Option<Url> {
+        response
             .headers()
             .get(header::LOCATION)
-            .and_then(|x| Url::parse(x.to_str().ok()?).ok());
-        Ok((response, location))
+            .and_then(|x| Url::parse(x.to_str().ok()?).ok())
     }
 
     pub fn reqwest(&self) -> &reqwest::Client {
@@ -189,6 +288,7 @@ fn reqwest_client<T: SegaTrait>() -> reqwest::Result<reqwest::Client> {
                 .last()
                 .map_or(false, |x| x.path() == T::AIME_SUBMIT_PATH)
             {
+                // TODO: Why do we have to stop here?
                 attempt.stop()
             } else {
                 attempt.follow()
@@ -203,6 +303,7 @@ pub fn set_and_save_credentials(
     response: &reqwest::Response,
 ) -> anyhow::Result<bool> {
     if let Some(cookie) = response.cookies().find(|x| x.name() == "userId") {
+        debug!("Stored `userId`: {:?}", cookie.value());
         cookie_store.user_id = cookie.value().to_owned().into();
         cookie_store.save(cookie_store_path)?;
         Ok(true)
@@ -214,7 +315,7 @@ pub fn set_and_save_credentials(
 #[derive(Debug, Serialize)]
 struct LoginForm<'a, T> {
     #[serde(rename = "segaId")]
-    sega_id: &'a UserName,
+    sega_id: &'a SegaId,
     password: &'a Password,
     save_cookie: &'static str,
     token: &'a str,
@@ -224,51 +325,13 @@ struct LoginForm<'a, T> {
 impl<'a, T> LoginForm<'a, T> {
     fn new(credentials: &'a Credentials, token: &'a str) -> Self {
         Self {
-            sega_id: &credentials.user_name,
+            sega_id: &credentials.sega_id,
             password: &credentials.password,
             save_cookie: "on",
             token,
             _phantom: Default::default(),
         }
     }
-}
-
-async fn try_login<T: SegaTrait>(
-    client: &reqwest::Client,
-    credentials_path: &Path,
-    cookie_store_path: &Path,
-) -> anyhow::Result<CookieStore> {
-    let credentials = Credentials::load(credentials_path)?;
-
-    let token = get_token::<T>(client).await?;
-
-    let login_url = T::LOGIN_URL;
-    let response = client
-        .post(login_url)
-        .form(&LoginForm::<T>::new(&credentials, &token))
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        bail!("Failed to log in: server returned {:?}", response.status());
-    }
-
-    let url = response.url().clone();
-    if url.as_str() != T::AIME_LIST_URL {
-        return Err(anyhow!(
-            "Error: redirected to unexpected url while logging in: {}",
-            url,
-        ));
-    }
-
-    let url = T::select_aime_list_url(credentials.aime_idx.unwrap_or_default());
-    let response = client.get(&url).send().await?;
-
-    let mut cookie_store = CookieStore::default();
-    if !set_and_save_credentials(&mut cookie_store, cookie_store_path, &response)? {
-        return Err(anyhow!("Desired cookie was not found."));
-    }
-    Ok(cookie_store)
 }
 
 async fn get_token<T: SegaTrait>(client: &reqwest::Client) -> Result<String, anyhow::Error> {
@@ -293,10 +356,10 @@ mod tests {
 
     #[test]
     fn test_login_form() {
-        let user_name = "abc".to_owned().into();
+        let sega_id = "abc".to_owned().into();
         let password = "def".to_owned().into();
         let credentials = Credentials::builder()
-            .user_name(user_name)
+            .sega_id(sega_id)
             .password(password)
             .aime_idx(None)
             .build();
