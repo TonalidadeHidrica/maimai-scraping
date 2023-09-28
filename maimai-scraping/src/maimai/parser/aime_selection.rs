@@ -4,7 +4,7 @@ use scraper::{ElementRef, Html};
 use crate::cookie_store::{AimeIdx, PlayerName};
 
 pub fn parse(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>> {
-    html.select(selector!("div.change_aime_block"))
+    html.select(selector!("div.charge_aime_block,div.see_through_block"))
         .map(parse_aime_block)
         .collect()
 }

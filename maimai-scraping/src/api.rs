@@ -274,7 +274,7 @@ async fn try_login<T: SegaTrait>(
         .into_iter()
         .find_map(|(aime_idx, name)| (player_name == &name).then_some(aime_idx))
         .with_context(|| {
-            "No user with player name {player_name:?} was found in the aime selection page"
+            format!("No user with player name {player_name:?} was found in the aime selection page")
         })?,
     };
     let url = T::select_aime_list_url(aime_idx);
