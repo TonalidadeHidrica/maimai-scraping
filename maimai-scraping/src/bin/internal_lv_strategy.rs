@@ -12,7 +12,7 @@ use maimai_scraping::{
         favorite_songs::{fetch_favorite_songs_form, song_name_to_idx_map, SetFavoriteSong},
         load_score_level::{self, Song},
         rating::{ScoreConstant, ScoreLevel},
-        schema::latest::SongName,
+        schema::latest::{ScoreDifficulty, ScoreGeneration, SongName},
         Maimai, MaimaiUserData,
     },
 };
@@ -23,10 +23,16 @@ struct Opts {
     cookie_store_path: PathBuf,
     old_json: PathBuf,
     new_json: PathBuf,
-    levels: Levels,
+    datas: Vec<PathBuf>,
+
+    // Constraints
+    #[clap(long)]
+    previous: Option<Levels>,
     #[clap(long)]
     current: Option<ScoreLevel>,
-    datas: Vec<PathBuf>,
+    #[clap(long)]
+    dx_master: bool,
+
     #[clap(long)]
     dry_run: bool,
     #[clap(flatten)]
@@ -115,14 +121,20 @@ fn songs<'os, 'ns>(
         let Ok(Some((song, candidates))) = old.get(key) else {
             continue;
         };
-        let old_level = (opts.levels.0.iter()).any(|&x| candidates.iter().any(|&y| x == y));
-        let new_level = opts.current.map_or(true, |level| {
+        let previous = opts.previous.as_ref().map_or(true, |x| {
+            x.0.iter().any(|&x| candidates.iter().any(|&y| x == y))
+        });
+        let current = opts.current.map_or(true, |level| {
             level
                 .score_constant_candidates()
                 .any(|x| entry.candidates().iter().any(|&y| x == y))
         });
         let undetermined = entry.candidates().len() != 1;
-        if old_level && new_level && undetermined {
+        let dx_master = !opts.dx_master
+            || (key.generation == ScoreGeneration::Deluxe
+                && (key.difficulty == ScoreDifficulty::Master
+                    || key.difficulty == ScoreDifficulty::ReMaster));
+        if previous && current && undetermined && dx_master {
             ret.push((song, key));
         }
     }
