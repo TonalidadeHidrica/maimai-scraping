@@ -43,7 +43,7 @@ pub struct Song {
 }
 #[derive(Debug, From)]
 pub struct GenreName(String);
-#[derive(Clone, Debug, From, Serialize)]
+#[derive(Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Hash, From, Serialize)]
 pub struct Idx(String);
 
 fn parse_genre(element: ElementRef) -> anyhow::Result<Genre> {

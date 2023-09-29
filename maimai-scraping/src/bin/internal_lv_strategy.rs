@@ -2,6 +2,7 @@ use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 use anyhow::{anyhow, bail};
 use clap::Parser;
+use hashbrown::HashSet;
 use lazy_format::lazy_format;
 use maimai_scraping::{
     api::SegaClient,
@@ -39,6 +40,10 @@ struct Opts {
     estimator_config: EstimatorConfig,
     #[clap(flatten)]
     user_identifier: UserIdentifier,
+
+    #[clap(long)]
+    /// Preserve old favorite songs list instead of overwriting.
+    append: bool,
 }
 #[derive(Clone)]
 struct Levels(Vec<ScoreConstant>);
@@ -57,6 +62,9 @@ impl FromStr for Levels {
 async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
     let opts = Opts::parse();
+    if opts.dry_run && opts.append {
+        bail!("--dry-run and --append cannot coexist.")
+    }
 
     let old = load_score_level::load(&opts.old_json)?;
     let old = ScoreConstantsStore::new(&old, &[])?;
@@ -86,21 +94,41 @@ async fn main() -> anyhow::Result<()> {
         .await?;
         let page = fetch_favorite_songs_form(&mut client).await?;
         let map = song_name_to_idx_map(&page);
-        let mut idxs = vec![];
+        let mut idxs = HashSet::new();
+        if opts.append {
+            for song in page
+                .genres
+                .iter()
+                .flat_map(|x| &x.songs)
+                .filter(|x| x.checked)
+            {
+                println!("Preserving existing song: {}", song.name);
+                idxs.insert(&song.idx);
+            }
+        }
+        let mut not_all = false;
         for (song, key) in songs {
             match &map.get(song.song_name()).map_or(&[][..], |x| &x[..]) {
                 [] => println!("Song not found: {}", display_song(song.song_name(), key)),
-                [idx] => idxs.push(*idx),
+                [idx] => {
+                    let len = idxs.len();
+                    if let hashbrown::hash_set::Entry::Vacant(entry) = idxs.entry(*idx) {
+                        if len < 30 {
+                            entry.insert();
+                        } else {
+                            not_all = true;
+                        }
+                    }
+                }
                 idxs => bail!("Multiple candidates are found: {song:?} {idxs:?}"),
             }
         }
-        if idxs.len() > 30 {
+        if not_all {
             println!("Only the first 30 of the candidates will be added.");
-            idxs.drain(30..);
         }
         SetFavoriteSong::builder()
             .token(&page.token)
-            .music(idxs)
+            .music(idxs.into_iter().collect())
             .build()
             .send(&mut client)
             .await?;
