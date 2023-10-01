@@ -323,6 +323,10 @@ fn make_message(record: &PlayRecord, song_lvs: &[ScoreConstant]) -> String {
         SSS => "SSS",
         SSSPlus => "SSS+",
     };
+    let ach_new = lazy_format!(
+        if record.achievement_result().new_record() => " :new:"
+        else => ""
+    );
     let fc = match record.combo_result().full_combo_kind() {
         Nothing => "",
         FullCombo => "FC",
@@ -332,7 +336,7 @@ fn make_message(record: &PlayRecord, song_lvs: &[ScoreConstant]) -> String {
     };
     let time = (record.played_at().idx().timestamp_jst()).unwrap_or(record.played_at().time());
     let main_line = lazy_format!(
-        "{time}　{title} ({score_kind} Lv.{lv})　{rank}({ach})　{fc}\n",
+        "{time}　{title} ({score_kind} Lv.{lv})　{rank}({ach}{ach_new})　{fc}\n",
         title = record.song_metadata().name(),
         ach = record.achievement_result().value(),
     );
