@@ -434,6 +434,7 @@ pub struct JudgeCountWithCP {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, TypedBuilder, CopyGetters, Serialize, Deserialize)]
+#[getset(get_copy = "pub")]
 pub struct JudgeCountWithoutCP {
     perfect: u32,
     great: u32,
