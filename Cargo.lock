@@ -723,18 +723,12 @@ dependencies = [
 
 [[package]]
 name = "deranged"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "026580dca314dba138e35eb8fda3885e66ac4b77633f6edb147b1c509261df94"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "deranged"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2696e8a945f658fd14dc3b87242e6b80cd0f36ff04ea560fa39082368847946"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "derive_more"
@@ -1624,7 +1618,7 @@ dependencies = [
  "chrono",
  "clap",
  "csv",
- "deranged 0.2.6",
+ "deranged",
  "derive_more",
  "ego-tree",
  "either",
@@ -2948,7 +2942,7 @@ version = "0.3.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "426f806f4089c493dcac0d24c29c01e2c38baf8e30f1b716ee37e83d200b18fe"
 dependencies = [
- "deranged 0.3.8",
+ "deranged",
  "itoa 1.0.9",
  "serde",
  "time-core",
