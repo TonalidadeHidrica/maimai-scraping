@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use chrono::NaiveDateTime;
-use deranged::U8;
+use deranged::RangedU8;
 use derive_more::{AsRef, Display, From, FromStr, Into};
 use getset::{CopyGetters, Getters};
 use num_format::{Locale, WriteFormatted};
@@ -40,12 +40,12 @@ pub struct PlayedAt {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Into, Display, Serialize, Deserialize)]
-pub struct Idx(U8<0, 49>);
+pub struct Idx(RangedU8<0, 49>);
 impl TryFrom<u8> for Idx {
-    type Error = <U8<0, 49> as TryFrom<u8>>::Error;
+    type Error = <RangedU8<0, 49> as TryFrom<u8>>::Error;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        Ok(Idx(U8::try_from(value)?))
+        Ok(Idx(RangedU8::try_from(value)?))
     }
 }
 
