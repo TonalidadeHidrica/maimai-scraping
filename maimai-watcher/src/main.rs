@@ -137,6 +137,7 @@ mod slash_command {
         Stop(Stop),
         Start(Start),
         Single(Single),
+        Recent(Recent),
     }
     #[derive(Args)]
     pub struct Stop {
@@ -149,6 +150,12 @@ mod slash_command {
     #[derive(Args)]
     pub struct Single {
         pub user_id: Option<UserId>,
+    }
+    #[derive(Args)]
+    pub struct Recent {
+        pub user_id: Option<UserId>,
+        #[arg(default_value = "5")]
+        pub count: usize,
     }
 }
 
@@ -212,6 +219,35 @@ async fn webhook_impl(
                 true,
             );
             watch::watch(config).await?;
+        }
+        slash_command::Sub::Recent(sub_args) => {
+            let config = state.config.clone();
+            let (user_id, user_config) = get_user_id(&state, &info, &sub_args.user_id)?;
+            let (user_id, user_config) = (user_id.to_owned(), user_config.to_owned());
+            tokio::task::spawn(async move {
+                let client = reqwest::Client::new();
+                if let Err(e) = watch::recent(
+                    &client,
+                    &config.slack_post_webhook,
+                    &user_id,
+                    &user_config.user_data_path,
+                    &config.levels_path,
+                    &config.removed_songs_path,
+                    user_config.estimator_config,
+                    sub_args.count,
+                )
+                .await
+                {
+                    error!("{e}");
+                    webhook_send(
+                        &client,
+                        &config.slack_post_webhook,
+                        Some(&user_id),
+                        e.to_string(),
+                    )
+                    .await;
+                }
+            });
         }
     };
     Ok(())

@@ -1614,6 +1614,7 @@ dependencies = [
  "env_logger",
  "fs-err",
  "itertools 0.11.0",
+ "joinery",
  "lazy_format",
  "log",
  "maimai-scraping",

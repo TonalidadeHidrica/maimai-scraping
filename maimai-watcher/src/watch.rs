@@ -5,7 +5,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::Context;
+use anyhow::{bail, Context};
+use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::error;
 use maimai_scraping::{
@@ -252,17 +253,12 @@ impl<'c, 's, 'r> Runner<'c, 's, 'r> {
 
         for time in inserted_records {
             let record = &self.data.records[&time];
-            let key = ScoreKey::from(record);
-            let song_lvs = if let Ok(Some((_, candidates))) = self.levels_naive.get(key) {
-                candidates
-            } else {
-                &[]
-            };
+            let song_lvs = get_song_lvs(record, &self.levels_naive);
             webhook_send(
                 client.reqwest(),
                 &config.slack_post_webhook,
                 &config.user_id,
-                make_message(record, song_lvs),
+                make_message(record, song_lvs).to_string(),
             )
             .await;
         }
@@ -299,7 +295,59 @@ async fn report_error<T>(
     result
 }
 
-fn make_message(record: &PlayRecord, song_lvs: &[ScoreConstant]) -> String {
+#[allow(clippy::too_many_arguments)]
+pub async fn recent(
+    client: &reqwest::Client,
+    slack_post_webhook: &Option<Url>,
+    user_id: &UserId,
+    user_data_path: &PathBuf,
+    levels_path: &PathBuf,
+    removed_songs_path: &PathBuf,
+    estimator_config: EstimatorConfig,
+    count: usize,
+) -> Result<(), anyhow::Error> {
+    let data = load_or_create_user_data::<Maimai, _>(user_data_path)?;
+    let levels = load_score_level::load(levels_path)?;
+    let removed_songs: Vec<RemovedSong> = read_json(removed_songs_path)?;
+    let mut levels = ScoreConstantsStore::new(&levels, &removed_songs)?;
+    if count > 10 {
+        bail!("Too many songs are requested!  (This is a safety guard to avoid a flood of message.  Please contact the author if you want more.)");
+    }
+    if let Err(e) = levels.do_everything(
+        estimator_config,
+        data.records.values(),
+        &data.rating_targets,
+    ) {
+        error!("{e}");
+    }
+    let message = (data.records.values().rev().take(count).rev())
+        .map(|record| make_message(record, get_song_lvs(record, &levels)))
+        .join_with("\n");
+    webhook_send(
+        client,
+        slack_post_webhook,
+        Some(user_id),
+        message.to_string(),
+    )
+    .await;
+    Ok(())
+}
+
+fn get_song_lvs<'a>(
+    record: &'_ PlayRecord,
+    levels: &'a ScoreConstantsStore<'_, '_>,
+) -> &'a [ScoreConstant] {
+    if let Ok(Some((_, candidates))) = levels.get(ScoreKey::from(record)) {
+        candidates
+    } else {
+        &[]
+    }
+}
+
+fn make_message<'a>(
+    record: &'a PlayRecord,
+    song_lvs: &'a [ScoreConstant],
+) -> impl Display + Send + 'a {
     use maimai_scraping::maimai::schema::latest::{AchievementRank::*, FullComboKind::*};
     let score_kind = describe_score_kind(record.score_metadata());
     let lv = lazy_format!(match (song_lvs[..]) {
@@ -363,17 +411,18 @@ fn make_message(record: &PlayRecord, song_lvs: &[ScoreConstant]) -> String {
             if old_color != new_color => "　Color changed to {new_color:?}!"
             else => ""
         );
-        format!("Rating: {old} => {new} ({delta:+}){color_change}\n")
+        lazy_format!("Rating: {old} => {new} ({delta:+}){color_change}\n")
     });
-    let rating_line = rating_line.as_deref().unwrap_or("");
+    let rating_line = lazy_format!(if let Some(x) = rating_line => "{x}" else => "");
+    // let rating_line = rating_line.as_deref().unwrap_or("");
     let life_line = match record.life_result() {
         LifeResult::Nothing => None,
         LifeResult::PerfectChallengeResult(res) => Some(("Perfect challenge", res)),
         LifeResult::CourseResult(res) => Some(("Course", res)),
     }
-    .map(|(name, res)| format!("{name} life: {}/{}\n", res.value(), res.max()));
-    let life_line = life_line.as_deref().unwrap_or("");
-    format!("{main_line}{rating_line}{life_line}")
+    .map(|(name, res)| lazy_format!("{name} life: {}/{}\n", res.value(), res.max()));
+    let life_line = lazy_format!(if let Some(x) = life_line => "{x}" else => "");
+    lazy_format!("{main_line}{rating_line}{life_line}")
 }
 fn describe_score_kind<'a>(metadata: ScoreMetadata) -> impl Display + 'a {
     use maimai_scraping::maimai::schema::latest::{ScoreDifficulty::*, ScoreGeneration::*};
