@@ -14,6 +14,7 @@ use clap::Parser;
 use log::{error, info};
 use maimai_scraping::{cookie_store::UserIdentifier, maimai::estimate_rating::EstimatorConfig};
 use maimai_watcher::{
+    misc,
     slack::webhook_send,
     watch::{self, TimeoutConfig, UserId, WatchHandler},
 };
@@ -226,7 +227,7 @@ async fn webhook_impl(
             let (user_id, user_config) = (user_id.to_owned(), user_config.to_owned());
             tokio::task::spawn(async move {
                 let client = reqwest::Client::new();
-                if let Err(e) = watch::recent(
+                if let Err(e) = misc::recent(
                     &client,
                     &config.slack_post_webhook,
                     &user_id,

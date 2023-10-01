@@ -1,13 +1,10 @@
 use std::{
-    fmt::Display,
     iter::successors,
     path::PathBuf,
     time::{Duration, Instant},
 };
 
-use anyhow::{bail, Context};
-use joinery::JoinableIterator;
-use lazy_format::lazy_format;
+use anyhow::Context;
 use log::error;
 use maimai_scraping::{
     api::SegaClient,
@@ -16,13 +13,8 @@ use maimai_scraping::{
     fs_json_util::{read_json, write_json},
     maimai::{
         data_collector::update_targets,
-        estimate_rating::{EstimatorConfig, ScoreConstantsStore, ScoreKey},
+        estimate_rating::{EstimatorConfig, ScoreConstantsStore},
         load_score_level::{self, RemovedSong, Song},
-        rating::{ScoreConstant, ScoreLevel},
-        schema::{
-            latest::{LifeResult, PlayRecord, RatingBorderColor, ScoreMetadata},
-            ver_20210316_2338::RatingValue,
-        },
         Maimai, MaimaiUserData,
     },
 };
@@ -33,7 +25,10 @@ use tokio::{
 };
 use url::Url;
 
-use crate::slack::webhook_send;
+use crate::{
+    describe_record::{describe_score_kind, get_song_lvs, make_message},
+    slack::webhook_send,
+};
 
 // TODO use netype instead of alias!
 // #[derive(Clone, PartialEq, Eq, Hash, Deserialize)]
@@ -293,152 +288,6 @@ async fn report_error<T>(
         webhook_send(&reqwest::Client::new(), url, user_id, e.to_string()).await;
     }
     result
-}
-
-#[allow(clippy::too_many_arguments)]
-pub async fn recent(
-    client: &reqwest::Client,
-    slack_post_webhook: &Option<Url>,
-    user_id: &UserId,
-    user_data_path: &PathBuf,
-    levels_path: &PathBuf,
-    removed_songs_path: &PathBuf,
-    estimator_config: EstimatorConfig,
-    count: usize,
-) -> Result<(), anyhow::Error> {
-    let data = load_or_create_user_data::<Maimai, _>(user_data_path)?;
-    let levels = load_score_level::load(levels_path)?;
-    let removed_songs: Vec<RemovedSong> = read_json(removed_songs_path)?;
-    let mut levels = ScoreConstantsStore::new(&levels, &removed_songs)?;
-    if count > 10 {
-        bail!("Too many songs are requested!  (This is a safety guard to avoid a flood of message.  Please contact the author if you want more.)");
-    }
-    if let Err(e) = levels.do_everything(
-        estimator_config,
-        data.records.values(),
-        &data.rating_targets,
-    ) {
-        error!("{e}");
-    }
-    let message = (data.records.values().rev().take(count).rev())
-        .map(|record| make_message(record, get_song_lvs(record, &levels)))
-        .join_with("\n");
-    webhook_send(
-        client,
-        slack_post_webhook,
-        Some(user_id),
-        message.to_string(),
-    )
-    .await;
-    Ok(())
-}
-
-fn get_song_lvs<'a>(
-    record: &'_ PlayRecord,
-    levels: &'a ScoreConstantsStore<'_, '_>,
-) -> &'a [ScoreConstant] {
-    if let Ok(Some((_, candidates))) = levels.get(ScoreKey::from(record)) {
-        candidates
-    } else {
-        &[]
-    }
-}
-
-fn make_message<'a>(
-    record: &'a PlayRecord,
-    song_lvs: &'a [ScoreConstant],
-) -> impl Display + Send + 'a {
-    use maimai_scraping::maimai::schema::latest::{AchievementRank::*, FullComboKind::*};
-    let score_kind = describe_score_kind(record.score_metadata());
-    let lv = lazy_format!(match (song_lvs[..]) {
-        [] => "?",
-        [lv] => "{lv}",
-        [lv, ..] => ("{}", ScoreLevel::from(lv)),
-    });
-    let rank = match record.achievement_result().rank() {
-        D => "D",
-        C => "C",
-        BBB => "BBB",
-        BB => "BB",
-        B => "B",
-        A => "A",
-        AA => "AA",
-        AAA => "AAA",
-        S => "S",
-        SPlus => "S+",
-        SS => "SS",
-        SSPlus => "SS+",
-        SSS => "SSS",
-        SSSPlus => "SSS+",
-    };
-    let ach_new = lazy_format!(
-        if record.achievement_result().new_record() => " :new:"
-        else => ""
-    );
-    let fc = match record.combo_result().full_combo_kind() {
-        Nothing => "",
-        FullCombo => "FC",
-        FullComboPlus => "FC+",
-        AllPerfect => "AP",
-        AllPerfectPlus => "AP+",
-    };
-    let time = (record.played_at().idx().timestamp_jst()).unwrap_or(record.played_at().time());
-    let main_line = lazy_format!(
-        "{time}　{title} ({score_kind} Lv.{lv})　{rank}({ach}{ach_new})　{fc}\n",
-        title = record.song_metadata().name(),
-        ach = record.achievement_result().value(),
-    );
-    let rating_line = (record.rating_result().delta() > 0).then(|| {
-        let new = record.rating_result().rating();
-        let delta = record.rating_result().delta();
-        let old = RatingValue::from((new.get() as i16 - delta) as u16);
-        use RatingBorderColor::*;
-        let old_color = match old.get() {
-            15000.. => Rainbow,
-            14500.. => Platinum,
-            14000.. => Gold,
-            13000.. => Silver,
-            12000.. => Bronze,
-            10000.. => Purple,
-            7000.. => Red,
-            4000.. => Orange,
-            2000.. => Green,
-            1000.. => Blue,
-            ..=999 => Normal,
-        };
-        let new_color = record.rating_result().border_color();
-        let color_change = lazy_format!(
-            if old_color != new_color => "　Color changed to {new_color:?}!"
-            else => ""
-        );
-        lazy_format!("Rating: {old} => {new} ({delta:+}){color_change}\n")
-    });
-    let rating_line = lazy_format!(if let Some(x) = rating_line => "{x}" else => "");
-    // let rating_line = rating_line.as_deref().unwrap_or("");
-    let life_line = match record.life_result() {
-        LifeResult::Nothing => None,
-        LifeResult::PerfectChallengeResult(res) => Some(("Perfect challenge", res)),
-        LifeResult::CourseResult(res) => Some(("Course", res)),
-    }
-    .map(|(name, res)| lazy_format!("{name} life: {}/{}\n", res.value(), res.max()));
-    let life_line = lazy_format!(if let Some(x) = life_line => "{x}" else => "");
-    lazy_format!("{main_line}{rating_line}{life_line}")
-}
-fn describe_score_kind<'a>(metadata: ScoreMetadata) -> impl Display + 'a {
-    use maimai_scraping::maimai::schema::latest::{ScoreDifficulty::*, ScoreGeneration::*};
-    let gen = match metadata.generation() {
-        Standard => "STD",
-        Deluxe => "DX",
-    };
-    let dif = match metadata.difficulty() {
-        Basic => "Bas",
-        Advanced => "Adv",
-        Expert => "Exp",
-        Master => "Mas",
-        ReMaster => "ReMas",
-        Utage => "Utg",
-    };
-    lazy_format!("{gen} {dif}")
 }
 
 pub struct WatchHandler(mpsc::Sender<()>);
