@@ -33,6 +33,8 @@ struct Opts {
     current: Option<ScoreLevel>,
     #[clap(long)]
     dx_master: bool,
+    #[clap(long)]
+    no_dx_master: bool,
 
     #[clap(long)]
     dry_run: bool,
@@ -62,6 +64,9 @@ impl FromStr for Levels {
 async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
     let opts = Opts::parse();
+    if opts.dx_master && opts.no_dx_master {
+        bail!("--dx-master and --no-dx-master cannot coexist.")
+    }
     if opts.dry_run && opts.append {
         bail!("--dry-run and --append cannot coexist.")
     }
@@ -158,10 +163,11 @@ fn songs<'os, 'ns>(
                 .any(|x| entry.candidates().iter().any(|&y| x == y))
         });
         let undetermined = entry.candidates().len() != 1;
-        let dx_master = !opts.dx_master
-            || (key.generation == ScoreGeneration::Deluxe
-                && (key.difficulty == ScoreDifficulty::Master
-                    || key.difficulty == ScoreDifficulty::ReMaster));
+        let dx_master = key.generation == ScoreGeneration::Deluxe
+            && (key.difficulty == ScoreDifficulty::Master
+                || key.difficulty == ScoreDifficulty::ReMaster);
+        let dx_master =
+            if_then(opts.dx_master, dx_master) && if_then(opts.no_dx_master, !dx_master);
         if previous && current && undetermined && dx_master {
             ret.push((song, key));
         }
@@ -172,4 +178,8 @@ fn songs<'os, 'ns>(
 
 fn display_song<'a>(name: &'a SongName, key: ScoreKey) -> impl Display + 'a {
     lazy_format!("{name} ({:?} {:?})", key.generation, key.difficulty)
+}
+
+fn if_then(a: bool, b: bool) -> bool {
+    !a || b
 }
