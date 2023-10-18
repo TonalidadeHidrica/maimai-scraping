@@ -238,7 +238,10 @@ pub fn parse_utage_metadata(div: ElementRef) -> anyhow::Result<UtageMetadata> {
         .text()
         .collect::<String>()[..]
     {
+        "光" => UtageKind::AllBreak,
         "協" => UtageKind::Collaborative,
+        "蔵" => UtageKind::Shelved,
+        "宴" => UtageKind::Miscellaneous,
         s => bail!("Unexpected utage kind: {s:?}"),
     };
     let buddy = div

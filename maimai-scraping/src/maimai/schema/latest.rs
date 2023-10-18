@@ -544,7 +544,10 @@ pub struct UtageMetadata {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum UtageKind {
+    AllBreak,
     Collaborative,
+    Shelved,
+    Miscellaneous,
 }
 
 #[cfg(test)]
