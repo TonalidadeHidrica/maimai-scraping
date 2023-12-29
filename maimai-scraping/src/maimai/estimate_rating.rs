@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeSet,
     fmt::Display,
-    hash::{BuildHasher, Hash, Hasher},
+    hash::{BuildHasher, Hash},
 };
 
 use crate::{
@@ -666,7 +666,5 @@ pub fn analyze_old_songs(
 }
 
 fn compute_hash<K: Hash + ?Sized, S: BuildHasher>(hash_builder: &S, key: &K) -> u64 {
-    let mut state = hash_builder.build_hasher();
-    key.hash(&mut state);
-    state.finish()
+    hash_builder.hash_one(key)
 }
