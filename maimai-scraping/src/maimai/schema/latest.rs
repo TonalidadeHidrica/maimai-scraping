@@ -464,7 +464,8 @@ pub enum FullSyncKind {
     FullSyncDxPlus,
 }
 
-#[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, derive_more::AsRef, Serialize, Deserialize)]
+#[as_ref(forward)]
 pub struct OtherPlayersList(Vec<OtherPlayer>);
 
 impl TryFrom<Vec<OtherPlayer>> for OtherPlayersList {
@@ -485,7 +486,9 @@ pub struct OtherPlayer {
     user_name: UserName,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
+#[derive(
+    Clone, PartialEq, Eq, PartialOrd, Ord, Debug, derive_more::From, Serialize, Deserialize,
+)]
 pub struct UserName(String);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
