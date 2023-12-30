@@ -544,10 +544,22 @@ pub struct UtageMetadata {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum UtageKind {
+    /// 光
     AllBreak,
+    /// 協
     Collaborative,
-    Shelved,
+    /// 狂
+    Insane,
+    /// 蛸
+    ManyHands,
+    /// 覚
+    Memorize,
+    /// 宴
     Miscellaneous,
+    /// 蔵
+    Shelved,
+    /// 星
+    Slides,
 }
 
 #[cfg(test)]
