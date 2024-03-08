@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use url::Url;
 
 use crate::fs_json_util::read_json;
@@ -291,10 +291,14 @@ impl MaimaiVersion {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Getters)]
+#[derive(Debug, Deserialize, Getters)]
 pub struct RemovedSong {
     #[getset(get = "pub")]
     icon: SongIcon,
     #[getset(get = "pub")]
     name: SongName,
+    #[getset(get = "pub")]
+    date: NaiveDate,
+    #[getset(get = "pub")]
+    levels: Option<SongRaw>,
 }

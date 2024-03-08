@@ -196,26 +196,34 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
         Ok(())
     }
 
-    fn key_from_target_entry(
+    fn key_from_target_entry<'e>(
         &self,
-        entry: &RatingTargetEntry,
-    ) -> anyhow::Result<Option<ScoreKey<'s>>> {
+        entry: &'e RatingTargetEntry,
+    ) -> KeyFromTargetEntry<'e, 's> {
+        use KeyFromTargetEntry::*;
         match self.song_name_to_icon.get(entry.song_name()) {
-            None => bail!("Unknown song: {:?}", entry.song_name()),
-            Some(icons) => Ok((icons.len() == 1).then(|| {
+            None => NotFound(entry.song_name()),
+            Some(icons) if icons.len() == 1 => {
                 let m = entry.score_metadata();
-                ScoreKey {
+                Unique(ScoreKey {
                     icon: icons.iter().next().unwrap(),
                     generation: m.generation(),
                     difficulty: m.difficulty(),
-                }
-            })),
+                })
+            }
+            _ => Multiple,
         }
     }
 
     pub fn scores(&self) -> impl Iterator<Item = (&ScoreKey<'s>, &ScoreConstantsEntry<'s>)> {
         self.constants.iter()
     }
+}
+
+enum KeyFromTargetEntry<'n, 's> {
+    NotFound(&'n SongName),
+    Unique(ScoreKey<'s>),
+    Multiple,
 }
 
 #[derive(Getters, CopyGetters)]
@@ -300,6 +308,17 @@ impl<'s> ScoreConstantsStore<'s, '_> {
         {
             let score_key = ScoreKey::from(record);
             let Some((song, _)) = self.get(score_key)? else {
+                // TODO: This block is visited when the given score is removed.
+                // Skipping it is problematic when this song is removed within the latest version,
+                // i.e. removed after played.
+                // To handle this issue, one has to update r2s and s2r,
+                // which requires songs not included in them
+                // (songs with lower score than target songs).
+                // In all likelihood, such an event may happen only when analyzing old songs.
+                //
+                // Below is the justification of not implementing for my case.
+                // For the main card, "old songs are complete" shall not be assumed.
+                // For the sub cards, I assume that such songs are not played.
                 continue;
             };
             let delta = record.rating_result().delta();
@@ -382,14 +401,23 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                 (false, false, list.candidates_old()),
             ] {
                 for rating_target_entry in entries {
-                    let Some(key) = self.key_from_target_entry(rating_target_entry)? else {
-                        println!(
-                            "TODO: score cannot be uniquely determined from the song name {:?}",
-                            rating_target_entry.song_name(),
-                        );
-                        return Ok(());
+                    let levels = match self.key_from_target_entry(rating_target_entry) {
+                        KeyFromTargetEntry::NotFound(name) => {
+                            // Search removed songs
+                            let song = self.removed_songs.get(rating_target_entry.)
+                            bail!("Unknown song: {name:?}")
+                        },
+                        KeyFromTargetEntry::Unique(key) => {
+                            let levels = self.get(key)?.context("Song must not be removed")?.1;
+                        }
+                        KeyFromTargetEntry::Multiple => {
+                            warn!(
+                                "TODO: score cannot be uniquely determined from the song name {:?}",
+                                rating_target_entry.song_name(),
+                            );
+                            return Ok(());
+                        }
                     };
-                    let levels = self.get(key)?.context("Song must not be removed")?.1;
                     sub_list.push(Entry {
                         new,
                         contributes_to_sum,
@@ -482,6 +510,7 @@ impl<'s> ScoreConstantsStore<'s, '_> {
             let records = group.collect_vec();
             let (target_time, list) = records[0].1;
 
+            // Stores score keys included in the current target list
             let mut contained = HashSet::new();
             for entry in chain(list.target_new(), list.target_old())
                 .chain(chain(list.candidates_new(), list.candidates_old()))
@@ -496,6 +525,9 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                 contained.insert(key);
             }
 
+            // Stores the record with the best achievement value
+            // among the currently inspected records
+            // for each score key not included in the current target list
             let mut best = HashMap::new();
             for &(record, _) in &records {
                 let score_key = ScoreKey::from(record);
@@ -541,6 +573,7 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                         .context("Old songs must be contained")?
                 };
 
+                // Finds the maximum possible rating value for the given entry
                 let compute = |entry: &RatingTargetEntry| {
                     // println!("min = {min:?}");
                     let a = entry.achievement();
