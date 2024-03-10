@@ -153,19 +153,19 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
     Ok(WatchHandler(tx))
 }
 
-struct Runner<'c, 's, 'r> {
+struct Runner<'c, 's> {
     config: &'c Config,
     data: MaimaiUserData,
-    levels_actual: ScoreConstantsStore<'s, 'r>,
-    levels_naive: ScoreConstantsStore<'s, 'r>,
+    levels_actual: ScoreConstantsStore<'s>,
+    levels_naive: ScoreConstantsStore<'s>,
 }
-impl<'c, 's, 'r> Runner<'c, 's, 'r> {
+impl<'c, 's> Runner<'c, 's> {
     async fn new(
         config: &'c Config,
         data: MaimaiUserData,
         levels: &'s [Song],
-        removed_songs: &'r [RemovedSong],
-    ) -> anyhow::Result<Runner<'c, 's, 'r>> {
+        removed_songs: &'s [RemovedSong],
+    ) -> anyhow::Result<Runner<'c, 's>> {
         let levels_actual = ScoreConstantsStore::new(levels, removed_songs)?;
         let levels_naive = ScoreConstantsStore::new(levels, removed_songs)?;
         let mut ret = Self {

@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use url::Url;
 
 use crate::fs_json_util::read_json;
@@ -300,5 +300,15 @@ pub struct RemovedSong {
     #[getset(get = "pub")]
     date: NaiveDate,
     #[getset(get = "pub")]
-    levels: Option<SongRaw>,
+    #[serde(default, deserialize_with = "deserialize_levels")]
+    levels: Option<Song>,
+}
+
+fn deserialize_levels<'de, D>(deserializer: D) -> Result<Option<Song>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<SongRaw>::deserialize(deserializer)?
+        .map(|song| Song::try_from(song).map_err(serde::de::Error::custom))
+        .transpose()
 }

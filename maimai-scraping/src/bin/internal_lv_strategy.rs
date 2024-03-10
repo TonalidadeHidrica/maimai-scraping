@@ -145,8 +145,8 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn songs<'os, 'ns>(
-    old: &ScoreConstantsStore<'os, '_>,
-    new: &ScoreConstantsStore<'ns, '_>,
+    old: &ScoreConstantsStore<'os>,
+    new: &ScoreConstantsStore<'ns>,
     opts: &Opts,
 ) -> anyhow::Result<Vec<(&'os Song, ScoreKey<'ns>)>> {
     let mut ret = vec![];

@@ -15,7 +15,7 @@ use maimai_scraping::maimai::{
 
 pub fn get_song_lvs<'a>(
     record: &'_ PlayRecord,
-    levels: &'a ScoreConstantsStore<'_, '_>,
+    levels: &'a ScoreConstantsStore<'_>,
 ) -> &'a [ScoreConstant] {
     if let Ok(Some((_, candidates))) = levels.get(ScoreKey::from(record)) {
         candidates

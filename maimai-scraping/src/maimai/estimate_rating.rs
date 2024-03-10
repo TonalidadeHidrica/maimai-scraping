@@ -20,6 +20,7 @@ use crate::{
     },
 };
 use anyhow::{bail, Context};
+use chrono::NaiveTime;
 use clap::Args;
 use either::Either;
 use getset::{CopyGetters, Getters};
@@ -68,20 +69,31 @@ impl<'a> ScoreKey<'a> {
 }
 
 #[derive(Getters)]
-pub struct ScoreConstantsStore<'s, 'r> {
+pub struct ScoreConstantsStore<'s> {
     #[getset(get = "pub")]
     events: Vec<(ScoreKey<'s>, String)>,
     constants: HashMap<ScoreKey<'s>, ScoreConstantsEntry<'s>>,
-    removed_songs: HashMap<&'r SongIcon, &'r RemovedSong>,
+    removed_songs: HashMap<&'s SongIcon, &'s RemovedSong>,
     song_name_to_icon: HashMap<&'s SongName, HashSet<&'s SongIcon>>,
     pub show_details: bool,
 }
-impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
-    pub fn new(levels: &'s [Song], removed_songs: &'r [RemovedSong]) -> anyhow::Result<Self> {
-        let song_name_to_icon =
-            make_hash_multimap(levels.iter().map(|song| (song.song_name(), song.icon())));
+impl<'s> ScoreConstantsStore<'s> {
+    pub fn new(levels: &'s [Song], removed_songs: &'s [RemovedSong]) -> anyhow::Result<Self> {
         let removed_songs = load_score_level::make_map(removed_songs, |r| r.icon())?;
-        let map = load_score_level::make_map(levels, |song| (song.icon(), song.generation()))?;
+        let song_name_to_icon = {
+            let present_songs = levels.iter().map(|song| (song.song_name(), song.icon()));
+            let removed_songs = removed_songs
+                .iter()
+                .map(|(&icon, &song)| (song.name(), icon));
+            make_hash_multimap(present_songs.chain(removed_songs))
+        };
+
+        let mut map = load_score_level::make_map(levels, |song| (song.icon(), song.generation()))?;
+        for (_icon, song) in &removed_songs {
+            if let Some(levels) = song.levels().as_ref() {
+                map.insert((song.icon(), levels.generation()), levels);
+            }
+        }
 
         let mut events = vec![];
         let mut constants = HashMap::new();
@@ -124,13 +136,16 @@ impl<'s, 'r> ScoreConstantsStore<'s, 'r> {
     }
 
     pub fn get(&self, key: ScoreKey) -> anyhow::Result<Option<(&'s Song, &[ScoreConstant])>> {
-        if self.removed_songs.contains_key(key.icon) {
-            return Ok(None);
-        }
         let hash = compute_hash(self.constants.hasher(), &key);
         match self.constants.raw_entry().from_hash(hash, |x| x == &key) {
             Some((_, entry)) => Ok(Some((entry.song, &entry.candidates))),
-            None => bail!("No score constant entry was found for {key:?}"),
+            None => {
+                if self.removed_songs.contains_key(key.icon) {
+                    Ok(None)
+                } else {
+                    bail!("No score constant entry was found for {key:?}")
+                }
+            }
         }
     }
 
@@ -260,7 +275,7 @@ pub struct EstimatorConfig {
     pub old_songs_are_complete: bool,
 }
 
-impl<'s> ScoreConstantsStore<'s, '_> {
+impl<'s> ScoreConstantsStore<'s> {
     pub fn do_everything<'r>(
         &mut self,
         config: EstimatorConfig,
@@ -384,7 +399,22 @@ impl<'s> ScoreConstantsStore<'s, '_> {
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
         let start_time: PlayTime = MaimaiVersion::latest().start_time().into();
+        // Once a song is removed not because of major version update,
+        // The rating sum is no longer reliable.
+        let removal_time = self
+            .removed_songs
+            .iter()
+            .map(|x| {
+                x.1.date()
+                    .and_time(NaiveTime::from_hms_opt(5, 0, 0).unwrap())
+            })
+            .filter(|&x| x > start_time.get())
+            .min();
+        // println!("{removal_time:?}");
         for (&play_time, list) in rating_targets.iter().filter(|p| &start_time <= p.0) {
+            let rating_sum_is_reliable =
+                removal_time.map_or(true, |removal_time| play_time.get() < removal_time);
+            // println!("{rating_sum_is_reliable}");
             let mut sub_list = vec![];
             #[derive(Clone, Copy, Debug)]
             struct Entry<'a, 'k> {
@@ -401,16 +431,11 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                 (false, false, list.candidates_old()),
             ] {
                 for rating_target_entry in entries {
-                    let levels = match self.key_from_target_entry(rating_target_entry) {
-                        KeyFromTargetEntry::NotFound(name) => {
-                            // Search removed songs
-                            let song = self.removed_songs.get(rating_target_entry.)
-                            bail!("Unknown song: {name:?}")
-                        },
-                        KeyFromTargetEntry::Unique(key) => {
-                            let levels = self.get(key)?.context("Song must not be removed")?.1;
-                        }
-                        KeyFromTargetEntry::Multiple => {
+                    use KeyFromTargetEntry::*;
+                    let key = match self.key_from_target_entry(rating_target_entry) {
+                        NotFound(name) => bail!("Unknown song: {name:?}"),
+                        Unique(key) => key,
+                        Multiple => {
                             warn!(
                                 "TODO: score cannot be uniquely determined from the song name {:?}",
                                 rating_target_entry.song_name(),
@@ -418,6 +443,7 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                             return Ok(());
                         }
                     };
+                    let levels = self.get(key)?.context("Song must not be removed")?.1;
                     sub_list.push(Entry {
                         new,
                         contributes_to_sum,
@@ -456,7 +482,9 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                         let single_song_rating =
                             single_song_rating_for_target_entry(level, entry.rating_target_entry)
                                 .get() as usize;
-                        let score = entry.contributes_to_sum as usize * single_song_rating;
+                        let score = entry.contributes_to_sum as usize
+                            * single_song_rating
+                            * rating_sum_is_reliable as usize;
                         let element = DpElement {
                             level,
                             entry,
@@ -466,13 +494,17 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                     })
                 },
                 |(_, x), (_, y)| x.tuple().cmp(&y.tuple()).reverse(),
-                list.rating().get() as usize,
+                list.rating().get() as usize * rating_sum_is_reliable as usize,
             );
             let keys = sub_list.iter().map(|e| e.key).collect_vec();
             let res = res
                 .iter()
                 .map(|res| res.iter().map(|x| x.1.level).collect_vec())
                 .collect_vec();
+            // println!("==== {} ====", play_time);
+            // for (&elem, res) in sub_list.iter().zip(&res) {
+            //     println!("{} {:?}", elem.rating_target_entry.song_name(), res);
+            // }
             for (&key, res) in keys.iter().zip(res) {
                 let reason = lazy_format!("by the rating target list on {play_time}");
                 self.set(key, res.into_iter(), reason)?;
@@ -515,12 +547,17 @@ impl<'s> ScoreConstantsStore<'s, '_> {
             for entry in chain(list.target_new(), list.target_old())
                 .chain(chain(list.candidates_new(), list.candidates_old()))
             {
-                let Some(key) = self.key_from_target_entry(entry)? else {
-                    println!(
-                        "TODO: score cannot be uniquely determined from the song name {:?}",
-                        entry.song_name()
-                    );
-                    continue 'next_group;
+                use KeyFromTargetEntry::*;
+                let key = match self.key_from_target_entry(entry) {
+                    NotFound(name) => bail!("Unknown song: {name:?}"),
+                    Unique(key) => key,
+                    Multiple => {
+                        println!(
+                            "TODO: score cannot be uniquely determined from the song name {:?}",
+                            entry.song_name()
+                        );
+                        continue 'next_group;
+                    }
                 };
                 contained.insert(key);
             }
@@ -577,13 +614,10 @@ impl<'s> ScoreConstantsStore<'s, '_> {
                 let compute = |entry: &RatingTargetEntry| {
                     // println!("min = {min:?}");
                     let a = entry.achievement();
-                    let lvs = &self
-                        .get(
-                            self.key_from_target_entry(entry)?
-                                .context("Must not be removed (1)")?,
-                        )?
-                        .context("Must not be removed (2)")?
-                        .1;
+                    let KeyFromTargetEntry::Unique(key) = self.key_from_target_entry(entry) else {
+                        bail!("Removed or not found")
+                    };
+                    let lvs = &self.get(key)?.context("Must not be removed (2)")?.1;
                     // println!("min_constans = {min_constants:?}");
                     let score = lvs
                         .iter()
