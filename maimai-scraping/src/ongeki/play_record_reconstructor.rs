@@ -397,7 +397,7 @@ fn construct_record_link_block(record: &PlayRecord) -> Box<div<String>> {
         ScoreDifficulty::Advanced => 1,
         ScoreDifficulty::Expert => 2,
         ScoreDifficulty::Master => 3,
-        ScoreDifficulty::Lunatic => 4,
+        ScoreDifficulty::Lunatic => 10,
     };
     html!(
         <div class="p_r_5">
