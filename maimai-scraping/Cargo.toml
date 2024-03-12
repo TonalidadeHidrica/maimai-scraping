@@ -15,6 +15,7 @@ deranged = { version = "0.3.8", features = ["serde"] }
 derive_more = "0.99.11"
 ego-tree = "0.6.2"
 either = "1.8.1"
+enum-iterator = "2.0.0"
 env_logger = "0.10.0"
 fs-err = "2.6.0"
 getset = "0.1.2"

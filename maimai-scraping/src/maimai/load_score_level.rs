@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{anyhow, bail};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use enum_iterator::Sequence;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Deserializer};
@@ -198,7 +199,7 @@ impl InternalScoreLevel {
 }
 
 #[non_exhaustive]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Sequence)]
 pub enum MaimaiVersion {
     Maimai,
     MaimaiPlus,
