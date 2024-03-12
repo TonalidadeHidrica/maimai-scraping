@@ -1,8 +1,17 @@
+use std::{
+    fmt::Display,
+    io::{BufWriter, Write},
+    path::{Path, PathBuf},
+};
+
 use anyhow::Context;
+use fs_err::File;
+use log::{error, info, trace};
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    chrono_util::jst_now,
     compare_htmls::elements_are_equivalent,
     cookie_store::{AimeIdx, FriendCode, PlayerName},
     sega_trait::{record_map_serde, PlayRecordTrait, RecordMap, SegaTrait, SegaUserData},
@@ -33,7 +42,48 @@ pub fn check_no_loss(html: &scraper::Html, record: &PlayRecord) -> anyhow::Resul
         .select(selector!(".container3"))
         .next()
         .context(".container3 not found")?;
-    elements_are_equivalent(html_reconstructed, html_actual)
+    let res = elements_are_equivalent(html_reconstructed, html_actual);
+    if let Err(e) = &res {
+        error!("{e}");
+        let dir = PathBuf::from(format!("ignore/maimai-watcher-log-{}", jst_now()));
+        match fs_err::create_dir_all(&dir) {
+            Err(e) => error!("Failed to create directory: {e}"),
+            Ok(_) => {
+                try_write(&dir.join("page.html"), "full HTML document", html.html());
+                try_write(
+                    &dir.join("reconstructed.html"),
+                    "parsed HTML element",
+                    html_reconstructed.html(),
+                );
+                try_write(
+                    &dir.join("actual.html"),
+                    "reconstructed HTML element",
+                    html_actual.html(),
+                );
+                try_write(
+                    &dir.join("parsed.rs"),
+                    "parse result",
+                    format_args!("{record:#?}"),
+                );
+            }
+        };
+    }
+    res
+}
+
+fn try_write(path: &Path, description: &'static str, content: impl Display) {
+    match (|| {
+        writeln!(BufWriter::new(File::create(path)?), "{content}")?;
+        anyhow::Ok(())
+    })() {
+        Ok(_) => {
+            info!("Saved {description} to {path:?}")
+        }
+        Err(e) => {
+            error!("Failed to write contents to {path:?}: {e}");
+            trace!("Tried to write: {content}")
+        }
+    }
 }
 
 pub struct Ongeki;
