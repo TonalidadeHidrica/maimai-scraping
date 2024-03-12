@@ -28,12 +28,16 @@ struct Opts {
 
     // Constraints
     #[clap(long)]
+    /// Comma-separated list of previous internal levels as integers (e.g. `127,128,129`)
     previous: Option<Levels>,
     #[clap(long)]
+    /// Up to one current level in an ordinary format (e.g. `13+`)
     current: Option<ScoreLevel>,
     #[clap(long)]
+    /// Choose only DX (ReMaster) scores.
     dx_master: bool,
     #[clap(long)]
+    /// Never hoose DX (ReMaster) scores.  `--dx-master` and `--no-dx-master` cannot coexist.
     no_dx_master: bool,
 
     #[clap(long)]
