@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fmt::Debug, path::PathBuf};
 
 use anyhow::{anyhow, bail};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
@@ -15,7 +15,7 @@ use super::{
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
 };
 
-pub fn load(path: impl Into<PathBuf>) -> anyhow::Result<Vec<Song>> {
+pub fn load(path: impl Into<PathBuf> + Debug) -> anyhow::Result<Vec<Song>> {
     let songs: Vec<SongRaw> = read_json(path)?;
     songs.into_iter().map(Song::try_from).collect()
 }

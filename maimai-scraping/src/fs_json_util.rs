@@ -1,13 +1,24 @@
 use std::{
+    fmt::Debug,
     io::{BufReader, BufWriter},
     path::PathBuf,
 };
 
+use anyhow::Context;
 use fs_err::File;
 use serde::{Deserialize, Serialize};
 
-pub fn read_json<P: Into<PathBuf>, T: for<'de> Deserialize<'de>>(path: P) -> anyhow::Result<T> {
-    Ok(serde_json::from_reader(BufReader::new(File::open(path)?))?)
+pub fn read_json<P: Into<PathBuf> + Debug, T: for<'de> Deserialize<'de>>(
+    path: P,
+) -> anyhow::Result<T> {
+    let path = path.into();
+    (|| serde_json::from_reader(BufReader::new(File::open(&path)?)).map_err(anyhow::Error::new))()
+        .with_context(|| {
+            format!(
+                "While trying to parse {path:?} as {}",
+                std::any::type_name::<T>()
+            )
+        })
 }
 pub fn write_json<P: Into<PathBuf>, T: Serialize>(path: P, value: &T) -> anyhow::Result<()> {
     Ok(serde_json::to_writer(
