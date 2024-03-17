@@ -244,7 +244,7 @@ async fn webhook_impl(
                         &client,
                         &config.slack_post_webhook,
                         Some(&user_id),
-                        e.to_string(),
+                        format!("{e:#}"),
                     )
                     .await;
                 }

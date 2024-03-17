@@ -109,7 +109,7 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
                         &reqwest::Client::new(),
                         &config.slack_post_webhook,
                         &config.user_id,
-                        e.to_string(),
+                        format!("{e:#}"),
                     )
                     .await;
                 }
@@ -285,7 +285,7 @@ async fn report_error<T>(
 ) -> anyhow::Result<T> {
     if let Err(e) = &result {
         error!("{e}");
-        webhook_send(&reqwest::Client::new(), url, user_id, e.to_string()).await;
+        webhook_send(&reqwest::Client::new(), url, user_id, format!("{e:#}")).await;
     }
     result
 }
