@@ -50,6 +50,6 @@ pub async fn webhook_send(
         .send()
         .await
     {
-        error!("{e}")
+        error!("{e:#}")
     }
 }

@@ -44,10 +44,10 @@ pub fn check_no_loss(html: &scraper::Html, record: &PlayRecord) -> anyhow::Resul
         .context(".container3 not found")?;
     let res = elements_are_equivalent(html_reconstructed, html_actual);
     if let Err(e) = &res {
-        error!("{e}");
+        error!("{e:#}");
         let dir = PathBuf::from(format!("ignore/maimai-watcher-log-{}", jst_now()));
         match fs_err::create_dir_all(&dir) {
-            Err(e) => error!("Failed to create directory: {e}"),
+            Err(e) => error!("Failed to create directory: {e:#}"),
             Ok(_) => {
                 try_write(&dir.join("page.html"), "full HTML document", html.html());
                 try_write(
@@ -80,7 +80,7 @@ fn try_write(path: &Path, description: &'static str, content: impl Display) {
             info!("Saved {description} to {path:?}")
         }
         Err(e) => {
-            error!("Failed to write contents to {path:?}: {e}");
+            error!("Failed to write contents to {path:?}: {e:#}");
             trace!("Tried to write: {content}")
         }
     }

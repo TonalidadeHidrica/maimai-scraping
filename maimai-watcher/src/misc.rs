@@ -43,7 +43,7 @@ pub async fn recent(
         data.records.values(),
         &data.rating_targets,
     ) {
-        error!("{e}");
+        error!("{e:#}");
     }
     let message = (data.records.values().rev().take(count).rev())
         .map(|record| make_message(record, get_song_lvs(record, &levels)))

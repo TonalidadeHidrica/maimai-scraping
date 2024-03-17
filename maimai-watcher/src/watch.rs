@@ -104,7 +104,7 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
         'outer: while let Err(TryRecvError::Empty | TryRecvError::Disconnected) = rx.try_recv() {
             match runner.run().await {
                 Err(e) => {
-                    error!("{e}");
+                    error!("{e:#}");
                     webhook_send(
                         &reqwest::Client::new(),
                         &config.slack_post_webhook,
@@ -284,7 +284,7 @@ async fn report_error<T>(
     result: anyhow::Result<T>,
 ) -> anyhow::Result<T> {
     if let Err(e) = &result {
-        error!("{e}");
+        error!("{e:#}");
         webhook_send(&reqwest::Client::new(), url, user_id, format!("{e:#}")).await;
     }
     result

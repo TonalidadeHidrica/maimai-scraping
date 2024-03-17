@@ -118,8 +118,8 @@ async fn webhook(state: web::Data<State>, info: web::Form<SlashCommand>) -> impl
     let client = reqwest::Client::new();
     let url = state.config.slack_post_webhook.clone();
     if let Err(e) = webhook_impl(state, info, &client).await {
-        error!("{e}");
-        webhook_send(&client, &url, None, e.to_string()).await;
+        error!("{e:#}");
+        webhook_send(&client, &url, None, format!("{e:#}")).await;
     };
     "done"
 }
@@ -239,7 +239,7 @@ async fn webhook_impl(
                 )
                 .await
                 {
-                    error!("{e}");
+                    error!("{e:#}");
                     webhook_send(
                         &client,
                         &config.slack_post_webhook,
