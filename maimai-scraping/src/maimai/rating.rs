@@ -116,10 +116,12 @@ impl ScoreLevel {
         let range = match self.level {
             a @ 1..=6 => a * 10..(a + 1) * 10,
             a @ 7..=14 => {
+                // TODO: For versions prior than BuddiesPlus, this should be + 7 instead.
+                let boundary = a * 10 + 6;
                 if self.plus {
-                    a * 10 + 7..(a + 1) * 10
+                    boundary..(a + 1) * 10
                 } else {
-                    a * 10..a * 10 + 7
+                    a * 10..boundary
                 }
             }
             15 => 150..151,
@@ -152,7 +154,7 @@ impl From<ScoreConstant> for ScoreLevel {
         let level = value / 10;
         Self {
             level,
-            plus: (7..=14).contains(&level) && value % 10 >= 7,
+            plus: (7..=14).contains(&level) && value % 10 >= 6,
         }
     }
 }
