@@ -175,8 +175,7 @@ impl TryFrom<f64> for InternalScoreLevel {
         } else {
             let plus = match int % 10 {
                 0 => false,
-                // TODO: If data json uses .6 to indicate this 7 shuold be updated to 6
-                7 => true,
+                6 => true,
                 _ => bail!("Absurd fractional part for unknown value: {value}"),
             };
             Self::Unknown(

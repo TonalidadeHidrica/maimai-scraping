@@ -183,6 +183,5 @@ fn levels_to_lv(levels: [&Option<String>; 5]) -> anyhow::Result<Option<Vec<f64>>
 }
 
 fn score_level_to_unknown_float(level: ScoreLevel) -> f64 {
-    // TODO: If data json uses .6 to indicate this 7 shuold be updated to 6
-    (level.level * 10 + level.plus as u8 * 7) as f64 / 10.
+    (level.level * 10 + level.plus as u8 * 6) as f64 / 10.
 }
