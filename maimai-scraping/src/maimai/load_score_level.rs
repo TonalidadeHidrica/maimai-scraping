@@ -5,7 +5,7 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use enum_iterator::Sequence;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use url::Url;
 
 use crate::fs_json_util::read_json;
@@ -46,7 +46,7 @@ where
     map
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SongRaw {
     pub dx: u8,
     pub v: i8,
@@ -255,6 +255,36 @@ impl TryFrom<i8> for MaimaiVersion {
             22 => BuddiesPlus,
             _ => bail!("Unexpected version: {v}"),
         })
+    }
+}
+impl From<MaimaiVersion> for i8 {
+    fn from(v: MaimaiVersion) -> i8 {
+        use MaimaiVersion::*;
+        match v {
+            Maimai => 0,
+            MaimaiPlus => 1,
+            Green => 2,
+            GreenPlus => 3,
+            Orange => 4,
+            OrangePlus => 5,
+            Pink => 6,
+            PinkPlus => 7,
+            Murasaki => 8,
+            MurasakiPlus => 9,
+            Milk => 10,
+            MilkPlus => 11,
+            Finale => 12,
+            Deluxe => 13,
+            DeluxePlus => 14,
+            Splash => 15,
+            SplashPlus => 16,
+            Universe => 17,
+            UniversePlus => 18,
+            Festival => 19,
+            FestivalPlus => 20,
+            Buddies => 21,
+            BuddiesPlus => 22,
+        }
     }
 }
 impl MaimaiVersion {

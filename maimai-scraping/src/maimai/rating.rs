@@ -99,8 +99,8 @@ pub fn single_song_rating(
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct ScoreLevel {
-    level: u8,
-    plus: bool,
+    pub level: u8,
+    pub plus: bool,
 }
 
 impl ScoreLevel {
