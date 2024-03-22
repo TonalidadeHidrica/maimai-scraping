@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{bail, Context};
 use clap::Parser;
@@ -6,17 +6,24 @@ use itertools::Itertools;
 use maimai_scraping::{
     fs_json_util::{read_json, write_json},
     maimai::{
-        load_score_level::{MaimaiVersion, SongRaw},
+        load_score_level::{self, MaimaiVersion, SongRaw},
         rating::ScoreLevel,
+        schema::latest::{SongIcon, SongName},
     },
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
+use url::Url;
 
 #[derive(Parser)]
 struct Args {
     songs_json: PathBuf,
     output_json: PathBuf,
+
+    #[clap(long)]
+    levels_json: Option<PathBuf>,
+    #[clap(long)]
+    dictionary_json: Option<PathBuf>,
 }
 
 #[allow(unused)]
@@ -70,7 +77,7 @@ fn main() -> anyhow::Result<()> {
     songs.sort_by_key(|song| song.sort);
 
     let mut res = vec![];
-    for song in songs {
+    for song in &songs {
         let negate_version = if song.title == "前前前世" { -1 } else { 1 };
         let version = i8::from(convert_version(&song.version)?) * negate_version;
 
@@ -85,6 +92,7 @@ fn main() -> anyhow::Result<()> {
             v: version,
             lv,
             n: song.title.clone(),
+            nn: None,
             ico: icon.clone(),
         };
 
@@ -117,6 +125,42 @@ fn main() -> anyhow::Result<()> {
     }
 
     write_json(args.output_json, &res)?;
+
+    if let Some(levels_json) = args.levels_json {
+        let Some(dictionary_json) = args.dictionary_json else {
+            bail!("Also specify --dictionary_json.");
+        };
+
+        #[derive(Serialize)]
+        struct SuggestionEntry<'a> {
+            song_name: &'a SongName,
+            abbrev_name: &'a str,
+            kana: &'a str,
+        }
+
+        let levels = load_score_level::load(levels_json)?;
+        let mut icon_to_name = HashMap::new();
+        for song in levels {
+            icon_to_name.insert(song.icon().clone(), song);
+        }
+        let mut res = vec![];
+        for song in &songs {
+            let icon = SongIcon::from(Url::parse(&format!(
+                "https://maimaidx.jp/maimai-mobile/img/Music/{}",
+                song.image_url
+            ))?);
+            let entry = icon_to_name
+                .get(&icon)
+                .with_context(|| format!("No corresponding entry was found for {song:?}"))?;
+            res.push(SuggestionEntry {
+                song_name: entry.song_name(),
+                abbrev_name: entry.song_name_abbrev(),
+                kana: &song.title_kana,
+            });
+        }
+
+        write_json(dictionary_json, &res)?;
+    }
 
     Ok(())
 }

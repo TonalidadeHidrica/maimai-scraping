@@ -52,6 +52,7 @@ pub struct SongRaw {
     pub v: i8,
     pub lv: Vec<f64>,
     pub n: String,
+    pub nn: Option<String>,
     pub ico: String,
 }
 
@@ -66,6 +67,8 @@ pub struct Song {
     levels: ScoreLevels,
     #[getset(get = "pub")]
     song_name: SongName,
+    #[getset(get = "pub")]
+    song_name_abbrev: String,
     #[getset(get = "pub")]
     icon: SongIcon,
 }
@@ -99,6 +102,7 @@ impl TryFrom<SongRaw> for Song {
                 master: entry(3)?,
                 re_master,
             },
+            song_name_abbrev: song.nn.to_owned().unwrap_or_else(|| song.n.to_owned()),
             song_name: song.n.into(),
             icon: Url::parse(&format!(
                 "https://maimaidx.jp/maimai-mobile/img/Music/{}.png",

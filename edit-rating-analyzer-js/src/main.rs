@@ -122,6 +122,7 @@ fn parse_song(obj: &ObjectExpr) -> anyhow::Result<SongInJs> {
     let mut v = None::<i8>;
     let mut lv = None;
     let mut n = None::<String>;
+    let mut nn = None::<String>;
     let mut ico = None::<String>;
     for prop in obj.props() {
         let ObjectProp::LiteralProp(prop) = prop else {
@@ -169,13 +170,22 @@ fn parse_song(obj: &ObjectExpr) -> anyhow::Result<SongInJs> {
                 lv = Some((lvs, tokens))
             }
             "n" => n = Some(parse_backtick_string(&prop).context("While parsing `n`")?),
+            "nn" => nn = Some(parse_backtick_string(&prop).context("While parsing `nn`")?),
             "ico" => ico = Some(parse_backtick_string(&prop).context("While parsing `ico`")?),
             _ => {}
         }
     }
     match (dx, v, lv, n, ico) {
         (Some(dx), Some(v), Some((lv, lv_tokens)), Some(n), Some(ico)) => Ok(SongInJs {
-            song: SongRaw { dx, v, lv, n, ico }.try_into()?,
+            song: SongRaw {
+                dx,
+                v,
+                lv,
+                n,
+                nn,
+                ico,
+            }
+            .try_into()?,
             lv_tokens,
         }),
         _ => bail!("Some of the fields (`dx, `v`, `lv`, `n`, and `ico`) are missing"),
