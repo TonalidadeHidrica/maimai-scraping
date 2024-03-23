@@ -4,12 +4,15 @@ use anyhow::{anyhow, bail, Context};
 use chrono::NaiveDateTime;
 use clap::Parser;
 use itertools::Itertools;
-use maimai_scraping::{fs_json_util::write_json, maimai::{
-    parser::rating_target::{RatingTargetEntry, RatingTargetList},
-    rating::ScoreLevel,
-    schema::latest::{ScoreDifficulty, ScoreGeneration, ScoreMetadata},
-    MaimaiUserData,
-}};
+use maimai_scraping::{
+    fs_json_util::write_json,
+    maimai::{
+        parser::rating_target::{RatingTargetEntry, RatingTargetList},
+        rating::ScoreLevel,
+        schema::latest::{ScoreDifficulty, ScoreGeneration, ScoreMetadata},
+        MaimaiUserData,
+    },
+};
 use maplit::btreemap;
 
 #[derive(Parser)]
