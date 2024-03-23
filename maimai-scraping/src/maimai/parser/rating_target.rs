@@ -5,6 +5,7 @@ use getset::{CopyGetters, Getters};
 use itertools::{Itertools, PeekingNext};
 use scraper::ElementRef;
 use serde::{Deserialize, Serialize};
+use typed_builder::TypedBuilder;
 
 use crate::maimai::{
     parser::{
@@ -87,7 +88,7 @@ pub fn parse_entry(div: ElementRef) -> anyhow::Result<RatingTargetEntry> {
     })
 }
 
-#[derive(Debug, Getters, CopyGetters, Serialize, Deserialize)]
+#[derive(Debug, TypedBuilder, Getters, CopyGetters, Serialize, Deserialize)]
 pub struct RatingTargetList {
     #[getset(get_copy = "pub")]
     rating: RatingValue,
@@ -100,7 +101,7 @@ pub struct RatingTargetList {
     #[getset(get = "pub")]
     candidates_old: Vec<RatingTargetEntry>,
 }
-#[derive(Debug, Getters, CopyGetters, Serialize, Deserialize)]
+#[derive(Debug, TypedBuilder, Getters, CopyGetters, Serialize, Deserialize)]
 pub struct RatingTargetEntry {
     #[getset(get_copy = "pub")]
     score_metadata: ScoreMetadata,

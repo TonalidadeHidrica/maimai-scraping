@@ -213,5 +213,5 @@ pub struct ScoreResult {
     full_combo_kind: FullComboKind,
     full_sync_kind: FullSyncKind,
 }
-#[derive(Debug, derive_more::Display, Serialize, Deserialize)]
+#[derive(Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
 pub struct ScoreIdx(String);
