@@ -246,7 +246,7 @@ pub fn parse_utage_metadata(div: ElementRef) -> anyhow::Result<UtageMetadata> {
         "宴" => UtageKind::Miscellaneous,
         "蔵" => UtageKind::Shelved,
         "星" => UtageKind::Slides,
-        s => bail!("Unexpected utage kind: {s:?}"),
+        kind => UtageKind::Raw(kind.to_owned().into()),
     };
     let buddy = div
         .select(selector!(

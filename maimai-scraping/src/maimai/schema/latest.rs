@@ -20,7 +20,7 @@ pub struct PlayRecord {
     song_metadata: SongMetadata,
     #[getset(get_copy = "pub")]
     score_metadata: ScoreMetadata,
-    #[getset(get_copy = "pub")]
+    #[getset(get = "pub")]
     utage_metadata: Option<UtageMetadata>,
     #[getset(get_copy = "pub")]
     cleared: bool,
@@ -540,12 +540,16 @@ pub enum LifeResult {
     CourseResult(ValueWithMax<u32>),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, TypedBuilder, CopyGetters, Serialize, Deserialize)]
+#[derive(
+    Clone, PartialEq, Eq, Debug, TypedBuilder, Getters, CopyGetters, Serialize, Deserialize,
+)]
 pub struct UtageMetadata {
+    #[getset(get = "pub")]
     kind: UtageKind,
+    #[getset(get_copy = "pub")]
     buddy: bool,
 }
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum UtageKind {
     /// 光
     AllBreak,
@@ -563,7 +567,15 @@ pub enum UtageKind {
     Shelved,
     /// 星
     Slides,
+
+    // I gave up enumearting all possible utage kinds.
+    Raw(UtageKindRaw),
 }
+
+#[derive(
+    Clone, PartialEq, Eq, PartialOrd, Ord, Debug, derive_more::From, Serialize, Deserialize,
+)]
+pub struct UtageKindRaw(String);
 
 #[cfg(test)]
 mod tests {
