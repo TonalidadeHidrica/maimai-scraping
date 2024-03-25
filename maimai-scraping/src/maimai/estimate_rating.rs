@@ -230,6 +230,28 @@ impl<'s> ScoreConstantsStore<'s> {
         }
     }
 
+    pub fn levels_from_target_entry<'slf>(
+        &'slf self,
+        entry: &RatingTargetEntry,
+    ) -> anyhow::Result<Option<(ScoreKey<'s>, &'slf [ScoreConstant])>> {
+        use KeyFromTargetEntry::*;
+        match self.key_from_target_entry(entry) {
+            NotFound(name) => bail!("Unknown song: {name:?}"),
+            Unique(key) => {
+                let levels = self.get(key)?.context("Song must not be removed")?.1;
+                Ok(Some((key, levels)))
+            }
+            Multiple => {
+                warn!(
+                    "TODO: score cannot be uniquely determined from the song name {:?}",
+                    entry.song_name(),
+                );
+                // return Ok(());
+                Ok(None)
+            }
+        }
+    }
+
     pub fn scores(&self) -> impl Iterator<Item = (&ScoreKey<'s>, &ScoreConstantsEntry<'s>)> {
         self.constants.iter()
     }
@@ -259,7 +281,7 @@ impl ScoreConstantsEntry<'_> {
     }
 }
 
-fn single_song_rating_for_target_entry(
+pub fn single_song_rating_for_target_entry(
     level: ScoreConstant,
     entry: &RatingTargetEntry,
 ) -> RatingValue {
@@ -431,19 +453,10 @@ impl<'s> ScoreConstantsStore<'s> {
                 (false, false, list.candidates_old()),
             ] {
                 for rating_target_entry in entries {
-                    use KeyFromTargetEntry::*;
-                    let key = match self.key_from_target_entry(rating_target_entry) {
-                        NotFound(name) => bail!("Unknown song: {name:?}"),
-                        Unique(key) => key,
-                        Multiple => {
-                            warn!(
-                                "TODO: score cannot be uniquely determined from the song name {:?}",
-                                rating_target_entry.song_name(),
-                            );
-                            return Ok(());
-                        }
+                    let Some((key, levels)) = self.levels_from_target_entry(rating_target_entry)?
+                    else {
+                        return Ok(());
                     };
-                    let levels = self.get(key)?.context("Song must not be removed")?.1;
                     sub_list.push(Entry {
                         new,
                         contributes_to_sum,
