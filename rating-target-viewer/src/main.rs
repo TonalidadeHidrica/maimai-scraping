@@ -23,6 +23,8 @@ struct Opts {
     maimai_user_data_path: PathBuf,
     #[arg(default_value = "19405")]
     port: u16,
+    #[arg(long, default_value = "https://sgimera.github.io/mai_RatingAnalyzer/")]
+    mai_rating_analyzer_url: String,
 }
 
 #[tokio::main]
@@ -35,7 +37,10 @@ async fn main() -> anyhow::Result<()> {
             .unwrap()
             .rating_targets;
         App::new()
-            .app_data(web::Data::new(Data { rating_targets }))
+            .app_data(web::Data::new(Data {
+                rating_targets,
+                mai_rating_analyzer_url: opts.mai_rating_analyzer_url.clone(),
+            }))
             .service(entry_next)
             .service(entry_prev)
             .service(get)
@@ -49,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
 
 struct Data {
     rating_targets: RatingTargetFile,
+    mai_rating_analyzer_url: String,
 }
 
 #[get("/entry/{time}")]
@@ -102,6 +108,7 @@ async fn get(web_data: web::Data<Data>, play_time: web::Path<PlayTime>) -> HttpR
         candidates_new = make(data.candidates_new()),
         candidates_old = make(data.candidates_old()),
         choices = choices,
+        mai_rating_analyzer_url = web_data.mai_rating_analyzer_url,
     );
     HttpResponse::Ok()
         .content_type(ContentType::html())
