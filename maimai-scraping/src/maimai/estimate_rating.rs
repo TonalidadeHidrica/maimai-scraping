@@ -298,12 +298,13 @@ pub struct EstimatorConfig {
 }
 
 impl<'s> ScoreConstantsStore<'s> {
+    /// Returns if there were updates by the given data.
     pub fn do_everything<'r>(
         &mut self,
         config: EstimatorConfig,
         records: impl IntoIterator<Item = &'r PlayRecord> + Clone,
         rating_targets: &RatingTargetFile,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<bool> {
         if self.show_details {
             println!("New songs");
         }
@@ -313,6 +314,7 @@ impl<'s> ScoreConstantsStore<'s> {
         if config.old_songs_are_complete {
             self.determine_by_delta(records.clone(), true)?;
         }
+        let very_before_len = self.events().len();
         for i in 1.. {
             if self.show_details {
                 println!("Iteration {i}");
@@ -324,7 +326,7 @@ impl<'s> ScoreConstantsStore<'s> {
                 break;
             }
         }
-        Ok(())
+        Ok(very_before_len != self.events.len())
     }
 
     fn determine_by_delta<'r>(

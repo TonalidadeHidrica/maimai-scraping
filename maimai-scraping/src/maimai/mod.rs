@@ -1,5 +1,6 @@
 pub mod data_collector;
 pub mod estimate_rating;
+pub mod estimator_config_multiuser;
 pub mod favorite_songs;
 pub mod load_score_level;
 pub mod parser;
