@@ -19,13 +19,17 @@ struct Opts {
 fn main() -> anyhow::Result<()> {
     let args = Opts::parse();
     let config: estimator_config_multiuser::Root = toml::from_str(&read_to_string(args.config)?)?;
+    let datas = (config.users().iter())
+        .map(|config| anyhow::Ok((config, read_json::<_, MaimaiUserData>(config.data_path())?)))
+        .collect::<Result<Vec<_>, _>>()?;
+
     let levels = load_score_level::load(&args.levels_json)?;
     let mut constants = ScoreConstantsStore::new(&levels, &[])?;
+
     while {
         println!("Iteration");
         let mut changed = false;
-        for config in config.users() {
-            let data: MaimaiUserData = read_json(config.data_path())?;
+        for (config, data) in &datas {
             changed |= constants.do_everything(
                 config.estimator_config(),
                 data.records.values(),
