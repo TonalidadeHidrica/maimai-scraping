@@ -13,7 +13,7 @@ use maimai_scraping::{
         estimator_config_multiuser,
         load_score_level::{self, MaimaiVersion},
         rating::ScoreConstant,
-        schema::latest::{AchievementValue, PlayTime, SongName},
+        schema::latest::{AchievementValue, PlayTime, ScoreDifficulty, ScoreGeneration, SongName},
         MaimaiUserData,
     },
 };
@@ -27,6 +27,9 @@ struct Opts {
 
     #[clap(default_value = "10")]
     level_update_factor: f64,
+
+    #[clap(long, value_enum, default_value = "quiet")]
+    estimator_detail: PrintResult,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -41,7 +44,7 @@ fn main() -> anyhow::Result<()> {
 
     let levels = load_score_level::load(&args.levels_json)?;
     let mut store = ScoreConstantsStore::new(&levels, &[])?;
-    store.show_details = PrintResult::Quiet;
+    store.show_details = args.estimator_detail;
 
     update_all(&datas, &mut store)?;
     let count_initial = store.num_determined_songs();
@@ -266,13 +269,19 @@ fn get_optimal_song<'s, 'o>(
             // );
         }
         let expected_count = weighted_count_sum / factor_sum;
-        candidates.push(OptimalSongEntry {
-            expected_count,
-            key,
-            song,
-            old_constants,
-            constants: constants.to_owned(),
-        });
+        if let (ScoreGeneration::Deluxe, ScoreDifficulty::Master | ScoreDifficulty::ReMaster) =
+            (key.generation, key.difficulty)
+        {
+            // Skip
+        } else {
+            candidates.push(OptimalSongEntry {
+                expected_count,
+                key,
+                song,
+                old_constants,
+                constants: constants.to_owned(),
+            });
+        }
     }
     candidates.sort_by_key(|x| OrderedFloat(-x.expected_count));
     let res = candidates.into_iter().next();

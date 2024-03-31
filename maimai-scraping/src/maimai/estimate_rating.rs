@@ -21,7 +21,7 @@ use crate::{
 };
 use anyhow::{bail, Context};
 use chrono::NaiveTime;
-use clap::Args;
+use clap::{Args, ValueEnum};
 use either::Either;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
@@ -77,7 +77,7 @@ pub struct ScoreConstantsStore<'s> {
     song_name_to_icon: HashMap<&'s SongName, HashSet<&'s SongIcon>>,
     pub show_details: PrintResult,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, ValueEnum)]
 pub enum PrintResult {
     Summarize,
     Detailed,
