@@ -407,16 +407,11 @@ impl<'s> ScoreConstantsStore<'s> {
                 };
                 key_to_record.insert(score_key, record);
 
-                let a = record.achievement_result().value();
-                self.set(
+                self.register_single_song_rating(
                     score_key,
-                    ScoreConstant::candidates().filter(|&level| {
-                        single_song_rating(level, a, rank_coef(a)).get() as i16 == rating
-                    }),
-                    lazy_format!(
-                        "beacuse record played at {} determines the single-song rating to be {rating}",
-                        record.played_at().time()
-                    ),
+                    record.achievement_result().value(),
+                    rating,
+                    record.played_at().time(),
                 )?;
             }
         }
@@ -430,6 +425,24 @@ impl<'s> ScoreConstantsStore<'s> {
         //     );
         // }
         // println!("Sum: {}", r2s.iter().map(|x| x.0).sum::<i16>());
+        Ok(())
+    }
+
+    pub fn register_single_song_rating(
+        &mut self,
+        score_key: ScoreKey<'_>,
+        a: AchievementValue,
+        rating: i16,
+        time: PlayTime,
+    ) -> Result<(), anyhow::Error> {
+        self.set(
+            score_key,
+            ScoreConstant::candidates()
+                .filter(|&level| single_song_rating(level, a, rank_coef(a)).get() as i16 == rating),
+            lazy_format!(
+                "beacuse record played at {time} determines the single-song rating to be {rating}",
+            ),
+        )?;
         Ok(())
     }
 
