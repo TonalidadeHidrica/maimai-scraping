@@ -58,7 +58,7 @@ fn main() -> anyhow::Result<()> {
     'outer_loop: loop {
         let mut store = store.clone();
         let res = match (|| {
-            store.show_details = PrintResult::Detailed;
+            // store.show_details = PrintResult::Detailed;
             for (i, entry) in history.iter().enumerate() {
                 let rating_before = history
                     .get(i.wrapping_sub(1))
@@ -74,7 +74,7 @@ fn main() -> anyhow::Result<()> {
                     .context("While registering single song rating")?;
             }
             update_all(&datas, &mut store).context("While updating under assumptions")?;
-            store.show_details = PrintResult::Quiet;
+            // store.show_details = PrintResult::Quiet;
             get_optimal_song(&datas, &store, &old_store, args.level_update_factor)
                 .context("While getting optimal song")
         })() {
