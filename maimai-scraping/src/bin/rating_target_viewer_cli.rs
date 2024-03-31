@@ -34,7 +34,11 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     for (time, file) in &data.rating_targets {
-        if time.get() < MaimaiVersion::latest().start_time() {
+        let version = args
+            .estimator_config
+            .version
+            .unwrap_or(MaimaiVersion::latest());
+        if !(version.start_time()..version.end_time()).contains(&time.get()) {
             continue;
         }
         println!("{time}");

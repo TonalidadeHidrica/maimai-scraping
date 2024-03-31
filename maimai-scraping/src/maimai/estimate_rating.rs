@@ -307,6 +307,8 @@ pub fn single_song_rating_for_target_entry(
 #[derive(Clone, Copy, Debug, Deserialize, Args)]
 pub struct EstimatorConfig {
     #[arg(long)]
+    pub version: Option<MaimaiVersion>,
+    #[arg(long)]
     pub new_songs_are_complete: bool,
     #[arg(long)]
     pub old_songs_are_complete: bool,
@@ -320,14 +322,15 @@ impl<'s> ScoreConstantsStore<'s> {
         records: impl IntoIterator<Item = &'r PlayRecord> + Clone,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<bool> {
+        let version = config.version.unwrap_or(MaimaiVersion::latest());
         if let PrintResult::Detailed = self.show_details {
             println!("New songs");
         }
         if config.new_songs_are_complete {
-            self.determine_by_delta(records.clone(), false)?;
+            self.determine_by_delta(version, records.clone(), false)?;
         }
         if config.old_songs_are_complete {
-            self.determine_by_delta(records.clone(), true)?;
+            self.determine_by_delta(version, records.clone(), true)?;
         }
         let very_before_len = self.events().len();
         for i in 1.. {
@@ -335,8 +338,8 @@ impl<'s> ScoreConstantsStore<'s> {
                 println!("Iteration {i}");
             }
             let before_len = self.events().len();
-            self.guess_from_rating_target_order(rating_targets)?;
-            self.records_not_in_targets(records.clone(), rating_targets)?;
+            self.guess_from_rating_target_order(version, rating_targets)?;
+            self.records_not_in_targets(version, records.clone(), rating_targets)?;
             if before_len == self.events().len() {
                 break;
             }
@@ -346,18 +349,19 @@ impl<'s> ScoreConstantsStore<'s> {
 
     fn determine_by_delta<'r>(
         &mut self,
+        version: MaimaiVersion,
         records: impl IntoIterator<Item = &'r PlayRecord>,
         analyze_old_songs: bool,
     ) -> anyhow::Result<()> {
-        let version = MaimaiVersion::latest();
         let start_time: PlayTime = version.start_time().into();
+        let end_time: PlayTime = version.end_time().into();
         let mut r2s = BTreeSet::<(i16, _)>::new();
         let mut s2r = HashMap::<_, i16>::new();
         let mut key_to_record = HashMap::new();
         let max_count = if analyze_old_songs { 35 } else { 15 };
         for record in records
             .into_iter()
-            .filter(|r| start_time <= r.played_at().time())
+            .filter(|r| (start_time..end_time).contains(&r.played_at().time()))
             .filter(|r| r.score_metadata().difficulty() != ScoreDifficulty::Utage)
         {
             let score_key = ScoreKey::from(record);
@@ -448,9 +452,11 @@ impl<'s> ScoreConstantsStore<'s> {
 
     pub fn guess_from_rating_target_order(
         &mut self,
+        version: MaimaiVersion,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
-        let start_time: PlayTime = MaimaiVersion::latest().start_time().into();
+        let start_time: PlayTime = version.start_time().into();
+        let end_time: PlayTime = version.end_time().into();
         // Once a song is removed not because of major version update,
         // The rating sum is no longer reliable.
         let removal_time = self
@@ -460,10 +466,13 @@ impl<'s> ScoreConstantsStore<'s> {
                 x.1.date()
                     .and_time(NaiveTime::from_hms_opt(5, 0, 0).unwrap())
             })
-            .filter(|&x| x > start_time.get())
+            .filter(|&x| start_time.get() < x && x < end_time.get())
             .min();
         // println!("{removal_time:?}");
-        for (&play_time, list) in rating_targets.iter().filter(|p| &start_time <= p.0) {
+        for (&play_time, list) in rating_targets
+            .iter()
+            .filter(|p| (start_time..end_time).contains(p.0))
+        {
             let rating_sum_is_reliable =
                 removal_time.map_or(true, |removal_time| play_time.get() < removal_time);
             // println!("{rating_sum_is_reliable}");
@@ -558,15 +567,16 @@ impl<'s> ScoreConstantsStore<'s> {
 
     pub fn records_not_in_targets<'r>(
         &mut self,
+        version: MaimaiVersion,
         records: impl IntoIterator<Item = &'r PlayRecord>,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
-        let version = MaimaiVersion::latest();
         let start_time: PlayTime = version.start_time().into();
+        let end_time: PlayTime = version.end_time().into();
 
         'next_group: for (_, group) in &records
             .into_iter()
-            .filter(|record| start_time <= record.played_at().time())
+            .filter(|record| (start_time..end_time).contains(&record.played_at().time()))
             .filter(|r| r.score_metadata().difficulty() != ScoreDifficulty::Utage)
             .filter_map(
                 |record| match rating_targets.range(record.played_at().time()..).next() {

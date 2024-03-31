@@ -14,7 +14,7 @@ use maimai_scraping::{
     maimai::{
         data_collector::update_targets,
         estimate_rating::{EstimatorConfig, ScoreConstantsStore},
-        load_score_level::{self, RemovedSong, Song},
+        load_score_level::{self, MaimaiVersion, RemovedSong, Song},
         Maimai, MaimaiUserData,
     },
 };
@@ -198,7 +198,7 @@ impl<'c, 's> Runner<'c, 's> {
             &self.config.slack_post_webhook,
             &self.config.user_id,
             self.levels_naive
-                .guess_from_rating_target_order(&self.data.rating_targets)
+                .guess_from_rating_target_order(MaimaiVersion::latest(), &self.data.rating_targets)
                 .context("While estimating levels roughly"),
         )
         .await;

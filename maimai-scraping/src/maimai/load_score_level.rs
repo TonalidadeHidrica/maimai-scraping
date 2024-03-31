@@ -6,6 +6,7 @@ use enum_iterator::Sequence;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
 use serde::{Deserialize, Deserializer, Serialize};
+use strum::EnumString;
 use url::Url;
 
 use crate::fs_json_util::read_json;
@@ -204,7 +205,7 @@ impl InternalScoreLevel {
 }
 
 #[non_exhaustive]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Sequence)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, EnumString, Deserialize, Sequence)]
 pub enum MaimaiVersion {
     Maimai,
     MaimaiPlus,
@@ -324,6 +325,14 @@ impl MaimaiVersion {
     pub fn start_time(self) -> NaiveDateTime {
         self.start_date()
             .and_time(NaiveTime::from_hms_opt(5, 0, 0).unwrap())
+    }
+    pub fn end_time(self) -> NaiveDateTime {
+        match self.next() {
+            Some(next) => next
+                .start_date()
+                .and_time(NaiveTime::from_hms_opt(5, 0, 0).unwrap()),
+            None => NaiveDateTime::MAX,
+        }
     }
     pub fn latest() -> Self {
         Self::BuddiesPlus
