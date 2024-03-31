@@ -68,14 +68,20 @@ impl<'a> ScoreKey<'a> {
     }
 }
 
-#[derive(Getters)]
+#[derive(Clone, Getters)]
 pub struct ScoreConstantsStore<'s> {
     #[getset(get = "pub")]
     events: Vec<(ScoreKey<'s>, String)>,
     constants: HashMap<ScoreKey<'s>, ScoreConstantsEntry<'s>>,
     removed_songs: HashMap<&'s SongIcon, &'s RemovedSong>,
     song_name_to_icon: HashMap<&'s SongName, HashSet<&'s SongIcon>>,
-    pub show_details: bool,
+    pub show_details: PrintResult,
+}
+#[derive(Clone, Copy)]
+pub enum PrintResult {
+    Summarize,
+    Detailed,
+    Quiet,
 }
 impl<'s> ScoreConstantsStore<'s> {
     pub fn new(levels: &'s [Song], removed_songs: &'s [RemovedSong]) -> anyhow::Result<Self> {
@@ -131,7 +137,7 @@ impl<'s> ScoreConstantsStore<'s> {
             constants,
             removed_songs,
             song_name_to_icon,
-            show_details: false,
+            show_details: PrintResult::Summarize,
         })
     }
 
@@ -149,10 +155,10 @@ impl<'s> ScoreConstantsStore<'s> {
         }
     }
 
-    fn set(
+    pub fn set(
         &mut self,
         key: ScoreKey,
-        new: impl Iterator<Item = ScoreConstant>,
+        new: impl IntoIterator<Item = ScoreConstant>,
         reason: impl Display,
     ) -> anyhow::Result<()> {
         let hash = compute_hash(self.constants.hasher(), &key);
@@ -166,7 +172,7 @@ impl<'s> ScoreConstantsStore<'s> {
         let entry = entry.get_mut();
         let old_len = entry.candidates.len();
 
-        let new: BTreeSet<_> = new.collect();
+        let new: BTreeSet<_> = new.into_iter().collect();
         entry.candidates.retain(|x| new.contains(x));
         // println!("new = {new:?}");
 
@@ -191,27 +197,29 @@ impl<'s> ScoreConstantsStore<'s> {
             match entry.candidates[..] {
                 [] => {
                     let message = lazy_format!("No more candidates for {score_name} :(");
-                    if self.show_details {
+                    if let PrintResult::Detailed = self.show_details {
                         println!("  {message}");
                         print_reasons();
                     }
                     bail!("{message}");
                 }
-                [determined] => {
-                    if self.show_details {
+                [determined] => match self.show_details {
+                    PrintResult::Detailed => {
                         println!("  Internal level determined! {score_name}: {determined}");
                         print_reasons();
-                    } else {
+                    }
+                    PrintResult::Summarize => {
                         println!("{score_name}: {determined}");
                     }
-                }
+                    _ => {}
+                },
                 _ => {}
             }
         }
         Ok(())
     }
 
-    fn key_from_target_entry<'e>(
+    pub fn key_from_target_entry<'e>(
         &self,
         entry: &'e RatingTargetEntry,
     ) -> KeyFromTargetEntry<'e, 's> {
@@ -255,15 +263,22 @@ impl<'s> ScoreConstantsStore<'s> {
     pub fn scores(&self) -> impl Iterator<Item = (&ScoreKey<'s>, &ScoreConstantsEntry<'s>)> {
         self.constants.iter()
     }
+
+    pub fn num_determined_songs(&self) -> usize {
+        self.constants
+            .values()
+            .filter(|x| x.candidates.len() == 1)
+            .count()
+    }
 }
 
-enum KeyFromTargetEntry<'n, 's> {
+pub enum KeyFromTargetEntry<'n, 's> {
     NotFound(&'n SongName),
     Unique(ScoreKey<'s>),
     Multiple,
 }
 
-#[derive(Getters, CopyGetters)]
+#[derive(Clone, Getters, CopyGetters)]
 pub struct ScoreConstantsEntry<'s> {
     #[getset(get_copy = "pub")]
     song: &'s Song,
@@ -305,7 +320,7 @@ impl<'s> ScoreConstantsStore<'s> {
         records: impl IntoIterator<Item = &'r PlayRecord> + Clone,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<bool> {
-        if self.show_details {
+        if let PrintResult::Detailed = self.show_details {
             println!("New songs");
         }
         if config.new_songs_are_complete {
@@ -316,7 +331,7 @@ impl<'s> ScoreConstantsStore<'s> {
         }
         let very_before_len = self.events().len();
         for i in 1.. {
-            if self.show_details {
+            if let PrintResult::Detailed = self.show_details {
                 println!("Iteration {i}");
             }
             let before_len = self.events().len();

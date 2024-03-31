@@ -179,7 +179,8 @@ impl TryFrom<f64> for InternalScoreLevel {
         } else {
             let plus = match int % 10 {
                 0 => false,
-                6 => true,
+                // Keeping both 6 and 7 for compatibility
+                6 | 7 => true,
                 _ => bail!("Absurd fractional part for unknown value: {value}"),
             };
             Self::Unknown(
