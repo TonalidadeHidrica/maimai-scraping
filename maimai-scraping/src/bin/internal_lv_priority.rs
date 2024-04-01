@@ -30,6 +30,9 @@ struct Opts {
 
     #[clap(long, value_enum, default_value = "quiet")]
     estimator_detail: PrintResult,
+
+    #[clap(long)]
+    only_estimate: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -48,6 +51,10 @@ fn main() -> anyhow::Result<()> {
 
     update_all(&datas, &mut store)?;
     let count_initial = store.num_determined_songs();
+
+    if args.only_estimate {
+        return Ok(());
+    }
 
     let initial_rating = read_i16("Initial rating");
     let mut history: Vec<HistoryEntry> = vec![];
