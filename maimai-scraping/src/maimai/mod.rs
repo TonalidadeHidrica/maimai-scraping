@@ -6,6 +6,7 @@ pub mod load_score_level;
 pub mod parser;
 pub mod rating;
 pub mod schema;
+pub mod song_list;
 
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
