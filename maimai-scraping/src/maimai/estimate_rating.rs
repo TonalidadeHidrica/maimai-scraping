@@ -78,11 +78,12 @@ pub struct ScoreConstantsStore<'s> {
     song_name_to_icon: HashMap<&'s SongName, HashSet<&'s SongIcon>>,
     pub show_details: PrintResult,
 }
-#[derive(Clone, Copy, ValueEnum)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, ValueEnum)]
 pub enum PrintResult {
+    Quiet,
     Summarize,
     Detailed,
-    Quiet,
+    Verbose,
 }
 impl<'s> ScoreConstantsStore<'s> {
     pub fn new(levels: &'s [Song], removed_songs: &'s [RemovedSong]) -> anyhow::Result<Self> {
@@ -198,14 +199,14 @@ impl<'s> ScoreConstantsStore<'s> {
             match entry.candidates[..] {
                 [] => {
                     let message = lazy_format!("No more candidates for {score_name} :(");
-                    if let PrintResult::Detailed = self.show_details {
+                    if PrintResult::Detailed <= self.show_details {
                         println!("  {message}");
                         print_reasons();
                     }
                     bail!("{message}");
                 }
                 [determined] => match self.show_details {
-                    PrintResult::Detailed => {
+                    PrintResult::Detailed | PrintResult::Verbose => {
                         println!("  Internal level determined! {score_name}: {determined}");
                         print_reasons();
                     }
@@ -325,7 +326,7 @@ impl<'s> ScoreConstantsStore<'s> {
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<bool> {
         let version = config.version.unwrap_or(MaimaiVersion::latest());
-        if let PrintResult::Detailed = self.show_details {
+        if let PrintResult::Verbose = self.show_details {
             println!("New songs");
         }
         if config.new_songs_are_complete {
@@ -336,7 +337,7 @@ impl<'s> ScoreConstantsStore<'s> {
         }
         let very_before_len = self.events().len();
         for i in 1.. {
-            if let PrintResult::Detailed = self.show_details {
+            if let PrintResult::Verbose = self.show_details {
                 println!("Iteration {i}");
             }
             let before_len = self.events().len();
