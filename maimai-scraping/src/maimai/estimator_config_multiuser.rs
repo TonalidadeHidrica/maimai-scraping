@@ -22,5 +22,5 @@ pub struct User {
     estimator_config: EstimatorConfig,
 }
 
-#[derive(From, Deserialize)]
+#[derive(Debug, From, Deserialize)]
 pub struct UserName(String);

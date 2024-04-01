@@ -29,6 +29,7 @@ fn main() -> anyhow::Result<()> {
     let mut constants = ScoreConstantsStore::new(&levels, &[])?;
     constants.do_everything(
         args.estimator_config,
+        None,
         data.records.values(),
         &data.rating_targets,
     )?;

@@ -40,6 +40,7 @@ pub async fn recent(
     }
     if let Err(e) = levels.do_everything(
         estimator_config,
+        None,
         data.records.values(),
         &data.rating_targets,
     ) {

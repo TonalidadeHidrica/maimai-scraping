@@ -188,6 +188,7 @@ impl<'c, 's> Runner<'c, 's> {
             self.levels_actual
                 .do_everything(
                     self.config.estimator_config,
+                    None,
                     self.data.records.values(),
                     &self.data.rating_targets,
                 )
@@ -198,7 +199,11 @@ impl<'c, 's> Runner<'c, 's> {
             &self.config.slack_post_webhook,
             &self.config.user_id,
             self.levels_naive
-                .guess_from_rating_target_order(MaimaiVersion::latest(), &self.data.rating_targets)
+                .guess_from_rating_target_order(
+                    MaimaiVersion::latest(),
+                    None,
+                    &self.data.rating_targets,
+                )
                 .context("While estimating levels roughly"),
         )
         .await;

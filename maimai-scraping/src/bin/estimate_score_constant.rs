@@ -38,6 +38,7 @@ fn main() -> anyhow::Result<()> {
     };
     levels.do_everything(
         opts.estimator_config,
+        None,
         data.records.values(),
         &data.rating_targets,
     )?;

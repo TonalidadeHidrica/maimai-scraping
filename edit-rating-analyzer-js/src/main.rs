@@ -38,6 +38,7 @@ fn main() -> anyhow::Result<()> {
     let mut levels = ScoreConstantsStore::new(&levels_original, &removed_songs)?;
     levels.do_everything(
         opts.estimator_config,
+        None,
         data.records.values(),
         &data.rating_targets,
     )?;

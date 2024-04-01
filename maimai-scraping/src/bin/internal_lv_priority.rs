@@ -70,6 +70,7 @@ fn main() -> anyhow::Result<()> {
                 store
                     .register_single_song_rating(
                         entry.key,
+                        None,
                         entry.achievement,
                         rating_delta,
                         entry.time,
@@ -304,8 +305,10 @@ fn update_all(
     while {
         let mut changed = false;
         for (config, data) in datas {
+            config.name();
             changed |= constants.do_everything(
                 config.estimator_config(),
+                Some(config.name()),
                 data.records.values(),
                 &data.rating_targets,
             )?;

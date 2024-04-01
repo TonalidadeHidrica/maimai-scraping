@@ -33,6 +33,7 @@ use serde::Deserialize;
 use strum::IntoEnumIterator;
 
 use super::{
+    estimator_config_multiuser::UserName,
     load_score_level::{self, make_hash_multimap},
     schema::latest::{AchievementRank, ScoreMetadata},
 };
@@ -319,6 +320,7 @@ impl<'s> ScoreConstantsStore<'s> {
     pub fn do_everything<'r>(
         &mut self,
         config: EstimatorConfig,
+        name: Option<&UserName>,
         records: impl IntoIterator<Item = &'r PlayRecord> + Clone,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<bool> {
@@ -327,10 +329,10 @@ impl<'s> ScoreConstantsStore<'s> {
             println!("New songs");
         }
         if config.new_songs_are_complete {
-            self.determine_by_delta(version, records.clone(), false)?;
+            self.determine_by_delta(version, name, records.clone(), false)?;
         }
         if config.old_songs_are_complete {
-            self.determine_by_delta(version, records.clone(), true)?;
+            self.determine_by_delta(version, name, records.clone(), true)?;
         }
         let very_before_len = self.events().len();
         for i in 1.. {
@@ -338,8 +340,8 @@ impl<'s> ScoreConstantsStore<'s> {
                 println!("Iteration {i}");
             }
             let before_len = self.events().len();
-            self.guess_from_rating_target_order(version, rating_targets)?;
-            self.records_not_in_targets(version, records.clone(), rating_targets)?;
+            self.guess_from_rating_target_order(version, name, rating_targets)?;
+            self.records_not_in_targets(version, name, records.clone(), rating_targets)?;
             if before_len == self.events().len() {
                 break;
             }
@@ -350,6 +352,7 @@ impl<'s> ScoreConstantsStore<'s> {
     fn determine_by_delta<'r>(
         &mut self,
         version: MaimaiVersion,
+        name: Option<&UserName>,
         records: impl IntoIterator<Item = &'r PlayRecord>,
         analyze_old_songs: bool,
     ) -> anyhow::Result<()> {
@@ -413,6 +416,7 @@ impl<'s> ScoreConstantsStore<'s> {
 
                 self.register_single_song_rating(
                     score_key,
+                    name,
                     record.achievement_result().value(),
                     rating,
                     record.played_at().time(),
@@ -435,6 +439,7 @@ impl<'s> ScoreConstantsStore<'s> {
     pub fn register_single_song_rating(
         &mut self,
         score_key: ScoreKey<'_>,
+        name: Option<&UserName>,
         a: AchievementValue,
         rating: i16,
         time: PlayTime,
@@ -444,7 +449,8 @@ impl<'s> ScoreConstantsStore<'s> {
             ScoreConstant::candidates()
                 .filter(|&level| single_song_rating(level, a, rank_coef(a)).get() as i16 == rating),
             lazy_format!(
-                "beacuse record played at {time} determines the single-song rating to be {rating}",
+                "beacuse record played at {time} achieving {a}{} determines the single-song rating to be {rating}",
+                display_played_by(name),
             ),
         )?;
         Ok(())
@@ -453,6 +459,7 @@ impl<'s> ScoreConstantsStore<'s> {
     pub fn guess_from_rating_target_order(
         &mut self,
         version: MaimaiVersion,
+        name: Option<&UserName>,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
         let start_time: PlayTime = version.start_time().into();
@@ -558,7 +565,10 @@ impl<'s> ScoreConstantsStore<'s> {
             //     println!("{} {:?}", elem.rating_target_entry.song_name(), res);
             // }
             for (&key, res) in keys.iter().zip(res) {
-                let reason = lazy_format!("by the rating target list on {play_time}");
+                let reason = lazy_format!(
+                    "by the rating target list on {play_time}{}",
+                    display_played_by(name),
+                );
                 self.set(key, res.into_iter(), reason)?;
             }
         }
@@ -568,6 +578,7 @@ impl<'s> ScoreConstantsStore<'s> {
     pub fn records_not_in_targets<'r>(
         &mut self,
         version: MaimaiVersion,
+        name: Option<&UserName>,
         records: impl IntoIterator<Item = &'r PlayRecord>,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
@@ -691,9 +702,10 @@ impl<'s> ScoreConstantsStore<'s> {
                     min_pair >= this_pair || this_sssplus && border_pair >= this_pair
                 });
                 let message = lazy_format!(
-                    "because record played at {} achieving {} is not in list at {}, so it's below {:?}",
+                    "because record played at {} achieving {}{} is not in list at {}, so it's below {:?}",
                     record.played_at().time(),
                     this_a,
+                    display_played_by(name),
                     target_time,
                     if this_sssplus { border_pair } else { min_pair },
                 );
@@ -702,6 +714,13 @@ impl<'s> ScoreConstantsStore<'s> {
         }
         Ok(())
     }
+}
+
+fn display_played_by(user: Option<&UserName>) -> impl Display + '_ {
+    lazy_format!(
+        if let Some(user) = user => " played by {user:?}"
+        else => ""
+    )
 }
 
 #[allow(unused)]

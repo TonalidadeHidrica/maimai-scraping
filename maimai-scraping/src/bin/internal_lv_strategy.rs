@@ -83,6 +83,7 @@ async fn main() -> anyhow::Result<()> {
         let data: MaimaiUserData = read_json(data)?;
         new.do_everything(
             opts.estimator_config,
+            None,
             data.records.values(),
             &data.rating_targets,
         )?;
