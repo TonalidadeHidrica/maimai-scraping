@@ -17,13 +17,41 @@ use crate::{
         parser::{play_record::parse_record_index, rating_target::RatingTargetFile},
         schema::latest::{Idx, PlayRecord, PlayTime, PlayedAt},
     },
-    sega_trait::{record_map_serde, PlayRecordTrait, RecordMap, SegaTrait, SegaUserData},
+    sega_trait::{
+        record_map_serde, PlayRecordTrait, RecordMap, SegaJapaneseAuth, SegaTrait, SegaUserData,
+    },
 };
 
 pub struct Maimai;
+impl SegaJapaneseAuth for Maimai {
+    const LOGIN_FORM_URL: &'static str = "https://maimaidx.jp/maimai-mobile/";
+    fn login_form_token_selector() -> &'static Selector {
+        selector!(r#"form[action="https://maimaidx.jp/maimai-mobile/submit/"] input[name="token"]"#)
+    }
+    const LOGIN_URL: &'static str = "https://maimaidx.jp/maimai-mobile/submit/";
+
+    const AIME_LIST_URL: &'static str = "https://maimaidx.jp/maimai-mobile/aimeList/";
+    fn select_aime_list_url(aime_idx: AimeIdx) -> String {
+        format!(
+            "https://maimaidx.jp/maimai-mobile/aimeList/submit/?idx={}",
+            aime_idx
+        )
+    }
+    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>> {
+        parser::aime_selection::parse(html)
+    }
+    const AIME_SUBMIT_PATH: &'static str = "/maimai-mobile/aimeList/submit/";
+
+    const FRIEND_CODE_URL: &'static str =
+        "https://maimaidx.jp/maimai-mobile/friend/userFriendCode/";
+    fn parse_friend_code_page(html: &Html) -> anyhow::Result<FriendCode> {
+        parser::friend_code::parse(html)
+    }
+
+    const HOME_URL: &'static str = "https://maimaidx.jp/maimai-mobile/home/";
+}
 impl SegaTrait for Maimai {
     const ERROR_PATH: &'static str = "/maimai-mobile/error/";
-    const AIME_SUBMIT_PATH: &'static str = "/maimai-mobile/aimeList/submit/";
     const RECORD_URL: &'static str = "https://maimaidx.jp/maimai-mobile/record/";
 
     type UserData = MaimaiUserData;
@@ -46,28 +74,6 @@ impl SegaTrait for Maimai {
 
     fn play_log_detail_not_found(location: &Url) -> bool {
         location.path() == "/maimai-mobile/record/"
-    }
-
-    const LOGIN_FORM_URL: &'static str = "https://maimaidx.jp/maimai-mobile/";
-    fn login_form_token_selector() -> &'static Selector {
-        selector!(r#"form[action="https://maimaidx.jp/maimai-mobile/submit/"] input[name="token"]"#)
-    }
-    const LOGIN_URL: &'static str = "https://maimaidx.jp/maimai-mobile/submit/";
-    const AIME_LIST_URL: &'static str = "https://maimaidx.jp/maimai-mobile/aimeList/";
-    fn select_aime_list_url(aime_idx: AimeIdx) -> String {
-        format!(
-            "https://maimaidx.jp/maimai-mobile/aimeList/submit/?idx={}",
-            aime_idx
-        )
-    }
-    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>> {
-        parser::aime_selection::parse(html)
-    }
-    const HOME_URL: &'static str = "https://maimaidx.jp/maimai-mobile/home/";
-    const FRIEND_CODE_URL: &'static str =
-        "https://maimaidx.jp/maimai-mobile/friend/userFriendCode/";
-    fn parse_friend_code_page(html: &Html) -> anyhow::Result<FriendCode> {
-        parser::friend_code::parse(html)
     }
 
     const CREDENTIALS_PATH: &'static str = "./ignore/credentials_maimai.json";

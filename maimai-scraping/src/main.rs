@@ -16,6 +16,7 @@ use maimai_scraping::ongeki::Ongeki;
 use maimai_scraping::sega_trait::Idx;
 use maimai_scraping::sega_trait::PlayTime;
 use maimai_scraping::sega_trait::PlayedAt;
+use maimai_scraping::sega_trait::SegaJapaneseAuth;
 use maimai_scraping::sega_trait::SegaTrait;
 use maimai_scraping::sega_trait::SegaUserData;
 use serde::Deserialize;
@@ -52,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run<T>(opts: &Opts) -> anyhow::Result<()>
 where
-    T: SegaTrait,
+    T: SegaTrait + SegaJapaneseAuth,
     Idx<T>: Copy + PartialEq + Display,
     PlayTime<T>: Copy + Ord + Display,
     PlayedAt<T>: Debug,

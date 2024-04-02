@@ -12,6 +12,7 @@ use crate::cookie_store::SegaId;
 use crate::cookie_store::UserIdentifier;
 use crate::sega_trait::Idx;
 use crate::sega_trait::PlayTime;
+use crate::sega_trait::SegaJapaneseAuth;
 use crate::sega_trait::SegaTrait;
 use anyhow::anyhow;
 use anyhow::bail;
@@ -36,7 +37,10 @@ pub struct SegaClient<'p, T: SegaTrait> {
 impl<'p, T: SegaTrait> SegaClient<'p, T> {
     pub async fn new_with_default_path(
         user_identifier: &UserIdentifier,
-    ) -> anyhow::Result<(SegaClient<'p, T>, Vec<(PlayTime<T>, Idx<T>)>)> {
+    ) -> anyhow::Result<(SegaClient<'p, T>, Vec<(PlayTime<T>, Idx<T>)>)>
+    where
+        T: SegaJapaneseAuth,
+    {
         Self::new(
             Path::new(T::CREDENTIALS_PATH),
             Path::new(T::COOKIE_STORE_PATH),
@@ -49,7 +53,10 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
         credentials_path: &'p Path,
         cookie_store_path: &'p Path,
         user_identifier: &UserIdentifier,
-    ) -> anyhow::Result<(SegaClient<'p, T>, Vec<(PlayTime<T>, Idx<T>)>)> {
+    ) -> anyhow::Result<(SegaClient<'p, T>, Vec<(PlayTime<T>, Idx<T>)>)>
+    where
+        T: SegaJapaneseAuth,
+    {
         let credentials = Credentials::load(credentials_path)?;
         let cookie_store_path = Cow::Borrowed(cookie_store_path);
         let cookie_store = CookieStore::load(cookie_store_path.as_ref());
@@ -165,7 +172,10 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
     async fn try_login(
         &mut self,
         credentials: &Credentials,
-    ) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>> {
+    ) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>>
+    where
+        T: SegaJapaneseAuth,
+    {
         info!("Trying to log in.");
         let token = get_token::<T>(&self.client).await?;
 
@@ -262,7 +272,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
     }
 }
 
-fn reqwest_client<T: SegaTrait>() -> reqwest::Result<reqwest::Client> {
+fn reqwest_client<T: SegaTrait + SegaJapaneseAuth>() -> reqwest::Result<reqwest::Client> {
     // let jar = Arc::new(Jar::default());
     reqwest::Client::builder()
         .cookie_store(true)
@@ -334,7 +344,7 @@ impl<'a, T> LoginForm<'a, T> {
     }
 }
 
-async fn get_token<T: SegaTrait>(client: &reqwest::Client) -> Result<String, anyhow::Error> {
+async fn get_token<T: SegaJapaneseAuth>(client: &reqwest::Client) -> Result<String, anyhow::Error> {
     let login_form = client.get(T::LOGIN_FORM_URL).send().await?;
     let login_form = Html::parse_document(&login_form.text().await?);
     let token = login_form
