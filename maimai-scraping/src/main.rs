@@ -7,11 +7,13 @@ use clap::Parser;
 use clap::ValueEnum;
 use log::info;
 use maimai_scraping::api::SegaClient;
+use maimai_scraping::api::SegaClientInitializer;
 use maimai_scraping::cookie_store::UserIdentifier;
 use maimai_scraping::data_collector::load_or_create_user_data;
 use maimai_scraping::data_collector::update_records;
 use maimai_scraping::fs_json_util::write_json;
 use maimai_scraping::maimai::Maimai;
+use maimai_scraping::maimai::MaimaiIntl;
 use maimai_scraping::ongeki::Ongeki;
 use maimai_scraping::sega_trait::Idx;
 use maimai_scraping::sega_trait::PlayTime;
@@ -38,6 +40,7 @@ struct Opts {
 enum Game {
     Ongeki,
     Maimai,
+    MaimaiIntl,
 }
 
 #[tokio::main]
@@ -48,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
     match opts.game {
         Game::Maimai => run::<Maimai>(&opts).await,
         Game::Ongeki => run::<Ongeki>(&opts).await,
+        Game::MaimaiIntl => run_maimai_intl(&opts).await,
     }
 }
 
@@ -61,18 +65,37 @@ where
     for<'a> T::UserData: Default + Deserialize<'a>,
 {
     let mut data = load_or_create_user_data::<T, _>(&opts.user_data_path)?;
-    let (mut client, index) = SegaClient::<T>::new(
-        opts.credentials_path
+    let (mut client, index) = SegaClient::<T>::new(SegaClientInitializer {
+        credentials_path: opts
+            .credentials_path
             .as_deref()
             .unwrap_or_else(|| Path::new(T::CREDENTIALS_PATH)),
-        opts.cookie_store_path
+        cookie_store_path: opts
+            .cookie_store_path
             .as_deref()
             .unwrap_or_else(|| Path::new(T::COOKIE_STORE_PATH)),
-        &opts.user_identifier,
-    )
+        user_identifier: &opts.user_identifier,
+    })
     .await?;
     update_records(&mut client, data.records_mut(), index).await?;
     write_json(&opts.user_data_path, &data)?;
     info!("Successfully saved data to {:?}.", opts.user_data_path);
+    Ok(())
+}
+
+async fn run_maimai_intl(opts: &Opts) -> anyhow::Result<()> {
+    // TODO: duplicate code
+    let client = SegaClient::new_maimai_intl(SegaClientInitializer {
+        credentials_path: opts
+            .credentials_path
+            .as_deref()
+            .unwrap_or_else(|| Path::new(MaimaiIntl::CREDENTIALS_PATH)),
+        cookie_store_path: opts
+            .cookie_store_path
+            .as_deref()
+            .unwrap_or_else(|| Path::new(MaimaiIntl::COOKIE_STORE_PATH)),
+        user_identifier: &opts.user_identifier,
+    })
+    .await?;
     Ok(())
 }

@@ -5,7 +5,7 @@ use clap::Parser;
 use hashbrown::HashSet;
 use lazy_format::lazy_format;
 use maimai_scraping::{
-    api::SegaClient,
+    api::{SegaClient, SegaClientInitializer},
     cookie_store::UserIdentifier,
     fs_json_util::read_json,
     maimai::{
@@ -96,11 +96,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if !opts.dry_run {
-        let (mut client, _) = SegaClient::<Maimai>::new(
-            &opts.credentials_path,
-            &opts.cookie_store_path,
-            &opts.user_identifier,
-        )
+        let (mut client, _) = SegaClient::<Maimai>::new(SegaClientInitializer {
+            credentials_path: &opts.credentials_path,
+            cookie_store_path: &opts.cookie_store_path,
+            user_identifier: &opts.user_identifier,
+        })
         .await?;
         let page = fetch_favorite_songs_form(&mut client).await?;
         let map = song_name_to_idx_map(&page);

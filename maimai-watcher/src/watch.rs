@@ -7,7 +7,7 @@ use std::{
 use anyhow::Context;
 use log::error;
 use maimai_scraping::{
-    api::SegaClient,
+    api::{SegaClient, SegaClientInitializer},
     cookie_store::UserIdentifier,
     data_collector::{load_or_create_user_data, update_records},
     fs_json_util::{read_json, write_json},
@@ -211,11 +211,11 @@ impl<'c, 's> Runner<'c, 's> {
 
     async fn run(&mut self) -> anyhow::Result<bool> {
         let config = self.config;
-        let (mut client, index) = SegaClient::<Maimai>::new(
-            &self.config.credentials_path,
-            &self.config.cookie_store_path,
-            &self.config.user_identifier,
-        )
+        let (mut client, index) = SegaClient::<Maimai>::new(SegaClientInitializer {
+            credentials_path: &self.config.credentials_path,
+            cookie_store_path: &self.config.cookie_store_path,
+            user_identifier: &self.config.user_identifier,
+        })
         .await?;
         let last_played = index.first().context("There is no play yet.")?.0;
         let inserted_records = update_records(&mut client, &mut self.data.records, index).await?;

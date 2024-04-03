@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use maimai_scraping::{
-    api::SegaClient,
+    api::{SegaClient, SegaClientInitializer},
     cookie_store::UserIdentifier,
     maimai::{
         favorite_songs::{fetch_favorite_songs_form, SetFavoriteSong},
@@ -23,11 +23,11 @@ async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init();
 
     let opts = Opts::parse();
-    let (mut client, _) = SegaClient::<Maimai>::new(
-        &opts.credentials_path,
-        &opts.cookie_store_path,
-        &opts.user_identifier,
-    )
+    let (mut client, _) = SegaClient::<Maimai>::new(SegaClientInitializer {
+        credentials_path: &opts.credentials_path,
+        cookie_store_path: &opts.cookie_store_path,
+        user_identifier: &opts.user_identifier,
+    })
     .await?;
     let page = fetch_favorite_songs_form(&mut client).await?;
     SetFavoriteSong::builder()

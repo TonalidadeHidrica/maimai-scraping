@@ -80,6 +80,37 @@ impl SegaTrait for Maimai {
     const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_maimai.json";
 }
 
+pub struct MaimaiIntl;
+impl SegaTrait for MaimaiIntl {
+    const ERROR_PATH: &'static str = "/maimai-mobile/error/";
+    const RECORD_URL: &'static str = "https://maimaidx-eng.com/maimai-mobile/record/";
+
+    type UserData = MaimaiUserData;
+
+    fn play_log_detail_url(idx: Idx) -> String {
+        format!(
+            "https://maimaidx-eng.com/maimai-mobile/record/playlogDetail/?idx={}",
+            idx
+        )
+    }
+
+    fn parse_record_index(html: &Html) -> anyhow::Result<Vec<(PlayTime, Idx)>> {
+        parse_record_index(html)
+    }
+
+    type PlayRecord = PlayRecord;
+    fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
+        parser::play_record::parse(html, idx)
+    }
+
+    fn play_log_detail_not_found(location: &Url) -> bool {
+        location.path() == "/maimai-mobile/record/"
+    }
+
+    const CREDENTIALS_PATH: &'static str = "./ignore/credentials_maimai_intl.json";
+    const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_maimai_intl.json";
+}
+
 #[derive(Default, Serialize, Deserialize)]
 pub struct MaimaiUserData {
     #[serde(default)]
@@ -91,6 +122,11 @@ pub struct MaimaiUserData {
 }
 impl SegaUserData<Maimai> for MaimaiUserData {
     fn records_mut(&mut self) -> &mut RecordMap<Maimai> {
+        &mut self.records
+    }
+}
+impl SegaUserData<MaimaiIntl> for MaimaiUserData {
+    fn records_mut(&mut self) -> &mut RecordMap<MaimaiIntl> {
         &mut self.records
     }
 }
