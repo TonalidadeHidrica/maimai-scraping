@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::future::Future;
 use std::marker::PhantomData;
 use std::path::Path;
 
@@ -64,22 +65,8 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
     where
         T: SegaJapaneseAuth,
     {
-        let credentials = Credentials::load(args.credentials_path)?;
-        let cookie_store_path = Cow::Borrowed(args.cookie_store_path);
-        let cookie_store = CookieStore::load(cookie_store_path.as_ref());
-
-        let client = reqwest_client::<T>(Some(T::AIME_SUBMIT_PATH))?;
-        let make_client = |cookie_store| Self {
-            client,
-            // credentials_path,
-            cookie_store,
-            cookie_store_path,
-            _phantom: PhantomData,
-        };
-
-        // Try to log in
-        let mut client = match cookie_store {
-            Ok(cookie_store) => {
+        let mut client =
+            match Self::make_client(&args, Some(T::AIME_SUBMIT_PATH), |mut client| async {
                 // Why can't we directly access AIME_LIST_URL to determine log-in state?
                 // This is because, even if the cookie is implicitly(*) expired,
                 // we can still access AIME_LIST_URL.
@@ -88,8 +75,6 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
                 // resulting in a wired error, where the cookie is not expired by this operation.
                 // (*) Implicit expiration includes logging in from another account or timeout,
                 // but as already mentioned, the wired error does not seem to count.
-                info!("Cookie store was found.  Trying to use this cookie.");
-                let mut client = make_client(cookie_store);
                 // Check if the cookie is valid and ...
                 if let Ok((response, redirect)) =
                     client.fetch_authenticated(T::FRIEND_CODE_URL).await
@@ -103,7 +88,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
                             debug!("Expected {expected_friend_code:?}, found {friend_code:?}");
                             if &friend_code == expected_friend_code {
                                 let res = client.download_record_index().await?;
-                                return Ok((client, res));
+                                return Ok(Ok((client, res)));
                             }
                         } else {
                             info!("Redirect occurred, so the session has expired.")
@@ -113,14 +98,15 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
                 // In other cases, we try to log in from scratch.
                 // Although there's a bit chance of improvement by skipping logging in here,
                 // but it's normal to start over when switching Aime, so we just don't care.
-                client
-            }
-            Err(CookieStoreLoadError::NotFound) => {
-                info!("Cookie store was not found.");
-                make_client(Default::default())
-            }
-            Err(e) => return Err(e.into()),
-        };
+                Ok(Err(client))
+            })
+            .await?
+            {
+                Ok(res) => return Ok(res),
+                Err(client) => client,
+            };
+
+        let credentials = Credentials::load(args.credentials_path)?;
         let aime_list = client.try_login(&credentials).await?;
         info!("Successfully logged in.");
         debug!("Available Aimes: {aime_list:?}");
@@ -177,6 +163,42 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
 
         let res = client.download_record_index().await?;
         Ok((client, res))
+    }
+
+    async fn make_client<U, UFut, R>(
+        args: &SegaClientInitializer<'p, '_>,
+        aime_submit_path: Option<&'static str>,
+        runner: R,
+    ) -> anyhow::Result<Result<(Self, U), Self>>
+    where
+        R: FnOnce(Self) -> UFut,
+        // Error returned by runner is immediately thrown
+        UFut: Future<Output = anyhow::Result<Result<(Self, U), Self>>>,
+    {
+        let cookie_store_path = Cow::Borrowed(args.cookie_store_path);
+        let cookie_store = CookieStore::load(cookie_store_path.as_ref());
+
+        let client = reqwest_client::<MaimaiIntl>(aime_submit_path)?;
+        let make_client = |cookie_store| Self {
+            client,
+            // credentials_path,
+            cookie_store,
+            cookie_store_path,
+            _phantom: PhantomData,
+        };
+
+        // Try to log in
+        match cookie_store {
+            Ok(cookie_store) => {
+                info!("Cookie store was found.  Trying to use this cookie.");
+                Ok(runner(make_client(cookie_store)).await?)
+            }
+            Err(CookieStoreLoadError::NotFound) => {
+                info!("Cookie store was not found.");
+                Ok(Err(make_client(Default::default())))
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     async fn try_login(
@@ -291,35 +313,16 @@ impl<'p> SegaClient<'p, MaimaiIntl> {
             bail!("Maimai international does not support multi user");
         }
 
-        // TODO: duplicate code, can be refactored!
-        let credentials = Credentials::load(args.credentials_path)?;
-        let cookie_store_path = Cow::Borrowed(args.cookie_store_path);
-        let cookie_store = CookieStore::load(cookie_store_path.as_ref());
-
-        let client = reqwest_client::<MaimaiIntl>(None)?;
-        let make_client = |cookie_store| Self {
-            client,
-            // credentials_path,
-            cookie_store,
-            cookie_store_path,
-            _phantom: PhantomData,
-        };
-
-        // Try to log in
-        let mut client = match cookie_store {
-            Ok(cookie_store) => {
-                info!("Cookie store was found.  Trying to use this cookie.");
-                let mut client = make_client(cookie_store);
-                if let Ok(res) = client.download_record_index().await {
-                    return Ok((client, res));
-                }
-                client
+        let mut client = match Self::make_client(&args, None, |mut client| async {
+            match client.download_record_index().await {
+                Ok(res) => Ok(Ok((client, res))),
+                Err(_) => Ok(Err(client)),
             }
-            Err(CookieStoreLoadError::NotFound) => {
-                info!("Cookie store was not found.");
-                make_client(Default::default())
-            }
-            Err(e) => return Err(e.into()),
+        })
+        .await?
+        {
+            Ok(res) => return Ok(res),
+            Err(client) => client,
         };
 
         // We just want the cookie (JSESSIONID).  Actual HTML does not matter.
@@ -335,6 +338,7 @@ impl<'p> SegaClient<'p, MaimaiIntl> {
             password: &'a Password,
             retention: u8,
         }
+        let credentials = Credentials::load(args.credentials_path)?;
         let response = client
             .reqwest()
             .post("https://lng-tgk-aime-gw.am-all.net/common_auth/login/sid/")
