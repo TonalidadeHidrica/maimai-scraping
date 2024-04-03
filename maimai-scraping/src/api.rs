@@ -41,6 +41,8 @@ pub struct SegaClient<'p, T: SegaTrait> {
     _phantom: PhantomData<T>,
 }
 
+pub type SegaClientAndRecordList<'p, T> = (SegaClient<'p, T>, Vec<(PlayTime<T>, Idx<T>)>);
+
 impl<'p, T: SegaTrait> SegaClient<'p, T> {
     pub async fn new_with_default_path(
         user_identifier: &UserIdentifier,
@@ -58,7 +60,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
 
     pub async fn new(
         args: SegaClientInitializer<'p, '_>,
-    ) -> anyhow::Result<(SegaClient<'p, T>, Vec<(PlayTime<T>, Idx<T>)>)>
+    ) -> anyhow::Result<SegaClientAndRecordList<'p, T>>
     where
         T: SegaJapaneseAuth,
     {
@@ -283,7 +285,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
 impl<'p> SegaClient<'p, MaimaiIntl> {
     pub async fn new_maimai_intl(
         args: SegaClientInitializer<'p, '_>,
-    ) -> anyhow::Result<(Self, Vec<(PlayTime<MaimaiIntl>, Idx<MaimaiIntl>)>)> {
+    ) -> anyhow::Result<SegaClientAndRecordList<'p, MaimaiIntl>> {
         // TODO: duplicate code, can be refactored!
         let credentials = Credentials::load(args.credentials_path)?;
         let cookie_store_path = Cow::Borrowed(args.cookie_store_path);
