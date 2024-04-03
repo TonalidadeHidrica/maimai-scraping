@@ -69,7 +69,7 @@ impl SegaTrait for Maimai {
 
     type PlayRecord = PlayRecord;
     fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
-        parser::play_record::parse(html, idx)
+        parser::play_record::parse(html, idx, true)
     }
 
     fn play_log_detail_not_found(location: &Url) -> bool {
@@ -100,7 +100,7 @@ impl SegaTrait for MaimaiIntl {
 
     type PlayRecord = PlayRecord;
     fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
-        parser::play_record::parse(html, idx)
+        parser::play_record::parse(html, idx, false)
     }
 
     fn play_log_detail_not_found(location: &Url) -> bool {

@@ -51,7 +51,7 @@ pub struct PlayedAt {
     #[getset(get_copy = "pub")]
     time: PlayTime,
     #[getset(get = "pub")]
-    place: PlaceName,
+    place: Option<PlaceName>,
     #[getset(get_copy = "pub")]
     track: TrackIndex,
 }

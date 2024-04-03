@@ -23,6 +23,7 @@ fn main() -> anyhow::Result<()> {
     let _record = play_record::parse(
         &Html::parse_document(&fs_err::read_to_string(opts.record_html)?),
         opts.idx,
+        true,
     );
     Ok(())
 }

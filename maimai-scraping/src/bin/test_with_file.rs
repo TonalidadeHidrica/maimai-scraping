@@ -13,7 +13,7 @@ fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let html = Html::parse_document(&fs_err::read_to_string(opts.input_file)?);
 
-    let result = maimai_scraping::maimai::parser::play_record::parse(&html, Idx::default())?;
+    let result = maimai_scraping::maimai::parser::play_record::parse(&html, Idx::default(), true)?;
     dbg!(&result);
     let serialized = serde_json::to_string_pretty(&result)?;
     println!("{}", &serialized);

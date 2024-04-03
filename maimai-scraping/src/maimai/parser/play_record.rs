@@ -46,7 +46,7 @@ fn parse_idx_from_playlog_main_container(playlog_top_container: ElementRef) -> a
         .map_err(|e| anyhow!("Could not parse Idx: {e:?}"))
 }
 
-pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
+pub fn parse(html: &Html, idx: Idx, place_expected: bool) -> anyhow::Result<PlayRecord> {
     let playlog_top_container = iterate_playlot_top_containers(html)
         .next()
         .ok_or_else(|| anyhow!("Playlog top container was not found."))?;
@@ -80,16 +80,18 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
         .map(parse_vs_user)
         .transpose()?;
 
-    let place_name_div = html
+    let place_name = html
         .select(selector!("#placeName > span"))
         .next()
-        .ok_or_else(|| anyhow!("Place name div not found"))?;
-    let place_name = place_name_div.text().collect::<String>().into();
+        .map(|place_name_div| PlaceName::from(place_name_div.text().collect::<String>()));
+    if place_expected && place_name.is_none() {
+        bail!("Place name expected, but not found")
+    }
 
-    let gray_block = place_name_div
+    let gray_block = playlog_top_container
         .parent()
-        .ok_or_else(|| anyhow!("No parent found for place name div"))?
-        .prev_siblings()
+        .ok_or_else(|| anyhow!("No parent found for playlog top container"))?
+        .next_siblings()
         .find_map(ElementRef::wrap)
         .ok_or_else(|| anyhow!("Gray block was not found"))?;
     let (tour_members, judge_count, rating_result, max_combo, max_sync) =
