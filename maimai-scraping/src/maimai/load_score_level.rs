@@ -105,6 +105,7 @@ impl TryFrom<SongRaw> for Song {
             },
             song_name_abbrev: song.nn.to_owned().unwrap_or_else(|| song.n.to_owned()),
             song_name: song.n.into(),
+            // TODO: to support intl, cosider how to ignore domain
             icon: Url::parse(&format!(
                 "https://maimaidx.jp/maimai-mobile/img/Music/{}.png",
                 song.ico

@@ -19,6 +19,7 @@ use super::{
 pub async fn fetch_favorite_songs_form(
     client: &mut SegaClient<'_, Maimai>,
 ) -> anyhow::Result<favorite_songs::Page> {
+    // TODO: when supporting international ver., the domain should be updated
     favorite_songs::parse(&Html::parse_document(
         &client
             .fetch_authenticated(Url::parse(
