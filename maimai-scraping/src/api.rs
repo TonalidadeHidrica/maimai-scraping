@@ -93,6 +93,8 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
                         } else {
                             info!("Redirect occurred, so the session has expired.")
                         }
+                    } else {
+                        info!("We cannot be sure if we are in the correct account.  Logging in from scratch.")
                     }
                 }
                 // In other cases, we try to log in from scratch.
