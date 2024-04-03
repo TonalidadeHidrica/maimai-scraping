@@ -286,6 +286,11 @@ impl<'p> SegaClient<'p, MaimaiIntl> {
     pub async fn new_maimai_intl(
         args: SegaClientInitializer<'p, '_>,
     ) -> anyhow::Result<SegaClientAndRecordList<'p, MaimaiIntl>> {
+        if args.user_identifier.friend_code.is_some() || args.user_identifier.player_name.is_some()
+        {
+            bail!("Maimai international does not support multi user");
+        }
+
         // TODO: duplicate code, can be refactored!
         let credentials = Credentials::load(args.credentials_path)?;
         let cookie_store_path = Cow::Borrowed(args.cookie_store_path);
