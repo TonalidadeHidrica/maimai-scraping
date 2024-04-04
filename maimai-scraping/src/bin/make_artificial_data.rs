@@ -52,7 +52,9 @@ fn main() -> anyhow::Result<()> {
         };
         let level = {
             let lv: u8 = lv.parse()?;
-            ScoreLevel::new(lv / 10, (7..=14).contains(&lv) && lv >= 6)?
+            let (x, y) = (lv / 10, lv % 10);
+            let plus = matches!((x, y), (7..=14, 6..));
+            ScoreLevel::new(x, plus)?
         };
         let idx = "dummy".to_owned().into();
         res[i].push(
