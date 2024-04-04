@@ -1,10 +1,10 @@
 use std::{io::stdin, path::PathBuf};
 
 use anyhow::{anyhow, bail, Context};
-use chrono::NaiveDateTime;
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::{
+    chrono_util::jst_now,
     fs_json_util::write_json,
     maimai::{
         parser::rating_target::{RatingTargetEntry, RatingTargetList},
@@ -70,7 +70,7 @@ fn main() -> anyhow::Result<()> {
                 .build(),
         );
     }
-    let date = NaiveDateTime::UNIX_EPOCH.into();
+    let date = jst_now().into();
     let targets = {
         let [a, b, c, d] = res;
         RatingTargetList::builder()
