@@ -314,6 +314,8 @@ pub struct EstimatorConfig {
     pub new_songs_are_complete: bool,
     #[arg(long)]
     pub old_songs_are_complete: bool,
+    #[arg(long)]
+    pub ignore_time: bool,
 }
 
 impl<'s> ScoreConstantsStore<'s> {
@@ -330,10 +332,10 @@ impl<'s> ScoreConstantsStore<'s> {
             println!("New songs");
         }
         if config.new_songs_are_complete {
-            self.determine_by_delta(version, name, records.clone(), false)?;
+            self.determine_by_delta(version, config.ignore_time, name, records.clone(), false)?;
         }
         if config.old_songs_are_complete {
-            self.determine_by_delta(version, name, records.clone(), true)?;
+            self.determine_by_delta(version, config.ignore_time, name, records.clone(), true)?;
         }
         let very_before_len = self.events().len();
         for i in 1.. {
@@ -341,8 +343,14 @@ impl<'s> ScoreConstantsStore<'s> {
                 println!("Iteration {i}");
             }
             let before_len = self.events().len();
-            self.guess_from_rating_target_order(version, name, rating_targets)?;
-            self.records_not_in_targets(version, name, records.clone(), rating_targets)?;
+            self.guess_from_rating_target_order(version, config.ignore_time, name, rating_targets)?;
+            self.records_not_in_targets(
+                version,
+                config.ignore_time,
+                name,
+                records.clone(),
+                rating_targets,
+            )?;
             if before_len == self.events().len() {
                 break;
             }
@@ -353,6 +361,7 @@ impl<'s> ScoreConstantsStore<'s> {
     fn determine_by_delta<'r>(
         &mut self,
         version: MaimaiVersion,
+        ignore_time: bool,
         name: Option<&UserName>,
         records: impl IntoIterator<Item = &'r PlayRecord>,
         analyze_old_songs: bool,
@@ -365,7 +374,7 @@ impl<'s> ScoreConstantsStore<'s> {
         let max_count = if analyze_old_songs { 35 } else { 15 };
         for record in records
             .into_iter()
-            .filter(|r| (start_time..end_time).contains(&r.played_at().time()))
+            .filter(|r| ignore_time || (start_time..end_time).contains(&r.played_at().time()))
             .filter(|r| r.score_metadata().difficulty() != ScoreDifficulty::Utage)
         {
             let score_key = ScoreKey::from(record);
@@ -460,6 +469,7 @@ impl<'s> ScoreConstantsStore<'s> {
     pub fn guess_from_rating_target_order(
         &mut self,
         version: MaimaiVersion,
+        ignore_time: bool,
         name: Option<&UserName>,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
@@ -479,7 +489,7 @@ impl<'s> ScoreConstantsStore<'s> {
         // println!("{removal_time:?}");
         for (&play_time, list) in rating_targets
             .iter()
-            .filter(|p| (start_time..end_time).contains(p.0))
+            .filter(|p| ignore_time || (start_time..end_time).contains(p.0))
         {
             let rating_sum_is_reliable =
                 removal_time.map_or(true, |removal_time| play_time.get() < removal_time);
@@ -579,6 +589,7 @@ impl<'s> ScoreConstantsStore<'s> {
     pub fn records_not_in_targets<'r>(
         &mut self,
         version: MaimaiVersion,
+        ignore_time: bool,
         name: Option<&UserName>,
         records: impl IntoIterator<Item = &'r PlayRecord>,
         rating_targets: &RatingTargetFile,
@@ -586,17 +597,22 @@ impl<'s> ScoreConstantsStore<'s> {
         let start_time: PlayTime = version.start_time().into();
         let end_time: PlayTime = version.end_time().into();
 
+        let mut warned = false;
         'next_group: for (_, group) in &records
             .into_iter()
-            .filter(|record| (start_time..end_time).contains(&record.played_at().time()))
+            .filter(|record| {
+                ignore_time || (start_time..end_time).contains(&record.played_at().time())
+            })
             .filter(|r| r.score_metadata().difficulty() != ScoreDifficulty::Utage)
             .filter_map(
                 |record| match rating_targets.range(record.played_at().time()..).next() {
                     None => {
-                        warn!(
-                            "Rating target not collected for a record played at {}",
-                            record.played_at().time()
-                        );
+                        if !std::mem::replace(&mut warned, true) {
+                            warn!(
+                                "Rating target not collected for a record played at {} (and potentially anything afterwards)",
+                                record.played_at().time()
+                            );
+                        }
                         None
                     }
                     Some(pair) => Some((record, pair)),

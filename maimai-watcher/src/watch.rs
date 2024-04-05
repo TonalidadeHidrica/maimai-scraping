@@ -212,6 +212,7 @@ impl<'c, 's> Runner<'c, 's> {
             self.levels_naive
                 .guess_from_rating_target_order(
                     MaimaiVersion::latest(),
+                    false,
                     None,
                     &self.data.rating_targets,
                 )
