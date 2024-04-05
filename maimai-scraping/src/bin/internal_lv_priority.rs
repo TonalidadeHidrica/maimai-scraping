@@ -7,10 +7,9 @@ use inquire::CustomType;
 use joinery::JoinableIterator;
 use maimai_scraping::{
     chrono_util::jst_now,
-    fs_json_util::read_json,
     maimai::{
         estimate_rating::{KeyFromTargetEntry, PrintResult, ScoreConstantsStore, ScoreKey},
-        estimator_config_multiuser,
+        estimator_config_multiuser::{self, update_all},
         load_score_level::{self, MaimaiVersion},
         rating::ScoreConstant,
         schema::latest::{AchievementValue, PlayTime, ScoreDifficulty, ScoreGeneration, SongName},
@@ -38,9 +37,7 @@ struct Opts {
 fn main() -> anyhow::Result<()> {
     let args = Opts::parse();
     let config: estimator_config_multiuser::Root = toml::from_str(&read_to_string(args.config)?)?;
-    let datas = (config.users().iter())
-        .map(|config| anyhow::Ok((config, read_json::<_, MaimaiUserData>(config.data_path())?)))
-        .collect::<Result<Vec<_>, _>>()?;
+    let datas = config.read_all()?;
 
     let old_levels = load_score_level::load(&args.old_levels_json)?;
     let old_store = ScoreConstantsStore::new(&old_levels, &[])?;
@@ -301,24 +298,4 @@ struct OptimalSongEntry<'s, 'o> {
     song: &'s load_score_level::Song,
     old_constants: &'o [ScoreConstant],
     constants: Vec<ScoreConstant>,
-}
-
-fn update_all(
-    datas: &[(&estimator_config_multiuser::User, MaimaiUserData)],
-    constants: &mut ScoreConstantsStore,
-) -> anyhow::Result<()> {
-    while {
-        let mut changed = false;
-        for (config, data) in datas {
-            config.name();
-            changed |= constants.do_everything(
-                config.estimator_config(),
-                Some(config.name()),
-                data.records.values(),
-                &data.rating_targets,
-            )?;
-        }
-        changed
-    } {}
-    Ok(())
 }

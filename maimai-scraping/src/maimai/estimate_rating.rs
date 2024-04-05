@@ -25,7 +25,7 @@ use clap::{Args, ValueEnum};
 use either::Either;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
-use itertools::{chain, Itertools};
+use itertools::{chain, repeat_n, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::{trace, warn};
@@ -173,15 +173,17 @@ impl<'s> ScoreConstantsStore<'s> {
         };
         let entry = entry.get_mut();
         let old_len = entry.candidates.len();
-
         let new: BTreeSet<_> = new.into_iter().collect();
+
+        let reason = entry.make_reason(reason);
+        let event = (key.with(entry.song.icon()), reason);
+        trace!("{event:?}");
+        trace!("{:?} is contrained by {:?}", entry.candidates, new);
+
         entry.candidates.retain(|x| new.contains(x));
-        // println!("new = {new:?}");
 
         if entry.candidates.len() < old_len {
             entry.reasons.push(self.events.len());
-            let event = (key.with(entry.song.icon()), entry.make_reason(reason));
-            trace!("{event:?}");
             self.events.push(event);
             let print_reasons = || {
                 for &i in &entry.reasons {
@@ -315,6 +317,7 @@ pub struct EstimatorConfig {
     #[arg(long)]
     pub old_songs_are_complete: bool,
     #[arg(long)]
+    #[serde(default)]
     pub ignore_time: bool,
 }
 
@@ -823,4 +826,40 @@ pub fn analyze_old_songs(
 
 fn compute_hash<K: Hash + ?Sized, S: BuildHasher>(hash_builder: &S, key: &K) -> u64 {
     hash_builder.hash_one(key)
+}
+
+pub fn visualize_rating_targets<'a>(
+    constants: &ScoreConstantsStore,
+    entries: impl IntoIterator<Item = &'a RatingTargetEntry>,
+    start_index: usize,
+) -> anyhow::Result<()> {
+    for (entry, i) in entries.into_iter().zip(start_index..) {
+        let Some((_, levels)) = constants.levels_from_target_entry(entry)? else {
+            bail!("Song unexpectedly removed!")
+        };
+        let levels = BTreeSet::from_iter(levels.iter().copied());
+        print!("    {i:4} {:<3} ", format!("{}", entry.level()));
+        let constants = || entry.level().score_constant_candidates();
+        let fill = repeat_n(None, 6usize.saturating_sub(constants().count()));
+        for constant in constants().map(Some).chain(fill) {
+            match constant {
+                Some(constant) if levels.contains(&constant) => {
+                    let value = single_song_rating_for_target_entry(constant, entry);
+                    print!("[{:>3}] ", value.get())
+                }
+                Some(_) => print!("[   ] "),
+                None => print!("      "),
+            }
+        }
+        let s = entry.score_metadata();
+        print!(
+            "{:9} {} ({:?} {:?})",
+            entry.achievement(),
+            entry.song_name(),
+            s.generation(),
+            s.difficulty()
+        );
+        println!();
+    }
+    Ok(())
 }

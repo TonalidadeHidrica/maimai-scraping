@@ -1,15 +1,11 @@
-use std::{collections::BTreeSet, iter::repeat, path::PathBuf};
+use std::path::PathBuf;
 
-use anyhow::bail;
 use clap::Parser;
 use maimai_scraping::{
     fs_json_util::read_json,
     maimai::{
-        estimate_rating::{
-            single_song_rating_for_target_entry, EstimatorConfig, ScoreConstantsStore,
-        },
+        estimate_rating::{visualize_rating_targets, EstimatorConfig, ScoreConstantsStore},
         load_score_level::{self, MaimaiVersion},
-        parser::rating_target::RatingTargetEntry,
         MaimaiUserData,
     },
 };
@@ -44,47 +40,15 @@ fn main() -> anyhow::Result<()> {
         }
         println!("{time}");
         println!("  New songs");
-        display(&constants, file.target_new())?;
+        visualize_rating_targets(&constants, file.target_new(), 0)?;
         println!("  =========");
-        display(&constants, file.candidates_new())?;
+        visualize_rating_targets(&constants, file.candidates_new(), file.target_new().len())?;
         println!("  Old songs");
-        display(&constants, file.target_old())?;
+        visualize_rating_targets(&constants, file.target_old(), 0)?;
         println!("  =========");
-        display(&constants, file.candidates_old())?;
+        visualize_rating_targets(&constants, file.candidates_old(), file.target_old().len())?;
         println!();
     }
 
-    Ok(())
-}
-
-fn display(constants: &ScoreConstantsStore, entries: &[RatingTargetEntry]) -> anyhow::Result<()> {
-    for entry in entries {
-        let Some((_, levels)) = constants.levels_from_target_entry(entry)? else {
-            bail!("Song unexpectedly removed!")
-        };
-        let levels = BTreeSet::from_iter(levels.iter().copied());
-        print!("    {:<3} ", format!("{}", entry.level()));
-        let constants = || entry.level().score_constant_candidates();
-        let fill = repeat(None).take(6usize.saturating_sub(constants().count()));
-        for constant in constants().map(Some).chain(fill) {
-            match constant {
-                Some(constant) if levels.contains(&constant) => {
-                    let value = single_song_rating_for_target_entry(constant, entry);
-                    print!("[{:>3}] ", value.get())
-                }
-                Some(_) => print!("[   ] "),
-                None => print!("      "),
-            }
-        }
-        let s = entry.score_metadata();
-        print!(
-            "{:9} {} ({:?} {:?})",
-            entry.achievement(),
-            entry.song_name(),
-            s.generation(),
-            s.difficulty()
-        );
-        println!();
-    }
     Ok(())
 }
