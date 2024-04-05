@@ -25,6 +25,7 @@ async fn main() -> anyhow::Result<()> {
         report_no_updates: false,
         estimator_config: opts.estimator_config,
         user_identifier: opts.user_identifier,
+        international: opts.international,
     })
     .await?;
 
@@ -49,4 +50,6 @@ struct Opts {
     estimator_config: EstimatorConfig,
     #[clap(flatten)]
     user_identifier: UserIdentifier,
+    #[clap(long)]
+    international: bool,
 }

@@ -28,6 +28,7 @@ use reqwest::Url;
 use scraper::Html;
 use serde::Serialize;
 
+#[derive(Clone, Copy)]
 pub struct SegaClientInitializer<'p, 'q> {
     pub credentials_path: &'p Path,
     pub cookie_store_path: &'p Path,

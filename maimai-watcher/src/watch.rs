@@ -1,13 +1,14 @@
 use std::{
+    fmt::{Debug, Display},
     iter::successors,
     path::PathBuf,
     time::{Duration, Instant},
 };
 
 use anyhow::Context;
-use log::error;
+use log::{error, info};
 use maimai_scraping::{
-    api::{SegaClient, SegaClientInitializer},
+    api::{SegaClient, SegaClientAndRecordList, SegaClientInitializer},
     cookie_store::UserIdentifier,
     data_collector::{load_or_create_user_data, update_records},
     fs_json_util::{read_json, write_json},
@@ -15,8 +16,11 @@ use maimai_scraping::{
         data_collector::update_targets,
         estimate_rating::{EstimatorConfig, ScoreConstantsStore},
         load_score_level::{self, MaimaiVersion, RemovedSong, Song},
-        Maimai, MaimaiUserData,
+        parser::rating_target::RatingTargetFile,
+        schema::latest::{PlayRecord, PlayTime},
+        Maimai, MaimaiIntl, MaimaiUserData,
     },
+    sega_trait::{self, Idx, PlayRecordTrait, PlayedAt, SegaTrait},
 };
 use tokio::{
     spawn,
@@ -50,6 +54,7 @@ pub struct Config {
     pub report_no_updates: bool,
     pub estimator_config: EstimatorConfig,
     pub user_identifier: UserIdentifier,
+    pub international: bool,
 }
 
 #[derive(Debug)]
@@ -101,8 +106,14 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
 
         let mut last_update_time = Instant::now();
         let mut count = 0;
+
         'outer: while let Err(TryRecvError::Empty | TryRecvError::Disconnected) = rx.try_recv() {
-            match runner.run().await {
+            let run = if config.international {
+                runner.run::<MaimaiIntl>().await
+            } else {
+                runner.run::<Maimai>().await
+            };
+            match run {
                 Err(e) => {
                     error!("{e:#}");
                     webhook_send(
@@ -209,21 +220,24 @@ impl<'c, 's> Runner<'c, 's> {
         .await;
     }
 
-    async fn run(&mut self) -> anyhow::Result<bool> {
+    async fn run<T>(&mut self) -> anyhow::Result<bool>
+    where
+        T: MaimaiPossiblyIntl,
+    {
         let config = self.config;
-        let (mut client, index) = SegaClient::<Maimai>::new(SegaClientInitializer {
+        let init = SegaClientInitializer {
             credentials_path: &self.config.credentials_path,
             cookie_store_path: &self.config.cookie_store_path,
             user_identifier: &self.config.user_identifier,
-        })
-        .await?;
+        };
+        let (mut client, index) = T::new_client(init).await?;
         let last_played = index.first().context("There is no play yet.")?.0;
         let inserted_records = update_records(&mut client, &mut self.data.records, index).await?;
         if inserted_records.is_empty() {
             return Ok(false);
         }
         write_json(&config.maimai_uesr_data_path, &self.data)?; // Save twice just in case
-        let update_targets_res = update_targets(
+        let update_targets_res = T::update_targets(
             &mut client,
             &mut self.data.rating_targets,
             last_played,
@@ -280,6 +294,62 @@ impl<'c, 's> Runner<'c, 's> {
         }
 
         Ok(true)
+    }
+}
+
+trait MaimaiPossiblyIntl
+where
+    Self: SegaTrait<PlayRecord = PlayRecord>,
+    // Self::UserData: SegaUserData<Maimai>,
+    Idx<Self>: Copy + PartialEq + Display,
+    sega_trait::PlayTime<Self>: Copy + Ord + Display,
+    PlayedAt<Self>: Debug,
+    <Self as SegaTrait>::PlayRecord: PlayRecordTrait<PlayTime = PlayTime>,
+{
+    async fn new_client<'p>(
+        init: SegaClientInitializer<'p, '_>,
+    ) -> anyhow::Result<SegaClientAndRecordList<'p, Self>>;
+
+    async fn update_targets(
+        client: &mut SegaClient<'_, Self>,
+        rating_targets: &mut RatingTargetFile,
+        last_played: PlayTime,
+        force: bool,
+    ) -> anyhow::Result<()>;
+}
+
+impl MaimaiPossiblyIntl for Maimai {
+    async fn new_client<'p>(
+        init: SegaClientInitializer<'p, '_>,
+    ) -> anyhow::Result<SegaClientAndRecordList<'p, Self>> {
+        SegaClient::<Maimai>::new(init).await
+    }
+
+    async fn update_targets(
+        client: &mut SegaClient<'_, Self>,
+        rating_targets: &mut RatingTargetFile,
+        last_played: PlayTime,
+        force: bool,
+    ) -> anyhow::Result<()> {
+        update_targets(client, rating_targets, last_played, force).await
+    }
+}
+
+impl MaimaiPossiblyIntl for MaimaiIntl {
+    async fn new_client<'p>(
+        init: SegaClientInitializer<'p, '_>,
+    ) -> anyhow::Result<SegaClientAndRecordList<'p, Self>> {
+        SegaClient::new_maimai_intl(init).await
+    }
+
+    async fn update_targets(
+        _client: &mut SegaClient<'_, Self>,
+        _rating_targets: &mut RatingTargetFile,
+        _last_played: PlayTime,
+        _force: bool,
+    ) -> anyhow::Result<()> {
+        info!("Maimai international has rating target available!");
+        Ok(())
     }
 }
 
