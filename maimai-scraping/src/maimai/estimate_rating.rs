@@ -853,8 +853,8 @@ pub fn visualize_rating_targets<'a>(
         }
         let s = entry.score_metadata();
         print!(
-            "{:9} {} ({:?} {:?})",
-            entry.achievement(),
+            "{:>9} {} ({:?} {:?})",
+            entry.achievement().to_string(),
             entry.song_name(),
             s.generation(),
             s.difficulty()
