@@ -92,7 +92,8 @@ pub fn parse(html: &Html, idx: Idx, place_expected: bool) -> anyhow::Result<Play
         .parent()
         .ok_or_else(|| anyhow!("No parent found for playlog top container"))?
         .next_siblings()
-        .find_map(ElementRef::wrap)
+        .filter_map(ElementRef::wrap)
+        .find(|e| selector!(".gray_block").matches(e))
         .ok_or_else(|| anyhow!("Gray block was not found"))?;
     let (tour_members, judge_count, rating_result, max_combo, max_sync) =
         parse_center_gray_block(gray_block)?;
