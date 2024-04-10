@@ -175,12 +175,12 @@ impl<'s> ScoreConstantsStore<'s> {
         let old_len = entry.candidates.len();
         let new: BTreeSet<_> = new.into_iter().collect();
 
+        trace!("{:?} will be contrained by {:?}", entry.candidates, new);
+        entry.candidates.retain(|x| new.contains(x));
+
         let reason = entry.make_reason(reason);
         let event = (key.with(entry.song.icon()), reason);
         trace!("{event:?}");
-        trace!("{:?} is contrained by {:?}", entry.candidates, new);
-
-        entry.candidates.retain(|x| new.contains(x));
 
         if entry.candidates.len() < old_len {
             entry.reasons.push(self.events.len());
