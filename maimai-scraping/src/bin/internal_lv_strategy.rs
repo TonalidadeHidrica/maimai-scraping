@@ -2,19 +2,20 @@ use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 use anyhow::{anyhow, bail};
 use clap::Parser;
+use fs_err::read_to_string;
 use hashbrown::HashSet;
 use lazy_format::lazy_format;
 use maimai_scraping::{
     api::{SegaClient, SegaClientInitializer},
     cookie_store::UserIdentifier,
-    fs_json_util::read_json,
     maimai::{
-        estimate_rating::{EstimatorConfig, ScoreConstantsStore, ScoreKey},
+        estimate_rating::{EstimatorConfig, ScoreConstantsEntry, ScoreConstantsStore, ScoreKey},
+        estimator_config_multiuser::{self, update_all},
         favorite_songs::{fetch_favorite_songs_form, song_name_to_idx_map, SetFavoriteSong},
         load_score_level::{self, Song},
         rating::{ScoreConstant, ScoreLevel},
         schema::latest::{ScoreDifficulty, ScoreGeneration, SongName},
-        Maimai, MaimaiUserData,
+        Maimai,
     },
 };
 
@@ -24,7 +25,7 @@ struct Opts {
     cookie_store_path: PathBuf,
     old_json: PathBuf,
     new_json: PathBuf,
-    datas: Vec<PathBuf>,
+    config_toml: PathBuf,
 
     // Constraints
     #[clap(long)]
@@ -79,20 +80,28 @@ async fn main() -> anyhow::Result<()> {
     let old = ScoreConstantsStore::new(&old, &[])?;
     let new = load_score_level::load(&opts.new_json)?;
     let mut new = ScoreConstantsStore::new(&new, &[])?;
-    for data in &opts.datas {
-        let data: MaimaiUserData = read_json(data)?;
-        new.do_everything(
-            opts.estimator_config,
-            None,
-            data.records.values(),
-            &data.rating_targets,
-        )?;
-    }
+
+    let config: estimator_config_multiuser::Root =
+        toml::from_str(&read_to_string(&opts.config_toml)?)?;
+    let datas = config.read_all()?;
+    update_all(&datas, &mut new)?;
 
     let songs = songs(&old, &new, &opts)?;
 
-    for (i, &(song, key)) in songs.iter().enumerate() {
-        println!("{i:>4} {}", display_song(song.song_name(), key));
+    for (i, song) in songs.iter().enumerate() {
+        let prev = match song.old_consts {
+            [] => "???".to_string(),
+            [x] => x.to_string(),
+            &[x, ..] => ScoreLevel::from(x).to_string(),
+        };
+        let now = match song.new_entry.candidates()[..] {
+            [] => "???".to_string(),
+            [x, ..] => ScoreLevel::from(x).to_string(),
+        };
+        println!(
+            "{i:>4} [{prev:>4} => {now:3}] {}",
+            display_song(song.old_song.song_name(), song.key)
+        );
     }
 
     if !opts.dry_run {
@@ -117,9 +126,10 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         let mut not_all = false;
-        for (song, key) in songs {
-            match &map.get(song.song_name()).map_or(&[][..], |x| &x[..]) {
-                [] => println!("Song not found: {}", display_song(song.song_name(), key)),
+        for song in songs {
+            let song_name = song.old_song.song_name();
+            match &map.get(song_name).map_or(&[][..], |x| &x[..]) {
+                [] => println!("Song not found: {}", display_song(song_name, song.key)),
                 [idx] => {
                     let len = idxs.len();
                     if let hashbrown::hash_set::Entry::Vacant(entry) = idxs.entry(*idx) {
@@ -149,11 +159,19 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn songs<'os, 'ns>(
-    old: &ScoreConstantsStore<'os>,
-    new: &ScoreConstantsStore<'ns>,
+#[derive(Debug)]
+struct SongsRet<'os, 'ns, 'nst> {
+    old_song: &'os Song,
+    old_consts: &'os [ScoreConstant],
+    key: ScoreKey<'ns>,
+    new_entry: &'nst ScoreConstantsEntry<'ns>,
+}
+
+fn songs<'os, 'ost: 'os, 'ns, 'nst>(
+    old: &'ost ScoreConstantsStore<'os>,
+    new: &'nst ScoreConstantsStore<'ns>,
     opts: &Opts,
-) -> anyhow::Result<Vec<(&'os Song, ScoreKey<'ns>)>> {
+) -> anyhow::Result<Vec<SongsRet<'os, 'ns, 'nst>>> {
     let mut ret = vec![];
     for (&key, entry) in new.scores() {
         let Ok(Some((song, candidates))) = old.get(key) else {
@@ -174,10 +192,15 @@ fn songs<'os, 'ns>(
         let dx_master =
             if_then(opts.dx_master, dx_master) && if_then(opts.no_dx_master, !dx_master);
         if previous && current && undetermined && dx_master {
-            ret.push((song, key));
+            ret.push(SongsRet {
+                old_song: song,
+                old_consts: candidates,
+                key,
+                new_entry: entry,
+            });
         }
     }
-    ret.sort_by_key(|x| x.1.icon);
+    ret.sort_by_key(|x| x.key.icon);
     Ok(ret)
 }
 

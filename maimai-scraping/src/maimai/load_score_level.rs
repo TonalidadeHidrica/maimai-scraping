@@ -115,7 +115,7 @@ impl TryFrom<SongRaw> for Song {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters)]
 pub struct ScoreLevels {
     basic: InternalScoreLevelEntry,
     advanced: InternalScoreLevelEntry,

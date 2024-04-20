@@ -282,7 +282,7 @@ pub enum KeyFromTargetEntry<'n, 's> {
     Multiple,
 }
 
-#[derive(Clone, Getters, CopyGetters)]
+#[derive(Clone, Debug, Getters, CopyGetters)]
 pub struct ScoreConstantsEntry<'s> {
     #[getset(get_copy = "pub")]
     song: &'s Song,
