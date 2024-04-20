@@ -177,6 +177,8 @@ pub struct SongMetadata {
     Clone,
     PartialEq,
     Eq,
+    PartialOrd,
+    Ord,
     Hash,
     Debug,
     derive_more::From,

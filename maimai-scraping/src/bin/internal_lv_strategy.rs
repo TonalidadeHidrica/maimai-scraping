@@ -200,8 +200,10 @@ fn songs<'os, 'ost: 'os, 'ns, 'nst>(
             });
         }
     }
-    ret.sort_by_key(|x| (x.old_consts, x.key.icon));
-    ret.reverse();
+    ret.sort_by(|x, y| {
+        (x.old_consts.cmp(y.old_consts).reverse())
+            .then_with(|| x.old_song.song_name().cmp(y.old_song.song_name()))
+    });
     Ok(ret)
 }
 
