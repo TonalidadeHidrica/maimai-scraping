@@ -51,6 +51,9 @@ struct Opts {
     #[clap(long)]
     /// Preserve old favorite songs list instead of overwriting.
     append: bool,
+    #[clap(long)]
+    /// Maximum songs to be added (existing songs count for `--append`)
+    limit: Option<usize>,
 }
 #[derive(Clone)]
 struct Levels(Vec<ScoreConstant>);
@@ -74,6 +77,10 @@ async fn main() -> anyhow::Result<()> {
     }
     if opts.dry_run && opts.append {
         bail!("--dry-run and --append cannot coexist.")
+    }
+    let limit = opts.limit.unwrap_or(30);
+    if !(1..=30).contains(&limit) {
+        bail!("--limit must be between 1 and 30")
     }
 
     let old = load_score_level::load(&opts.old_json)?;
@@ -133,7 +140,7 @@ async fn main() -> anyhow::Result<()> {
                 [idx] => {
                     let len = idxs.len();
                     if let hashbrown::hash_set::Entry::Vacant(entry) = idxs.entry(*idx) {
-                        if len < 30 {
+                        if len < limit {
                             entry.insert();
                         } else {
                             not_all = true;
@@ -144,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         if not_all {
-            println!("Only the first 30 of the candidates will be added.");
+            println!("Only the first {limit} of the candidates will be added.");
         }
         SetFavoriteSong::builder()
             .token(&page.token)
