@@ -2,8 +2,9 @@
 resolver = "2"
 
 members = [
+	"edit-rating-analyzer-js",
 	"maimai-scraping",
 	"maimai-watcher",
 	"rating-target-viewer",
-	"edit-rating-analyzer-js",
+	"screenshot-generator"
 ]

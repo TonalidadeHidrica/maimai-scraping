@@ -115,23 +115,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
         debug!("Available Aimes: {aime_list:?}");
 
         // Determine which Aime to use
-        let candidates = aime_list
-            .into_iter()
-            .filter_map(|(aime_idx, player_name)| {
-                args.user_identifier
-                    .player_name
-                    .as_ref()
-                    .map_or(true, |expected| &player_name == expected)
-                    .then_some(aime_idx)
-            })
-            .collect_vec();
-        if candidates.len() != 1 {
-            bail!(
-                "The Aime matching {:?} cannot be uniquely determined",
-                args.user_identifier
-            );
-        }
-        let aime_idx = candidates[0];
+        let aime_idx = find_aime_idx(&aime_list, args.user_identifier.player_name.as_ref())?;
 
         // Select Aime
         let url = T::select_aime_list_url(aime_idx);
@@ -458,6 +442,25 @@ async fn get_token<T: SegaJapaneseAuth>(client: &reqwest::Client) -> Result<Stri
         .ok_or_else(|| anyhow!("Value was not present in the token element."))?
         .to_owned();
     Ok(token)
+}
+
+pub fn find_aime_idx<'p>(
+    aime_list: &[(AimeIdx, PlayerName)],
+    player_name: impl Into<Option<&'p PlayerName>>,
+) -> anyhow::Result<AimeIdx> {
+    let expected = player_name.into();
+    match aime_list
+        .iter()
+        .filter_map(|&(aime_idx, ref player_name)| {
+            expected
+                .map_or(true, |expected| player_name == expected)
+                .then_some(aime_idx)
+        })
+        .collect_vec()[..]
+    {
+        [aime_idx] => Ok(aime_idx),
+        _ => bail!("The Aime with player name {expected:?} cannot be uniquely determined"),
+    }
 }
 
 #[cfg(test)]

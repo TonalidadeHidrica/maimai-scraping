@@ -31,10 +31,16 @@ pub struct Credentials {
 #[derive(Default, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
 pub struct UserIdCookie(String);
 
-#[derive(Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
+#[derive(
+    Debug, derive_more::From, derive_more::AsRef, derive_more::Display, Serialize, Deserialize,
+)]
+#[as_ref(forward)]
 pub struct SegaId(String);
 
-#[derive(Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
+#[derive(
+    Debug, derive_more::From, derive_more::AsRef, derive_more::Display, Serialize, Deserialize,
+)]
+#[as_ref(forward)]
 pub struct Password(String);
 
 #[derive(Clone, Debug, TypedBuilder, Serialize, Deserialize, clap::Args)]
@@ -46,7 +52,15 @@ pub struct UserIdentifier {
 }
 
 #[derive(
-    Clone, PartialEq, Eq, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize,
+    Clone,
+    PartialEq,
+    Eq,
+    Debug,
+    derive_more::From,
+    derive_more::AsRef,
+    derive_more::Display,
+    Serialize,
+    Deserialize,
 )]
 pub struct FriendCode(String);
 

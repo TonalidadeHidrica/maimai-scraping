@@ -3,10 +3,10 @@ use scraper::{ElementRef, Html};
 
 use crate::cookie_store::{AimeIdx, PlayerName};
 
+pub const DIV: &str = "div.charge_aime_block,div.see_through_block";
+
 pub fn parse(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>> {
-    html.select(selector!("div.charge_aime_block,div.see_through_block"))
-        .map(parse_aime_block)
-        .collect()
+    html.select(selector!(DIV)).map(parse_aime_block).collect()
 }
 
 pub fn parse_aime_block(div: ElementRef) -> anyhow::Result<(AimeIdx, PlayerName)> {
