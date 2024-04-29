@@ -200,10 +200,15 @@ fn songs<'os, 'ns, 'nst>(
     for (&key, entry) in new.scores() {
         let history = old.get(&key).copied();
 
+        // This is just heuristic
+        let reliable_version = match entry.song().generation() {
+            ScoreGeneration::Standard => MaimaiVersion::UniversePlus,
+            ScoreGeneration::Deluxe => MaimaiVersion::SplashPlus,
+        };
         let estimation = history
             .into_iter()
             .flatten()
-            .filter(|z| *z.0 >= MaimaiVersion::UniversePlus)
+            .filter(|z| *z.0 >= reliable_version)
             .map(|(&version, &lv)| match lv {
                 InternalScoreLevel::Unknown(lv) => lv
                     .score_constant_candidates_aware(version >= MaimaiVersion::BuddiesPlus)
