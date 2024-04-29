@@ -7,7 +7,7 @@ use hashbrown::HashMap;
 use itertools::Itertools;
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
-use log::info;
+use log::{info, warn};
 use maimai_scraping::{
     fs_json_util::{read_json, write_json},
     maimai::{
@@ -78,9 +78,18 @@ fn main() -> anyhow::Result<()> {
                 for entry in data {
                     let entry = entry.parse()?;
                     if let Some(icon) = songs.get(&entry.entry.song_nickname) {
-                        res.entry(entry.entry.score_key(icon))
+                        let key = entry.entry.score_key(icon);
+                        res.entry(key)
                             .or_default()
                             .insert(version, InternalScoreLevel::Unknown(level));
+                        for (difficulty, level) in entry.additional {
+                            let key = ScoreKey { difficulty, ..key };
+                            res.entry(key)
+                                .or_default()
+                                .insert(version, InternalScoreLevel::Unknown(level));
+                        }
+                    } else {
+                        warn!("Missing song: {:?}", entry.entry.song_nickname);
                     }
                 }
             }
@@ -110,6 +119,8 @@ fn main() -> anyhow::Result<()> {
                         res.entry(entry.score_key(icon))
                             .or_default()
                             .insert(version, InternalScoreLevel::Known(level));
+                    } else {
+                        warn!("Missing song: {:?}", entry.song_nickname);
                     }
                 }
             }
