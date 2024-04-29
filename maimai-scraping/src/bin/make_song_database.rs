@@ -1,16 +1,20 @@
-use std::{iter::successors, path::PathBuf, str::FromStr};
+use std::{collections::BTreeMap, iter::successors, path::PathBuf, str::FromStr};
 
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
 use clap::Parser;
 use enum_iterator::Sequence;
 use hashbrown::HashMap;
+use itertools::Itertools;
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::info;
 use maimai_scraping::{
-    fs_json_util::read_json,
+    fs_json_util::{read_json, write_json},
     maimai::{
-        load_score_level::MaimaiVersion, rating::ScoreLevel, schema::latest::ScoreDifficulty,
+        estimate_rating::ScoreKey,
+        load_score_level::{self, make_hash_multimap, InternalScoreLevel, MaimaiVersion},
+        rating::{ScoreConstant, ScoreLevel},
+        schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon},
     },
     regex,
 };
@@ -18,12 +22,39 @@ use serde::Deserialize;
 
 #[derive(Parser)]
 struct Opts {
+    in_lv_dir: PathBuf,
     in_lv_data_dir: PathBuf,
+    save_json: PathBuf,
 }
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
     let opts = Opts::parse();
+
+    let mut version_to_levels = BTreeMap::new();
+    for version in successors(Some(MaimaiVersion::Festival), MaimaiVersion::next) {
+        let path = format!("{}.json", i8::from(version));
+        let levels = load_score_level::load(opts.in_lv_dir.join(path))?;
+        version_to_levels.insert(version, levels);
+    }
+    let songs = make_hash_multimap(
+        version_to_levels
+            .values()
+            .flatten()
+            .map(|song| (song.song_name_abbrev(), song.icon())),
+    );
+    let songs = songs
+        .into_iter()
+        .map(|(k, v)| match v.into_iter().all_equal_value() {
+            Ok(v) => Ok((k, v)),
+            Err(Some((x, y))) => {
+                bail!("At least two songs are associated to nickname {k:?}: {x} and {y}")
+            }
+            Err(None) => unreachable!(),
+        })
+        .collect::<Result<HashMap<_, _>, _>>()?;
+
+    let mut res = HashMap::<ScoreKey, BTreeMap<MaimaiVersion, InternalScoreLevel>>::new();
 
     for version in successors(Some(MaimaiVersion::SplashPlus), MaimaiVersion::next) {
         info!("Processing {version:?}");
@@ -45,7 +76,12 @@ fn main() -> anyhow::Result<()> {
                     .remove(&UnknownKey::gen(level))
                     .with_context(|| format!("No unknown entry found for {level}"))?;
                 for entry in data {
-                    entry.parse()?;
+                    let entry = entry.parse()?;
+                    if let Some(icon) = songs.get(&entry.entry.song_nickname) {
+                        res.entry(entry.entry.score_key(icon))
+                            .or_default()
+                            .insert(version, InternalScoreLevel::Unknown(level));
+                    }
                 }
             }
         }
@@ -65,9 +101,16 @@ fn main() -> anyhow::Result<()> {
                     data.len()
                 );
             }
-            for (entries, _fractional) in data.iter().rev().zip(0..) {
+            for (entries, fractional) in data.iter().rev().zip(0..) {
+                let level = ScoreConstant::try_from(level * 10 + fractional)
+                    .map_err(|e| anyhow!("Unexpected internal lv: {e}"))?;
                 for entry in entries {
-                    entry.parse()?;
+                    let entry = entry.parse()?;
+                    if let Some(icon) = songs.get(&entry.song_nickname) {
+                        res.entry(entry.score_key(icon))
+                            .or_default()
+                            .insert(version, InternalScoreLevel::Known(level));
+                    }
                 }
             }
         }
@@ -75,6 +118,8 @@ fn main() -> anyhow::Result<()> {
             bail!("Additional data found: {:?}", data.unknown);
         }
     }
+
+    write_json(opts.save_json, &res.iter().collect_vec())?;
 
     Ok(())
 }
@@ -149,9 +194,9 @@ struct EntryWithAdditional {
     entry: Entry,
     additional: Vec<(ScoreDifficulty, ScoreLevel)>,
 }
-#[allow(unused)]
 struct Entry {
     difficulty: ScoreDifficulty,
+    #[allow(unused)]
     new_song: bool,
     song_nickname: String,
     dx: bool,
@@ -232,4 +277,17 @@ fn parse_entry(s: &str) -> anyhow::Result<EntryWithAdditional> {
         },
         additional,
     })
+}
+impl Entry {
+    fn score_key<'a>(&self, icon: &'a SongIcon) -> ScoreKey<'a> {
+        ScoreKey {
+            icon,
+            generation: if self.dx {
+                ScoreGeneration::Deluxe
+            } else {
+                ScoreGeneration::Standard
+            },
+            difficulty: self.difficulty,
+        }
+    }
 }

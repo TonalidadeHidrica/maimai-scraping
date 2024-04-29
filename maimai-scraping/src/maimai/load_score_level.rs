@@ -29,7 +29,7 @@ where
     let mut map = HashMap::new();
     for song in songs {
         if let Some(entry) = map.insert(key(song), song) {
-            bail!("Duplicating icon url: {entry:?}");
+            bail!("Duplicating key: {entry:?}");
         }
     }
     Ok(map)
@@ -163,7 +163,7 @@ impl InternalScoreLevelEntry {
         })
     }
 }
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum InternalScoreLevel {
     Unknown(ScoreLevel),
     Known(ScoreConstant),
@@ -206,7 +206,9 @@ impl InternalScoreLevel {
 }
 
 #[non_exhaustive]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, EnumString, Deserialize, Sequence)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, EnumString, Serialize, Deserialize, Sequence,
+)]
 pub enum MaimaiVersion {
     Maimai,
     MaimaiPlus,

@@ -29,7 +29,7 @@ use itertools::{chain, repeat_n, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::{trace, warn};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use super::{
@@ -38,7 +38,7 @@ use super::{
     schema::latest::{AchievementRank, ScoreMetadata},
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize)]
 pub struct ScoreKey<'a> {
     pub icon: &'a SongIcon,
     pub generation: ScoreGeneration,
