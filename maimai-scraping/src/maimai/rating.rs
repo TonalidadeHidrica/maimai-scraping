@@ -113,11 +113,18 @@ impl ScoreLevel {
         }
     }
     pub fn score_constant_candidates(self) -> impl Iterator<Item = ScoreConstant> + Clone {
+        // TODO: This function should be deprecated and every usage must be aware of its version.
+        self.score_constant_candidates_aware(true)
+    }
+
+    pub fn score_constant_candidates_aware(
+        self,
+        buddies_plus_or_later: bool,
+    ) -> impl Iterator<Item = ScoreConstant> + Clone {
         let range = match self.level {
             a @ 1..=6 => a * 10..(a + 1) * 10,
             a @ 7..=14 => {
-                // TODO: For versions prior than BuddiesPlus, this should be + 7 instead.
-                let boundary = a * 10 + 6;
+                let boundary = a * 10 + if buddies_plus_or_later { 6 } else { 7 };
                 if self.plus {
                     boundary..(a + 1) * 10
                 } else {
