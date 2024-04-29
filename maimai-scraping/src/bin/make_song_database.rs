@@ -25,6 +25,7 @@ struct Opts {
     in_lv_dir: PathBuf,
     in_lv_data_dir: PathBuf,
     save_json: PathBuf,
+    additional_nickname: Option<PathBuf>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -37,11 +38,15 @@ fn main() -> anyhow::Result<()> {
         let levels = load_score_level::load(opts.in_lv_dir.join(path))?;
         version_to_levels.insert(version, levels);
     }
+    let additional_nickname: Vec<(String, SongIcon)> = opts
+        .additional_nickname
+        .map_or_else(|| Ok(vec![]), read_json)?;
     let songs = make_hash_multimap(
         version_to_levels
             .values()
             .flatten()
-            .map(|song| (song.song_name_abbrev(), song.icon())),
+            .map(|song| (song.song_name_abbrev(), song.icon()))
+            .chain(additional_nickname.iter().map(|(x, y)| (x, y))),
     );
     let songs = songs
         .into_iter()
