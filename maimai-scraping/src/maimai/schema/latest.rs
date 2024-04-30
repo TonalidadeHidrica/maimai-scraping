@@ -192,18 +192,7 @@ pub struct SongMetadata {
 pub struct SongName(String);
 
 #[derive(
-    Clone,
-    // PartialEq,
-    // Eq,
-    // PartialOrd,
-    // Ord,
-    // Hash,
-    Debug,
-    derive_more::From,
-    derive_more::FromStr,
-    derive_more::Display,
-    Serialize,
-    Deserialize,
+    Clone, derive_more::From, derive_more::FromStr, derive_more::Display, Serialize, Deserialize,
 )]
 pub struct SongIcon(Url);
 
@@ -242,6 +231,11 @@ impl Ord for SongIcon {
 impl Hash for SongIcon {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.comparator().hash(state);
+    }
+}
+impl std::fmt::Debug for SongIcon {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.comparator().1)
     }
 }
 

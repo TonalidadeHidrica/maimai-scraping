@@ -117,6 +117,12 @@ fn main() -> anyhow::Result<()> {
         write_json(dictionary_json, &res)?;
     }
 
+    let _songs_parsed = songs
+        .into_iter()
+        .map(official_song_list::Song::try_from)
+        .collect::<Result<Vec<_>, _>>()?;
+    // println!("{_songs_parsed:?}");
+
     Ok(())
 }
 
