@@ -74,10 +74,11 @@ pub fn check_no_loss(html: &scraper::Html, record: &PlayRecord) -> anyhow::Resul
 }
 
 fn try_write(path: &Path, description: &'static str, content: impl Display) {
-    match (|| {
+    let write_result = (|| {
         writeln!(BufWriter::new(File::create(path)?), "{content}")?;
         anyhow::Ok(())
-    })() {
+    })();
+    match write_result {
         Ok(_) => {
             info!("Saved {description} to {path:?}")
         }

@@ -64,7 +64,7 @@ fn main() -> anyhow::Result<()> {
     }
     'outer_loop: loop {
         let mut store = store.clone();
-        let res = match (|| {
+        let optimal_songs = (|| {
             for (i, entry) in history.iter().enumerate() {
                 let rating_before = history
                     .get(i.wrapping_sub(1))
@@ -87,7 +87,8 @@ fn main() -> anyhow::Result<()> {
             );
             get_optimal_song(&datas, &store, &old_store, args.level_update_factor)
                 .context("While getting optimal song")
-        })() {
+        })();
+        let res = match optimal_songs {
             Err(e) => {
                 println!("Error: {e:#}");
                 None

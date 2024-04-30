@@ -168,7 +168,9 @@ mod tests {
             vec![vec![100, 104], vec![200], vec![300, 304]],
         );
 
-        let a = vec![vec![210, 212], vec![208, 210]];
+        // TODO: many of these Vectors can actually be arrays
+        // Clippy pointed out some of them so I fixed them, but there should be more
+        let a = [vec![210, 212], vec![208, 210]];
         let b = &[975132, 985146];
         let res = solve(
             2,
@@ -179,7 +181,7 @@ mod tests {
         let expected = vec![vec![(212, 975132)], vec![(208, 985146)]];
         assert_eq!(res, expected);
 
-        let a = vec![vec![210, 212], vec![208, 210]];
+        let a = [vec![210, 212], vec![208, 210]];
         let b = &[985146, 975132];
         let res = solve(
             2,

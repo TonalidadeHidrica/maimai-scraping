@@ -42,7 +42,7 @@ pub struct Song {
     pub checked: bool,
 }
 #[derive(Debug, From)]
-pub struct GenreName(String);
+pub struct GenreName(#[allow(unused)] String);
 #[derive(Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Hash, From, Serialize)]
 pub struct Idx(String);
 

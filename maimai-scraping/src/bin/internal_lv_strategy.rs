@@ -1,9 +1,6 @@
-use std::{
-    cmp::Reverse, collections::BTreeMap, fmt::Display, iter::successors, path::PathBuf,
-    str::FromStr,
-};
+use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, iter::successors, path::PathBuf};
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use clap::Parser;
 use enum_iterator::Sequence;
 use fs_err::read_to_string;
@@ -63,18 +60,18 @@ struct Opts {
     /// Maximum songs to be added (existing songs count for `--append`)
     limit: Option<usize>,
 }
-#[derive(Clone)]
-struct Levels(Vec<ScoreConstant>);
-impl FromStr for Levels {
-    type Err = anyhow::Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(
-            s.split(',')
-                .map(|s| ScoreConstant::try_from(s.parse::<u8>()?).map_err(|e| anyhow!("Bad: {e}")))
-                .collect::<anyhow::Result<Vec<ScoreConstant>>>()?,
-        ))
-    }
-}
+// #[derive(Clone)]
+// struct Levels(Vec<ScoreConstant>);
+// impl FromStr for Levels {
+//     type Err = anyhow::Error;
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         Ok(Self(
+//             s.split(',')
+//                 .map(|s| ScoreConstant::try_from(s.parse::<u8>()?).map_err(|e| anyhow!("Bad: {e}")))
+//                 .collect::<anyhow::Result<Vec<ScoreConstant>>>()?,
+//         ))
+//     }
+// }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
