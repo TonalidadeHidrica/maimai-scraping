@@ -61,7 +61,7 @@ struct Opts {
     #[clap(long)]
     /// Maximum songs to be added (existing songs count for `--append`)
     limit: Option<usize>,
-    #[clap(long)]
+    #[clap(long, default_value = "0")]
     /// The number of songs to skip among listed ones
     skip: usize,
 
@@ -332,6 +332,7 @@ fn songs<'of, 'os, 'ns, 'nst>(
             Reverse(x.estimation.last().copied()),
             Reverse(x.confident),
             x.song.title_kana(),
+            x.key.score_metadata(),
         )
     });
     Ok(ret)
