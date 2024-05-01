@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{BTreeSet, HashMap},
+    path::PathBuf,
+};
 
 use anyhow::{bail, Context};
 use clap::Parser;
@@ -117,11 +120,16 @@ fn main() -> anyhow::Result<()> {
         write_json(dictionary_json, &res)?;
     }
 
-    let _songs_parsed = songs
+    let official_songs = songs
         .into_iter()
         .map(official_song_list::Song::try_from)
         .collect::<Result<Vec<_>, _>>()?;
-    // println!("{_songs_parsed:?}");
+    let chars: BTreeSet<_> = official_songs
+        .iter()
+        .flat_map(|song| song.title_kana().as_ref().chars())
+        .collect();
+    println!("{:?}", chars);
+    println!("{}", chars.iter().collect::<String>());
 
     Ok(())
 }

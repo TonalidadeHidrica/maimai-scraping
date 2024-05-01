@@ -1,10 +1,11 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{cmp::Ordering, path::PathBuf, str::FromStr};
 
 use anyhow::{bail, Context};
 use chrono::NaiveDate;
 use deranged::RangedU8;
 use derive_more::{AsRef, From};
 use getset::{CopyGetters, Getters};
+use itertools::Itertools;
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 
@@ -329,4 +330,53 @@ impl UtageScore {
 pub fn load(path: impl Into<PathBuf>) -> anyhow::Result<Vec<Song>> {
     let official_songs: Vec<SongRaw> = read_json(path.into())?;
     official_songs.into_iter().map(TryInto::try_into).collect()
+}
+
+impl PartialEq for SongKana {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other).is_eq()
+    }
+}
+impl Eq for SongKana {}
+impl PartialOrd for SongKana {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for SongKana {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use Ordering::*;
+        self.0
+            .chars()
+            .zip_longest(other.0.chars())
+            .map(|x| match x {
+                itertools::EitherOrBoth::Both(x, y) => {
+                    maimai_char_order(x).cmp(&maimai_char_order(y))
+                }
+                itertools::EitherOrBoth::Left(_) => Greater,
+                itertools::EitherOrBoth::Right(_) => Less,
+            })
+            .find(|x| x.is_ne())
+            .unwrap_or(Equal)
+    }
+}
+fn maimai_char_order(c: char) -> (u8, char) {
+    match c {
+        'ア'..='ン' => (0, c),
+        'A'..='Z' => (1, c),
+        '0'..='9' => (2, c),
+        _ => (3, c),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SongKana;
+
+    #[test]
+    fn test_song_kana_cmp() {
+        let [x, y]: [SongKana; 2] =
+            ["ソウキユウフカク", "YETANOTHERDRIZZLYRAIN"].map(|x| x.to_owned().into());
+        assert!(x < y);
+    }
 }

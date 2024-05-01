@@ -305,7 +305,7 @@ fn songs<'of, 'os, 'ns, 'nst>(
             x.estimation.len(),
             Reverse(x.estimation.last().copied()),
             Reverse(x.confident),
-            x.song_name(),
+            x.song.title_kana(),
         )
     });
     Ok(ret)
