@@ -121,7 +121,8 @@ async fn main() -> anyhow::Result<()> {
             .map(|v| lazy_format!("{v:4}"))
             .join_with(" ");
         let estimation = song.estimation.iter().map(|x| x.to_string()).join_with(" ");
-        let estimation = format!("[{estimation}]?");
+        let confident = if song.confident { "? " } else { "??" };
+        let estimation = format!("[{estimation}]{confident}");
         let locked = if song.song.locked() { '!' } else { ' ' };
         println!(
             "{i:>4} [{history}] => {estimation:8} {locked} {}",
@@ -190,6 +191,7 @@ struct SongsRet<'of, 'os, 'ns, 'nst> {
     // old_consts: &'os [ScoreConstant],
     song: &'of official_song_list::Song,
     estimation: Vec<ScoreConstant>,
+    confident: bool,
     history: Option<&'os BTreeMap<MaimaiVersion, InternalScoreLevel>>,
     key: ScoreKey<'ns>,
     new_entry: &'nst ScoreConstantsEntry<'ns>,
@@ -208,6 +210,8 @@ fn songs<'of, 'os, 'ns, 'nst>(
 ) -> anyhow::Result<Vec<SongsRet<'of, 'os, 'ns, 'nst>>> {
     let mut ret = vec![];
     for (&key, entry) in new.scores() {
+        use InternalScoreLevel::*;
+
         let song = official
             .get(key.icon)
             .with_context(|| format!("No score was found for icon {:?}", key.icon))?;
@@ -219,14 +223,15 @@ fn songs<'of, 'os, 'ns, 'nst>(
             ScoreGeneration::Deluxe => MaimaiVersion::SplashPlus,
         };
         let estimation = history
-            .into_iter()
+            .iter()
+            .copied()
             .flatten()
             .filter(|z| *z.0 >= reliable_version)
             .map(|(&version, &lv)| match lv {
-                InternalScoreLevel::Unknown(lv) => lv
+                Unknown(lv) => lv
                     .score_constant_candidates_aware(version >= MaimaiVersion::BuddiesPlus)
                     .collect(),
-                InternalScoreLevel::Known(lv) => vec![lv],
+                Known(lv) => vec![lv],
             })
             .reduce(|x, y| {
                 let d = |[x, y]: [ScoreConstant; 2]| u8::from(x).abs_diff(u8::from(y));
@@ -242,6 +247,32 @@ fn songs<'of, 'os, 'ns, 'nst>(
                 // Estimation list is always non-empty
             })
             .unwrap_or_else(|| entry.candidates().clone());
+        let splash_plus_lv = history
+            .and_then(|x| x.get(&MaimaiVersion::SplashPlus))
+            .and_then(|&lv| match lv {
+                Known(lv) => Some(u8::from(lv)),
+                Unknown(_) => None,
+            });
+        let estimation_override = || match (estimation.len(), splash_plus_lv) {
+            (1, _) => None,
+            (_, Some(lv)) => {
+                // Ad-hoc fitting
+                let level = match lv {
+                    124 => Some(129),
+                    123 => Some(128),
+                    122 => Some(127),
+                    121 => Some(127),
+                    120 => Some(127),
+                    _ => None,
+                };
+                Some(level?.try_into().unwrap())
+            }
+            (_, _) => None,
+        };
+        let (estimation, confident) = match estimation_override() {
+            Some(level) => (vec![level], false),
+            None => (estimation, true),
+        };
 
         // let previous = opts.previous.as_ref().map_or(true, |x| {
         //     x.0.iter().any(|&x| candidates.iter().any(|&y| x == y))
@@ -262,6 +293,7 @@ fn songs<'of, 'os, 'ns, 'nst>(
             ret.push(SongsRet {
                 song,
                 estimation,
+                confident,
                 history,
                 key,
                 new_entry: entry,
@@ -272,6 +304,7 @@ fn songs<'of, 'os, 'ns, 'nst>(
         (
             x.estimation.len(),
             Reverse(x.estimation.last().copied()),
+            Reverse(x.confident),
             x.song_name(),
         )
     });
