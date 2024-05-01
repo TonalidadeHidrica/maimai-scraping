@@ -176,7 +176,12 @@ async fn main() -> anyhow::Result<()> {
                         }
                     }
                 }
-                idxs => bail!("Multiple candidates are found: {song:?} {idxs:?}"),
+                candidates => {
+                    // TODO FIXME AAAAAAARGH
+                    if idxs.len() < limit {
+                        bail!("Multiple candidates are found: {song:?} {candidates:?}")
+                    }
+                }
             }
         }
         if not_all {
