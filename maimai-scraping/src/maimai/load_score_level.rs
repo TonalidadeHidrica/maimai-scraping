@@ -20,9 +20,10 @@ pub fn load(path: impl Into<PathBuf> + Debug) -> anyhow::Result<Vec<Song>> {
     let songs: Vec<SongRaw> = read_json(path)?;
     songs.into_iter().map(Song::try_from).collect()
 }
-pub fn make_map<'t, T, U, F>(songs: &'t [T], mut key: F) -> anyhow::Result<HashMap<U, &'t T>>
+pub fn make_map<'t, T, I, U, F>(songs: I, mut key: F) -> anyhow::Result<HashMap<U, &'t T>>
 where
     T: std::fmt::Debug,
+    I: IntoIterator<Item = &'t T>,
     U: std::hash::Hash + std::cmp::Eq,
     F: FnMut(&'t T) -> U,
 {

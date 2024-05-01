@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 use anyhow::{bail, Context};
 use chrono::NaiveDate;
@@ -7,6 +7,8 @@ use derive_more::{AsRef, From};
 use getset::{CopyGetters, Getters};
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
+
+use crate::fs_json_util::read_json;
 
 use super::{
     load_score_level::MaimaiVersion,
@@ -274,10 +276,10 @@ impl FromStr for Category {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         use Category::*;
         Ok(match s {
-            "GAME＆VARIETY" => GamesVariety,
-            "POPS＆ANIME" => PopsAnime,
+            "ゲーム＆バラエティ" | "GAME＆VARIETY" => GamesVariety,
+            "POPS＆アニメ" | "POPS＆ANIME" => PopsAnime,
             "maimai" => MaimaiOriginal,
-            "niconico＆VOCALOID™" => NiconicoVocaloid,
+            "niconico＆ボーカロイド" | "niconico＆VOCALOID™" => NiconicoVocaloid,
             "オンゲキ＆CHUNITHM" => OngekiChunithm,
             "東方Project" => TouhouProject,
             _ => bail!("Unexpected category: {s:?}"),
@@ -322,4 +324,9 @@ impl UtageScore {
             x => bail!("Unexpected type of song: {x:?}"),
         })
     }
+}
+
+pub fn load(path: impl Into<PathBuf>) -> anyhow::Result<Vec<Song>> {
+    let official_songs: Vec<SongRaw> = read_json(path.into())?;
+    official_songs.into_iter().map(TryInto::try_into).collect()
 }

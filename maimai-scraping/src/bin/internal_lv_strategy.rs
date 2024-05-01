@@ -1,6 +1,6 @@
 use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, iter::successors, path::PathBuf};
 
-use anyhow::bail;
+use anyhow::{bail, Context};
 use clap::Parser;
 use enum_iterator::Sequence;
 use fs_err::read_to_string;
@@ -16,7 +16,8 @@ use maimai_scraping::{
         estimate_rating::{EstimatorConfig, ScoreConstantsEntry, ScoreConstantsStore, ScoreKey},
         estimator_config_multiuser::{self, update_all},
         favorite_songs::{fetch_favorite_songs_form, song_name_to_idx_map, SetFavoriteSong},
-        load_score_level::{self, InternalScoreLevel, MaimaiVersion},
+        load_score_level::{self, make_map, InternalScoreLevel, MaimaiVersion},
+        official_song_list::{self, ScoreDetails},
         rating::{ScoreConstant, ScoreLevel},
         schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
         Maimai,
@@ -30,6 +31,7 @@ struct Opts {
     cookie_store_path: PathBuf,
     in_lv_history_json: PathBuf,
     new_json: PathBuf,
+    offical_songs_json: PathBuf,
     config_toml: PathBuf,
 
     // Constraints
@@ -99,7 +101,15 @@ async fn main() -> anyhow::Result<()> {
     let datas = config.read_all()?;
     update_all(&datas, &mut new)?;
 
-    let songs = songs(&in_lvs, &new, &opts)?;
+    let official_songs = official_song_list::load(&opts.offical_songs_json)?;
+    let icon_to_official_song = make_map(
+        official_songs
+            .iter()
+            .filter(|song| matches!(song.details(), ScoreDetails::Ordinary(_))),
+        |song: &official_song_list::Song| song.image(),
+    )?;
+
+    let songs = songs(&in_lvs, &new, &icon_to_official_song, &opts)?;
 
     for (i, song) in songs.iter().enumerate() {
         let history = successors(Some(MaimaiVersion::SplashPlus), MaimaiVersion::next)
@@ -112,8 +122,9 @@ async fn main() -> anyhow::Result<()> {
             .join_with(" ");
         let estimation = song.estimation.iter().map(|x| x.to_string()).join_with(" ");
         let estimation = format!("[{estimation}]?");
+        let locked = if song.song.locked() { '!' } else { ' ' };
         println!(
-            "{i:>4} [{history}] => {estimation:8} {}",
+            "{i:>4} [{history}] => {estimation:8} {locked} {}",
             display_song(song.song_name(), song.key)
         );
     }
@@ -174,27 +185,32 @@ async fn main() -> anyhow::Result<()> {
 }
 
 #[derive(Debug)]
-struct SongsRet<'os, 'ns, 'nst> {
+struct SongsRet<'of, 'os, 'ns, 'nst> {
     // old_song: &'os Song,
     // old_consts: &'os [ScoreConstant],
+    song: &'of official_song_list::Song,
     estimation: Vec<ScoreConstant>,
     history: Option<&'os BTreeMap<MaimaiVersion, InternalScoreLevel>>,
     key: ScoreKey<'ns>,
     new_entry: &'nst ScoreConstantsEntry<'ns>,
 }
-impl<'ns> SongsRet<'_, 'ns, '_> {
+impl<'ns> SongsRet<'_, '_, 'ns, '_> {
     fn song_name(&self) -> &'ns SongName {
         self.new_entry.song().song_name()
     }
 }
 
-fn songs<'os, 'ns, 'nst>(
+fn songs<'of, 'os, 'ns, 'nst>(
     old: &HashMap<ScoreKey, &'os BTreeMap<MaimaiVersion, InternalScoreLevel>>,
     new: &'nst ScoreConstantsStore<'ns>,
+    official: &HashMap<&SongIcon, &'of official_song_list::Song>,
     opts: &Opts,
-) -> anyhow::Result<Vec<SongsRet<'os, 'ns, 'nst>>> {
+) -> anyhow::Result<Vec<SongsRet<'of, 'os, 'ns, 'nst>>> {
     let mut ret = vec![];
     for (&key, entry) in new.scores() {
+        let song = official
+            .get(key.icon)
+            .with_context(|| format!("No score was found for icon {:?}", key.icon))?;
         let history = old.get(&key).copied();
 
         // This is just heuristic
@@ -244,6 +260,7 @@ fn songs<'os, 'ns, 'nst>(
             if_then(opts.dx_master, dx_master) && if_then(opts.no_dx_master, !dx_master);
         if previous && current && undetermined && dx_master {
             ret.push(SongsRet {
+                song,
                 estimation,
                 history,
                 key,
