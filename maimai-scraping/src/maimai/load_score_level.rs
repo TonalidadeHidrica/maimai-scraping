@@ -20,16 +20,17 @@ pub fn load(path: impl Into<PathBuf> + Debug) -> anyhow::Result<Vec<Song>> {
     let songs: Vec<SongRaw> = read_json(path)?;
     songs.into_iter().map(Song::try_from).collect()
 }
-pub fn make_map<'t, T, I, U, F>(songs: I, mut key: F) -> anyhow::Result<HashMap<U, &'t T>>
+pub fn make_map<T, I, U, F>(songs: I, mut key: F) -> anyhow::Result<HashMap<U, T>>
 where
     T: std::fmt::Debug,
-    I: IntoIterator<Item = &'t T>,
+    I: IntoIterator<Item = T>,
     U: std::hash::Hash + std::cmp::Eq,
-    F: FnMut(&'t T) -> U,
+    F: for<'t> FnMut(&'t T) -> U,
 {
     let mut map = HashMap::new();
     for song in songs {
-        if let Some(entry) = map.insert(key(song), song) {
+        let key = key(&song);
+        if let Some(entry) = map.insert(key, song) {
             bail!("Duplicating key: {entry:?}");
         }
     }

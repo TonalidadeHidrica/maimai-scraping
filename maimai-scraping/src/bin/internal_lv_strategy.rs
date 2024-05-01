@@ -17,7 +17,7 @@ use maimai_scraping::{
         estimator_config_multiuser::{self, update_all},
         favorite_songs::{fetch_favorite_songs_form, song_name_to_idx_map, SetFavoriteSong},
         load_score_level::{self, make_map, InternalScoreLevel, MaimaiVersion},
-        official_song_list::{self, ScoreDetails},
+        official_song_list::{self, OrdinaryScore, ScoreDetails},
         rating::{ScoreConstant, ScoreLevel},
         schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
         Maimai,
@@ -61,6 +61,9 @@ struct Opts {
     #[clap(long)]
     /// Maximum songs to be added (existing songs count for `--append`)
     limit: Option<usize>,
+
+    #[clap(long)]
+    hide_history: bool,
 }
 // #[derive(Clone)]
 // struct Levels(Vec<ScoreConstant>);
@@ -105,8 +108,11 @@ async fn main() -> anyhow::Result<()> {
     let icon_to_official_song = make_map(
         official_songs
             .iter()
-            .filter(|song| matches!(song.details(), ScoreDetails::Ordinary(_))),
-        |song: &official_song_list::Song| song.image(),
+            .filter_map(|song| match song.details() {
+                ScoreDetails::Ordinary(details) => Some((song, details)),
+                ScoreDetails::Utage(_) => None,
+            }),
+        |song| song.0.image(),
     )?;
 
     let songs = songs(&in_lvs, &new, &icon_to_official_song, &opts)?;
@@ -120,13 +126,14 @@ async fn main() -> anyhow::Result<()> {
             })
             .map(|v| lazy_format!("{v:4}"))
             .join_with(" ");
+        let history = lazy_format!(if opts.hide_history => "" else => "[{history}] => ");
         let estimation = song.estimation.iter().map(|x| x.to_string()).join_with(" ");
         let confident = if song.confident { "? " } else { "??" };
         let estimation = format!("[{estimation}]{confident}");
         let locked = if song.song.locked() { '!' } else { ' ' };
         println!(
-            "{i:>4} [{history}] => {estimation:8} {locked} {}",
-            display_song(song.song_name(), song.key)
+            "{i:>4} {history}{estimation:8} {locked} {}",
+            display_song(song.song_name(), song.details, song.key)
         );
     }
 
@@ -155,7 +162,10 @@ async fn main() -> anyhow::Result<()> {
         for song in songs {
             let song_name = song.song_name();
             match &map.get(song_name).map_or(&[][..], |x| &x[..]) {
-                [] => println!("Song not found: {}", display_song(song_name, song.key)),
+                [] => println!(
+                    "Song not found: {}",
+                    display_song(song_name, song.details, song.key)
+                ),
                 [idx] => {
                     let len = idxs.len();
                     if let hashbrown::hash_set::Entry::Vacant(entry) = idxs.entry(*idx) {
@@ -190,6 +200,7 @@ struct SongsRet<'of, 'os, 'ns, 'nst> {
     // old_song: &'os Song,
     // old_consts: &'os [ScoreConstant],
     song: &'of official_song_list::Song,
+    details: &'of OrdinaryScore,
     estimation: Vec<ScoreConstant>,
     confident: bool,
     history: Option<&'os BTreeMap<MaimaiVersion, InternalScoreLevel>>,
@@ -205,14 +216,14 @@ impl<'ns> SongsRet<'_, '_, 'ns, '_> {
 fn songs<'of, 'os, 'ns, 'nst>(
     old: &HashMap<ScoreKey, &'os BTreeMap<MaimaiVersion, InternalScoreLevel>>,
     new: &'nst ScoreConstantsStore<'ns>,
-    official: &HashMap<&SongIcon, &'of official_song_list::Song>,
+    official: &HashMap<&SongIcon, (&'of official_song_list::Song, &'of OrdinaryScore)>,
     opts: &Opts,
 ) -> anyhow::Result<Vec<SongsRet<'of, 'os, 'ns, 'nst>>> {
     let mut ret = vec![];
     for (&key, entry) in new.scores() {
         use InternalScoreLevel::*;
 
-        let song = official
+        let (song, details) = official
             .get(key.icon)
             .with_context(|| format!("No score was found for icon {:?}", key.icon))?;
         let history = old.get(&key).copied();
@@ -292,6 +303,7 @@ fn songs<'of, 'os, 'ns, 'nst>(
         if previous && current && undetermined && dx_master {
             ret.push(SongsRet {
                 song,
+                details,
                 estimation,
                 confident,
                 history,
@@ -311,8 +323,19 @@ fn songs<'of, 'os, 'ns, 'nst>(
     Ok(ret)
 }
 
-fn display_song<'a>(name: &'a SongName, key: ScoreKey) -> impl Display + 'a {
-    lazy_format!("{name} ({:?} {:?})", key.generation, key.difficulty)
+fn display_song<'a>(
+    name: &'a SongName,
+    details: &'a OrdinaryScore,
+    key: ScoreKey,
+) -> impl Display + 'a {
+    let highlight_if = |b: bool| if b { "`" } else { "" };
+    let x = highlight_if(details.standard().is_some() && details.deluxe().is_some());
+    let y = highlight_if(key.difficulty != ScoreDifficulty::Master);
+    lazy_format!(
+        "{name} ({x}{:?}{x} {y}{:?}{y})",
+        key.generation,
+        key.difficulty
+    )
 }
 
 fn if_then(a: bool, b: bool) -> bool {
