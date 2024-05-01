@@ -1,4 +1,11 @@
-use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, iter::successors, path::PathBuf};
+use std::{
+    cmp::Reverse,
+    collections::{BTreeMap, BTreeSet},
+    fmt::Display,
+    iter::successors,
+    path::PathBuf,
+    str::FromStr,
+};
 
 use anyhow::{bail, Context};
 use clap::Parser;
@@ -39,8 +46,9 @@ struct Opts {
     // /// Comma-separated list of previous internal levels as integers (e.g. `127,128,129`)
     // previous: Option<Levels>,
     #[clap(long)]
-    /// Up to one current level in an ordinary format (e.g. `13+`)
-    current: Option<ScoreLevel>,
+    /// Current levels in the ordinary format (e.g. `13+`)
+    /// A hyphen indicates a range, and comma means union
+    current: Option<CurrentLevels>,
     #[clap(long)]
     /// Choose only DX (ReMaster) scores.
     dx_master: bool,
@@ -80,6 +88,28 @@ struct Opts {
 //         ))
 //     }
 // }
+
+#[derive(Clone)]
+struct CurrentLevels(BTreeSet<ScoreLevel>);
+impl FromStr for CurrentLevels {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        Ok(Self(
+            s.split(',')
+                .map(|s| {
+                    Ok(match s.split_once('-') {
+                        Some((x, y)) => ScoreLevel::range_inclusive(x.parse()?, y.parse()?),
+                        _ => {
+                            let x = s.parse()?;
+                            ScoreLevel::range_inclusive(x, x)
+                        }
+                    })
+                })
+                .flatten_ok()
+                .collect::<anyhow::Result<_>>()?,
+        ))
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -303,10 +333,9 @@ fn songs<'of, 'os, 'ns, 'nst>(
         //     x.0.iter().any(|&x| candidates.iter().any(|&y| x == y))
         // });
         let previous = true;
-        let current = opts.current.map_or(true, |level| {
-            level
-                .score_constant_candidates()
-                .any(|x| entry.candidates().iter().any(|&y| x == y))
+        let current = opts.current.as_ref().map_or(true, |levels| {
+            let mut candidates = entry.candidates().iter().map(|&x| ScoreLevel::from(x));
+            candidates.any(|level| levels.0.contains(&level))
         });
         let undetermined = entry.candidates().len() != 1;
         let dx_master = key.generation == ScoreGeneration::Deluxe
