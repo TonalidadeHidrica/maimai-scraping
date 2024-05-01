@@ -61,6 +61,9 @@ struct Opts {
     #[clap(long)]
     /// Maximum songs to be added (existing songs count for `--append`)
     limit: Option<usize>,
+    #[clap(long)]
+    /// The number of songs to skip among listed ones
+    skip: usize,
 
     #[clap(long)]
     hide_history: bool,
@@ -154,6 +157,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         let mut not_all = false;
+        let mut skipped = 0;
         for song in songs {
             let song_name = song.song_name();
             match &map
@@ -168,7 +172,11 @@ async fn main() -> anyhow::Result<()> {
                     let len = idxs.len();
                     if let hashbrown::hash_set::Entry::Vacant(entry) = idxs.entry(*idx) {
                         if len < limit {
-                            entry.insert();
+                            if skipped < opts.skip {
+                                skipped += 1;
+                            } else {
+                                entry.insert();
+                            }
                         } else {
                             not_all = true;
                         }
@@ -181,6 +189,9 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        if skipped > 0 {
+            println!("Skipped {skipped} songs.");
+        }
         if not_all {
             println!("Only the first {limit} of the candidates will be added.");
         }
@@ -190,6 +201,7 @@ async fn main() -> anyhow::Result<()> {
             .build()
             .send(&mut client)
             .await?;
+        println!("Favorite songs have been edited.");
     } else {
         println!("WARNING: DRY-RUN!");
     }
