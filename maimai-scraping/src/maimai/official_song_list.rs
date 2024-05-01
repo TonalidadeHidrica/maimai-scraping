@@ -121,7 +121,7 @@ pub struct OrdinaryScore {
     deluxe: Option<Levels>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Category {
     GamesVariety,
     PopsAnime,

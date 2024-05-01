@@ -148,12 +148,7 @@ async fn main() -> anyhow::Result<()> {
         let map = song_name_to_idx_map(&page);
         let mut idxs = HashSet::new();
         if opts.append {
-            for song in page
-                .genres
-                .iter()
-                .flat_map(|x| &x.songs)
-                .filter(|x| x.checked)
-            {
+            for song in page.songs.iter().filter(|x| x.checked) {
                 println!("Preserving existing song: {}", song.name);
                 idxs.insert(&song.idx);
             }
@@ -161,7 +156,10 @@ async fn main() -> anyhow::Result<()> {
         let mut not_all = false;
         for song in songs {
             let song_name = song.song_name();
-            match &map.get(song_name).map_or(&[][..], |x| &x[..]) {
+            match &map
+                .get(&(song.details.category(), song_name))
+                .map_or(&[][..], |x| &x[..])
+            {
                 [] => println!(
                     "Song not found: {}",
                     display_song(song_name, song.details, song.key)
@@ -177,10 +175,9 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
                 candidates => {
-                    // TODO FIXME AAAAAAARGH
-                    if idxs.len() < limit {
-                        bail!("Multiple candidates are found: {song:?} {candidates:?}")
-                    }
+                    // Now that songs are distinguished by category as well as title,
+                    // This should not happen
+                    bail!("Multiple candidates are found: {song:?} {candidates:?}")
                 }
             }
         }

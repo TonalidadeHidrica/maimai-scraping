@@ -32,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
     let page = fetch_favorite_songs_form(&mut client).await?;
     SetFavoriteSong::builder()
         .token(&page.token)
-        .music(vec![&page.genres[0].songs[39].idx])
+        .music(vec![&page.songs[39].idx])
         .build()
         .send(&mut client)
         .await?;
