@@ -5,9 +5,12 @@ use fs_err::File;
 use itertools::Itertools;
 use maimai_scraping::{
     fs_json_util::read_json,
-    maimai::schema::{
-        latest::{PlayRecord, ScoreDifficulty, SongName},
-        ver_20210316_2338::AchievementValue,
+    maimai::{
+        schema::{
+            latest::{ScoreDifficulty, SongName},
+            ver_20210316_2338::AchievementValue,
+        },
+        MaimaiUserData,
     },
 };
 use svg::{
@@ -25,9 +28,10 @@ struct Opts {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let records: Vec<PlayRecord> = read_json(&opts.input_file)?;
-    let filtered = records
-        .iter()
+    let data: MaimaiUserData = read_json(&opts.input_file)?;
+    let filtered = data
+        .records
+        .values()
         .filter(|x| {
             x.song_metadata().name() == &opts.song_name
                 && x.score_metadata().difficulty() == opts.difficulty
