@@ -22,7 +22,7 @@ getset = "0.1.2"
 hashbrown = { version = "0.14.0", features = ["serde"] }
 html-minifier = "4.0.0"
 indexmap = "2.0.0"
-inquire = "0.6.2"
+inquire = "0.7.5"
 itertools = "0.12.1"
 joinery = "3.1.0"
 lazy_format = "2.0.0"
