@@ -17,7 +17,7 @@ joinery = "3.1.0"
 lazy_format = "2.0.0"
 log = "0.4.19"
 maimai-scraping = { version = "0.1.0", path = "../maimai-scraping" }
-reqwest = { version = "0.11.18", features = ["json"] }
+reqwest = { version = "0.12.4", features = ["json"] }
 serde = "1.0.171"
 splitty = "1.0.1"
 tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread", "sync"] }
