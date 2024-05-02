@@ -1,6 +1,7 @@
 use anyhow::Context;
 use derive_more::{AsRef, Display, From};
 use itertools::Itertools;
+use maimai_scraping_utils::selector;
 use scraper::ElementRef;
 use serde::Serialize;
 

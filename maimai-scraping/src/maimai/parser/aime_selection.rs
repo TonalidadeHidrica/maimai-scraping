@@ -1,4 +1,5 @@
 use anyhow::Context;
+use maimai_scraping_utils::selector;
 use scraper::{ElementRef, Html};
 
 use crate::cookie_store::{AimeIdx, PlayerName};

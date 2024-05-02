@@ -3,6 +3,7 @@ use std::str::FromStr;
 use anyhow::{anyhow, bail, Context};
 use arrayvec::ArrayVec;
 use chrono::NaiveDateTime;
+use maimai_scraping_utils::{regex, selector};
 use once_cell::sync::Lazy;
 use scraper::{ElementRef, Html, Selector};
 

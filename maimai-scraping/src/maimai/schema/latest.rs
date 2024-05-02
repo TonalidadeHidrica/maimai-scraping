@@ -5,6 +5,7 @@ use chrono::naive::NaiveDateTime;
 use chrono::FixedOffset;
 use getset::{CopyGetters, Getters};
 use log::warn;
+use maimai_scraping_utils::regex;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fmt::Display;

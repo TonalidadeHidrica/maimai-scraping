@@ -7,6 +7,7 @@ use std::{
 use anyhow::Context;
 use fs_err::File;
 use log::{error, info, trace};
+use maimai_scraping_utils::selector;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 

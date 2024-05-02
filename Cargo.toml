@@ -4,7 +4,8 @@ resolver = "2"
 members = [
 	"edit-rating-analyzer-js",
 	"maimai-scraping",
+	"maimai-scraping-utils",
 	"maimai-watcher",
 	"rating-target-viewer",
-	"screenshot-generator"
+	"screenshot-generator",
 ]

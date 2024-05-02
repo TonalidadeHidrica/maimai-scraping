@@ -8,6 +8,7 @@ pub mod parser;
 pub mod rating;
 pub mod schema;
 
+use maimai_scraping_utils::selector;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use url::Url;

@@ -1,8 +1,5 @@
 #![recursion_limit = "1024"]
 
-#[macro_use]
-pub mod macros;
-
 pub mod algorithm;
 pub mod api;
 pub mod chrono_util;

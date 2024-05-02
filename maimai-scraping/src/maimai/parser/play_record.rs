@@ -7,6 +7,7 @@ use std::{
 use anyhow::{anyhow, bail};
 use chrono::NaiveDateTime;
 use itertools::Itertools;
+use maimai_scraping_utils::{regex, selector};
 use scraper::{ElementRef, Html};
 
 use crate::maimai::schema::latest::*;

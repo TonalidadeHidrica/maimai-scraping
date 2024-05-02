@@ -16,8 +16,8 @@ use maimai_scraping::{
         rating::{ScoreConstant, ScoreLevel},
         schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon},
     },
-    regex,
 };
+use maimai_scraping_utils::regex;
 use serde::Deserialize;
 
 #[derive(Parser)]
