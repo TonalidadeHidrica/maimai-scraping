@@ -8,10 +8,7 @@ use maimai_scraping::maimai::{
     schema::latest::AchievementValue,
 };
 use svg::{
-    node::{
-        element::{Line, Rectangle, Text as TextElement},
-        Text as TextNode,
-    },
+    node::element::{Line, Rectangle, Text},
     Document,
 };
 
@@ -75,16 +72,14 @@ fn main() -> anyhow::Result<()> {
                         .set("fill-opacity", 0.2),
                 )
                 .add(
-                    TextElement::new()
-                        .add(TextNode::new(start.to_string()))
+                    Text::new(start.to_string())
                         .set("x", x(start))
                         .set("y", y_bottom - percent_index as f64 * 2.)
                         .set("font-size", 3),
                 );
             if x(end) - x(start) >= 15. {
                 document = document.add(
-                    TextElement::new()
-                        .add(TextNode::new(score_constant.to_string()))
+                    Text::new(score_constant.to_string())
                         .set("x", (x(start) + x(end)) / 2.)
                         .set("y", y_center)
                         .set("text-anchor", "middle")
@@ -96,8 +91,7 @@ fn main() -> anyhow::Result<()> {
             }
             if !replace(&mut value_drawn[val.get() as usize], true) {
                 document = document.add(
-                    TextElement::new()
-                        .add(TextNode::new(val.to_string()))
+                    Text::new(val.to_string())
                         .set("x", x(start))
                         .set("y", y_center)
                         .set("text-anchor", "end")
@@ -105,8 +99,7 @@ fn main() -> anyhow::Result<()> {
                         .set("font-size", 6),
                 );
                 document = document.add(
-                    TextElement::new()
-                        .add(TextNode::new(val.to_string()))
+                    Text::new(val.to_string())
                         .set("x", x_range.end)
                         .set("y", y_center)
                         .set("alignment-baseline", "middle")

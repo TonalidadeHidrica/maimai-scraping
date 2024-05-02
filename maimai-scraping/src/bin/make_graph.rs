@@ -114,8 +114,7 @@ fn main() -> anyhow::Result<()> {
         }
         let x = sum / count as f64;
         document = document.add(
-            Text::new()
-                .add(svg::node::Text::new(date.to_string()))
+            Text::new(date.to_string())
                 .set("font-size", 10)
                 .set("dominant-baseline", "central")
                 .set(
