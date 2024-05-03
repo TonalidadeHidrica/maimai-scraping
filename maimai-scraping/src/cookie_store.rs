@@ -24,7 +24,6 @@ impl Debug for CookieStore {
 pub struct Credentials {
     pub sega_id: SegaId,
     pub password: Password,
-    pub aime_idx: Option<AimeIdx>,
 }
 
 /// Represents the value of `user_id` cookie, which is used to track user's identity

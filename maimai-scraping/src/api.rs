@@ -476,7 +476,6 @@ mod tests {
         let credentials = Credentials::builder()
             .sega_id(sega_id)
             .password(password)
-            .aime_idx(None)
             .build();
         let form = LoginForm::<Maimai>::new(&credentials, "ghi");
         let json = serde_json::to_string(&form).unwrap();
