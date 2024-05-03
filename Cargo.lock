@@ -234,6 +234,16 @@ name = "aime-net"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "derive_more",
+ "fs-err",
+ "getset",
+ "itertools 0.12.1",
+ "log",
+ "maimai-scraping-utils",
+ "once_cell",
+ "reqwest",
+ "reqwest_cookie_store",
+ "scraper",
 ]
 
 [[package]]
@@ -2640,6 +2650,18 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "winreg",
+]
+
+[[package]]
+name = "reqwest_cookie_store"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93ea5c6f30c19d766efe8d823c88f9abd1c56516648a0d4264ab2dc04cc19472"
+dependencies = [
+ "bytes",
+ "cookie_store",
+ "reqwest",
+ "url",
 ]
 
 [[package]]

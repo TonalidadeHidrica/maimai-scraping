@@ -1,6 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use anyhow::{bail, Context};
+use derive_more::{Display, From};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct AccessCode([u16; 5]);
@@ -64,3 +65,6 @@ mod tests {
         assert_eq!(&t.to_string(), s);
     }
 }
+
+#[derive(From, Display)]
+pub struct BlockId(String);
