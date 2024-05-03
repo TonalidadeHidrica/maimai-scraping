@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use maimai_scraping::cookie_store::{Credentials, UserIdentifier};
+use maimai_scraping::{cookie_store::UserIdentifier, fs_json_util::read_json};
 use screenshot_generator::generate;
 
 #[derive(Parser)]
@@ -18,7 +18,7 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
     let opts = Opts::parse();
 
-    let credentials = Credentials::load(opts.credentials_path)?;
+    let credentials = read_json(opts.credentials_path)?;
     generate(
         &opts.img_save_dir,
         credentials,

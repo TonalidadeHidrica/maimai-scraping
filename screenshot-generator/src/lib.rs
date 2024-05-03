@@ -8,13 +8,14 @@ use headless_chrome::{
 use log::info;
 use maimai_scraping::{
     api::find_aime_idx,
-    cookie_store::{Credentials, UserIdentifier},
+    cookie_store::UserIdentifier,
     maimai::{
         parser::{self, aime_selection, play_record},
         Maimai,
     },
     sega_trait::{SegaJapaneseAuth, SegaTrait},
 };
+use maimai_scraping_utils::sega_id::Credentials;
 use scraper::Html;
 
 pub fn generate(

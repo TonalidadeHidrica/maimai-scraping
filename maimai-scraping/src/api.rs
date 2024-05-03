@@ -6,11 +6,9 @@ use std::path::Path;
 use crate::cookie_store::AimeIdx;
 use crate::cookie_store::CookieStore;
 use crate::cookie_store::CookieStoreLoadError;
-use crate::cookie_store::Credentials;
-use crate::cookie_store::Password;
 use crate::cookie_store::PlayerName;
-use crate::cookie_store::SegaId;
 use crate::cookie_store::UserIdentifier;
+use crate::fs_json_util::read_json;
 use crate::maimai::MaimaiIntl;
 use crate::sega_trait::Idx;
 use crate::sega_trait::PlayTime;
@@ -21,6 +19,9 @@ use anyhow::bail;
 use itertools::Itertools;
 use log::debug;
 use log::info;
+use maimai_scraping_utils::sega_id::Credentials;
+use maimai_scraping_utils::sega_id::Password;
+use maimai_scraping_utils::sega_id::SegaId;
 use reqwest::header;
 use reqwest::redirect;
 use reqwest::IntoUrl;
@@ -109,7 +110,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
                 Err(client) => client,
             };
 
-        let credentials = Credentials::load(args.credentials_path)?;
+        let credentials = read_json(args.credentials_path)?;
         let aime_list = client.try_login(&credentials).await?;
         info!("Successfully logged in.");
         debug!("Available Aimes: {aime_list:?}");
@@ -325,7 +326,7 @@ impl<'p> SegaClient<'p, MaimaiIntl> {
             password: &'a Password,
             retention: u8,
         }
-        let credentials = Credentials::load(args.credentials_path)?;
+        let credentials: Credentials = read_json(args.credentials_path)?;
         let response = client
             .reqwest()
             .post("https://lng-tgk-aime-gw.am-all.net/common_auth/login/sid/")
@@ -465,7 +466,8 @@ pub fn find_aime_idx<'p>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{cookie_store::Credentials, maimai::Maimai};
+    use crate::maimai::Maimai;
+    use maimai_scraping_utils::sega_id::Credentials;
 
     use super::LoginForm;
 

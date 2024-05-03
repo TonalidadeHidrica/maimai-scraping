@@ -4,6 +4,7 @@ use std::{
     path::PathBuf,
 };
 
+use derive_more::{AsRef, Display, From};
 use fs_err::File;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
@@ -12,6 +13,11 @@ use typed_builder::TypedBuilder;
 pub struct CookieStore {
     pub user_id: UserIdCookie,
 }
+
+/// Represents the value of `user_id` cookie, which is used to track user's identity
+#[derive(Default, Debug, From, Display, Serialize, Deserialize)]
+pub struct UserIdCookie(String);
+
 impl Debug for CookieStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CookieStore")
@@ -19,28 +25,6 @@ impl Debug for CookieStore {
             .finish()
     }
 }
-
-#[derive(Debug, TypedBuilder, Serialize, Deserialize)]
-pub struct Credentials {
-    pub sega_id: SegaId,
-    pub password: Password,
-}
-
-/// Represents the value of `user_id` cookie, which is used to track user's identity
-#[derive(Default, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize)]
-pub struct UserIdCookie(String);
-
-#[derive(
-    Debug, derive_more::From, derive_more::AsRef, derive_more::Display, Serialize, Deserialize,
-)]
-#[as_ref(forward)]
-pub struct SegaId(String);
-
-#[derive(
-    Debug, derive_more::From, derive_more::AsRef, derive_more::Display, Serialize, Deserialize,
-)]
-#[as_ref(forward)]
-pub struct Password(String);
 
 #[derive(Clone, Debug, TypedBuilder, Serialize, Deserialize, clap::Args)]
 pub struct UserIdentifier {
@@ -50,36 +34,13 @@ pub struct UserIdentifier {
     pub player_name: Option<PlayerName>,
 }
 
-#[derive(
-    Clone,
-    PartialEq,
-    Eq,
-    Debug,
-    derive_more::From,
-    derive_more::AsRef,
-    derive_more::Display,
-    Serialize,
-    Deserialize,
-)]
+#[derive(Clone, PartialEq, Eq, Debug, From, AsRef, Display, Serialize, Deserialize)]
 pub struct FriendCode(String);
 
-#[derive(
-    Clone, PartialEq, Eq, Debug, derive_more::From, derive_more::Display, Serialize, Deserialize,
-)]
+#[derive(Clone, PartialEq, Eq, Debug, From, Display, Serialize, Deserialize)]
 pub struct PlayerName(String);
 
-#[derive(
-    Clone,
-    Copy,
-    Default,
-    PartialEq,
-    Eq,
-    Debug,
-    derive_more::From,
-    derive_more::Display,
-    Serialize,
-    Deserialize,
-)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug, From, Display, Serialize, Deserialize)]
 pub struct AimeIdx(u8);
 
 impl CookieStore {
@@ -109,17 +70,5 @@ impl From<io::Error> for CookieStoreLoadError {
             io::ErrorKind::NotFound => Self::NotFound,
             _ => Self::IOError(e),
         }
-    }
-}
-
-impl Credentials {
-    pub fn load(path: impl Into<PathBuf>) -> anyhow::Result<Self> {
-        Ok(serde_json::from_reader(BufReader::new(File::open(path)?))?)
-    }
-
-    pub fn save(&self, path: impl Into<PathBuf>) -> std::io::Result<()> {
-        let writer = BufWriter::new(File::create(path)?);
-        serde_json::to_writer(writer, self)?;
-        Ok(())
     }
 }
