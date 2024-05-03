@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+	"aime-net",
 	"edit-rating-analyzer-js",
 	"maimai-scraping",
 	"maimai-scraping-utils",

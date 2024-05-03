@@ -232,6 +232,9 @@ dependencies = [
 [[package]]
 name = "aime-net"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
 
 [[package]]
 name = "alloc-no-stdlib"
