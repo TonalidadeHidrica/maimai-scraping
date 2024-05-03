@@ -6,10 +6,9 @@ use deranged::RangedU8;
 use derive_more::{AsRef, From};
 use getset::{CopyGetters, Getters};
 use itertools::Itertools;
+use maimai_scraping_utils::fs_json_util::read_json;
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
-
-use crate::fs_json_util::read_json;
 
 use super::{
     load_score_level::MaimaiVersion,

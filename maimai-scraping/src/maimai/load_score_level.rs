@@ -5,11 +5,10 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use enum_iterator::Sequence;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
+use maimai_scraping_utils::fs_json_util::read_json;
 use serde::{Deserialize, Deserializer, Serialize};
 use strum::EnumString;
 use url::Url;
-
-use crate::fs_json_util::read_json;
 
 use super::{
     rating::{ScoreConstant, ScoreLevel},

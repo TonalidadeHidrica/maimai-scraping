@@ -6,15 +6,13 @@ use std::{
 use anyhow::{bail, Context};
 use clap::Parser;
 use itertools::Itertools;
-use maimai_scraping::{
-    fs_json_util::{read_json, write_json},
-    maimai::{
-        load_score_level::{self, MaimaiVersion, SongRaw},
-        official_song_list,
-        rating::ScoreLevel,
-        schema::latest::{SongIcon, SongName},
-    },
+use maimai_scraping::maimai::{
+    load_score_level::{self, MaimaiVersion, SongRaw},
+    official_song_list,
+    rating::ScoreLevel,
+    schema::latest::{SongIcon, SongName},
 };
+use maimai_scraping_utils::fs_json_util::{read_json, write_json};
 use serde::Serialize;
 use url::Url;
 

@@ -5,7 +5,6 @@ use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::{
     chrono_util::jst_now,
-    fs_json_util::write_json,
     maimai::{
         parser::rating_target::{RatingTargetEntry, RatingTargetList},
         rating::ScoreLevel,
@@ -13,6 +12,7 @@ use maimai_scraping::{
         MaimaiUserData,
     },
 };
+use maimai_scraping_utils::fs_json_util::write_json;
 use maplit::btreemap;
 
 #[derive(Parser)]

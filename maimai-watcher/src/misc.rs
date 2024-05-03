@@ -5,13 +5,13 @@ use joinery::JoinableIterator;
 use log::error;
 use maimai_scraping::{
     data_collector::load_or_create_user_data,
-    fs_json_util::read_json,
     maimai::{
         estimate_rating::{EstimatorConfig, ScoreConstantsStore},
         load_score_level::{self, RemovedSong},
         Maimai,
     },
 };
+use maimai_scraping_utils::fs_json_util::read_json;
 use url::Url;
 
 use crate::{

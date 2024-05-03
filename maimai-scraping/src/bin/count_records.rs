@@ -4,13 +4,11 @@ use chrono::NaiveDateTime;
 use clap::Parser;
 use hashbrown::HashSet;
 use itertools::Itertools;
-use maimai_scraping::{
-    fs_json_util::read_json,
-    maimai::{
-        estimate_rating::ScoreKey, load_score_level::MaimaiVersion, schema::latest::PlayTime,
-        MaimaiUserData,
-    },
+use maimai_scraping::maimai::{
+    estimate_rating::ScoreKey, load_score_level::MaimaiVersion, schema::latest::PlayTime,
+    MaimaiUserData,
 };
+use maimai_scraping_utils::fs_json_util::read_json;
 
 #[derive(Parser)]
 struct Opts {

@@ -2,10 +2,8 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use indexmap::IndexMap;
-use maimai_scraping::{
-    fs_json_util::read_json,
-    maimai::schema::latest::{PlayRecord, ScoreGeneration},
-};
+use maimai_scraping::maimai::schema::latest::{PlayRecord, ScoreGeneration};
+use maimai_scraping_utils::fs_json_util::read_json;
 
 #[derive(Parser)]
 struct Opts {

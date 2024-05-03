@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use maimai_scraping::{cookie_store::UserIdentifier, fs_json_util::read_json};
+use maimai_scraping::cookie_store::UserIdentifier;
+use maimai_scraping_utils::fs_json_util::read_json;
 use screenshot_generator::generate;
 
 #[derive(Parser)]

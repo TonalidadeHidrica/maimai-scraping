@@ -3,10 +3,10 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use clap::Parser;
-use maimai_scraping::{
-    fs_json_util::{read_json, write_json},
-    maimai::{parser::rating_target::RatingTargetFile, schema::latest::PlayRecord},
+use maimai_scraping::maimai::{
+    parser::rating_target::RatingTargetFile, schema::latest::PlayRecord,
 };
+use maimai_scraping_utils::fs_json_util::{read_json, write_json};
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();

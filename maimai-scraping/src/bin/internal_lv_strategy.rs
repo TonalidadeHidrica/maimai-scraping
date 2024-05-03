@@ -18,7 +18,6 @@ use lazy_format::lazy_format;
 use maimai_scraping::{
     api::{SegaClient, SegaClientInitializer},
     cookie_store::UserIdentifier,
-    fs_json_util::read_json,
     maimai::{
         estimate_rating::{EstimatorConfig, ScoreConstantsEntry, ScoreConstantsStore, ScoreKey},
         estimator_config_multiuser::{self, update_all},
@@ -30,6 +29,7 @@ use maimai_scraping::{
         Maimai,
     },
 };
+use maimai_scraping_utils::fs_json_util::read_json;
 use serde::Deserialize;
 
 #[derive(Parser)]

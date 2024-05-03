@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use maimai_scraping::fs_json_util::{read_json, write_json};
+use maimai_scraping_utils::fs_json_util::{read_json, write_json};
 use serde_json::{Map, Value};
 
 #[derive(Parser)]

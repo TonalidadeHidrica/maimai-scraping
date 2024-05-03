@@ -12,7 +12,6 @@ use maimai_scraping::api::SegaClientInitializer;
 use maimai_scraping::cookie_store::UserIdentifier;
 use maimai_scraping::data_collector::load_or_create_user_data;
 use maimai_scraping::data_collector::update_records;
-use maimai_scraping::fs_json_util::write_json;
 use maimai_scraping::maimai::Maimai;
 use maimai_scraping::maimai::MaimaiIntl;
 use maimai_scraping::ongeki::Ongeki;
@@ -21,6 +20,7 @@ use maimai_scraping::sega_trait::PlayTime;
 use maimai_scraping::sega_trait::PlayedAt;
 use maimai_scraping::sega_trait::SegaTrait;
 use maimai_scraping::sega_trait::SegaUserData;
+use maimai_scraping_utils::fs_json_util::write_json;
 use serde::Deserialize;
 use serde::Serialize;
 

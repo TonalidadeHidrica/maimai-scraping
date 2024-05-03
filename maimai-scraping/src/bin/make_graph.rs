@@ -3,16 +3,14 @@ use std::{convert::TryInto, io::BufWriter, ops::Range, path::PathBuf};
 use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
-use maimai_scraping::{
-    fs_json_util::read_json,
-    maimai::{
-        schema::{
-            latest::{ScoreDifficulty, SongName},
-            ver_20210316_2338::AchievementValue,
-        },
-        MaimaiUserData,
+use maimai_scraping::maimai::{
+    schema::{
+        latest::{ScoreDifficulty, SongName},
+        ver_20210316_2338::AchievementValue,
     },
+    MaimaiUserData,
 };
+use maimai_scraping_utils::fs_json_util::read_json;
 use svg::{
     node::element::{Circle, Line, Rectangle, Text},
     Document,

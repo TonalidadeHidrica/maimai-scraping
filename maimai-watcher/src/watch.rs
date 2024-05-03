@@ -11,7 +11,6 @@ use maimai_scraping::{
     api::{SegaClient, SegaClientAndRecordList, SegaClientInitializer},
     cookie_store::UserIdentifier,
     data_collector::{load_or_create_user_data, update_records},
-    fs_json_util::{read_json, write_json},
     maimai::{
         data_collector::update_targets,
         estimate_rating::{EstimatorConfig, ScoreConstantsStore},
@@ -22,6 +21,7 @@ use maimai_scraping::{
     },
     sega_trait::{self, Idx, PlayRecordTrait, PlayedAt, SegaTrait},
 };
+use maimai_scraping_utils::fs_json_util::{read_json, write_json};
 use tokio::{
     spawn,
     sync::mpsc::{self, error::TryRecvError},

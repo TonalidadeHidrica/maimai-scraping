@@ -8,15 +8,13 @@ use itertools::Itertools;
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::{info, warn};
-use maimai_scraping::{
-    fs_json_util::{read_json, write_json},
-    maimai::{
-        estimate_rating::ScoreKey,
-        load_score_level::{self, make_hash_multimap, InternalScoreLevel, MaimaiVersion},
-        rating::{ScoreConstant, ScoreLevel},
-        schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon},
-    },
+use maimai_scraping::maimai::{
+    estimate_rating::ScoreKey,
+    load_score_level::{self, make_hash_multimap, InternalScoreLevel, MaimaiVersion},
+    rating::{ScoreConstant, ScoreLevel},
+    schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon},
 };
+use maimai_scraping_utils::fs_json_util::{read_json, write_json};
 use maimai_scraping_utils::regex;
 use serde::Deserialize;
 

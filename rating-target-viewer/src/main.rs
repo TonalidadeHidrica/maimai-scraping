@@ -9,14 +9,12 @@ use actix_web::{
 use chrono::NaiveDateTime;
 use clap::Parser;
 use itertools::Itertools;
-use maimai_scraping::{
-    fs_json_util::read_json,
-    maimai::{
-        parser::rating_target::{RatingTargetEntry, RatingTargetFile},
-        schema::latest::{PlayTime, ScoreDifficulty, ScoreGeneration},
-        MaimaiUserData,
-    },
+use maimai_scraping::maimai::{
+    parser::rating_target::{RatingTargetEntry, RatingTargetFile},
+    schema::latest::{PlayTime, ScoreDifficulty, ScoreGeneration},
+    MaimaiUserData,
 };
+use maimai_scraping_utils::fs_json_util::read_json;
 
 #[derive(Parser)]
 struct Opts {

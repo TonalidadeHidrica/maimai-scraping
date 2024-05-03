@@ -4,8 +4,9 @@ use anyhow::Context;
 use clap::Parser;
 use maimai_scraping::{
     api::SegaClient, cookie_store::UserIdentifier, data_collector::load_or_create_user_data,
-    fs_json_util::write_json, maimai::data_collector::update_targets, maimai::Maimai,
+    maimai::data_collector::update_targets, maimai::Maimai,
 };
+use maimai_scraping_utils::fs_json_util::write_json;
 
 #[derive(Parser)]
 struct Opts {

@@ -1,7 +1,8 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use clap::Parser;
-use maimai_scraping::{fs_json_util::read_json, maimai::schema::latest::PlayRecord};
+use maimai_scraping::maimai::schema::latest::PlayRecord;
+use maimai_scraping_utils::fs_json_util::read_json;
 
 #[derive(Parser)]
 struct Opts {

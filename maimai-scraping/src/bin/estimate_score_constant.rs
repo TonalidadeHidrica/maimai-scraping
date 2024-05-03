@@ -1,14 +1,12 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use maimai_scraping::{
-    fs_json_util::read_json,
-    maimai::{
-        estimate_rating::{EstimatorConfig, PrintResult, ScoreConstantsStore},
-        load_score_level::{self, RemovedSong},
-        MaimaiUserData,
-    },
+use maimai_scraping::maimai::{
+    estimate_rating::{EstimatorConfig, PrintResult, ScoreConstantsStore},
+    load_score_level::{self, RemovedSong},
+    MaimaiUserData,
 };
+use maimai_scraping_utils::fs_json_util::read_json;
 
 #[derive(Parser)]
 struct Opts {

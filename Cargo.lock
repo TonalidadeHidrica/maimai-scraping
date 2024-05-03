@@ -1035,6 +1035,7 @@ dependencies = [
  "fs-err",
  "itertools 0.12.1",
  "maimai-scraping",
+ "maimai-scraping-utils",
  "rslint_parser",
 ]
 
@@ -1920,6 +1921,7 @@ dependencies = [
  "itertools 0.12.1",
  "lazy_format",
  "maimai-scraping",
+ "maimai-scraping-utils",
  "tokio",
 ]
 
@@ -1974,8 +1976,11 @@ dependencies = [
 name = "maimai-scraping-utils"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "derive_more",
+ "fs-err",
  "serde",
+ "serde_json",
  "typed-builder",
 ]
 
@@ -1994,6 +1999,7 @@ dependencies = [
  "lazy_format",
  "log",
  "maimai-scraping",
+ "maimai-scraping-utils",
  "reqwest",
  "serde",
  "splitty",

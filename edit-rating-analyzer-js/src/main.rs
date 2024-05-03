@@ -3,14 +3,12 @@ use std::path::PathBuf;
 use anyhow::{bail, Context};
 use clap::Parser;
 use itertools::{EitherOrBoth, Itertools};
-use maimai_scraping::{
-    fs_json_util::read_json,
-    maimai::{
-        estimate_rating::{EstimatorConfig, ScoreConstantsStore, ScoreKey},
-        load_score_level::{self, RemovedSong, Song, SongRaw},
-        MaimaiUserData,
-    },
+use maimai_scraping::maimai::{
+    estimate_rating::{EstimatorConfig, ScoreConstantsStore, ScoreKey},
+    load_score_level::{self, RemovedSong, Song, SongRaw},
+    MaimaiUserData,
 };
+use maimai_scraping_utils::fs_json_util::read_json;
 use rslint_parser::{
     ast::{Expr, ExprOrSpread, LiteralProp, ObjectExpr, ObjectProp, PropName, VarDecl},
     AstNode,

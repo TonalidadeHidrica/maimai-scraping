@@ -2,9 +2,8 @@ use std::path::PathBuf;
 
 use derive_more::From;
 use getset::{CopyGetters, Getters};
+use maimai_scraping_utils::fs_json_util::read_json;
 use serde::Deserialize;
-
-use crate::fs_json_util::read_json;
 
 use super::{
     estimate_rating::{EstimatorConfig, ScoreConstantsStore},
