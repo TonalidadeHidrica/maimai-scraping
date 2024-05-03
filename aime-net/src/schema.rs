@@ -66,5 +66,5 @@ mod tests {
     }
 }
 
-#[derive(From, Display)]
+#[derive(Debug, From, Display)]
 pub struct BlockId(String);

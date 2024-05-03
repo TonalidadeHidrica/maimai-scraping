@@ -6,13 +6,13 @@ use scraper::{selectable::Selectable, ElementRef, Html};
 
 use crate::schema::{AccessCode, BlockId};
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 #[getset(get = "pub")]
 pub struct AimeIndex {
     slots: [Option<AimeSlot>; 3],
 }
 
-#[derive(Getters, CopyGetters)]
+#[derive(Debug, Getters, CopyGetters)]
 pub struct AimeSlot {
     #[getset(get_copy = "pub")]
     access_code: AccessCode,
@@ -20,7 +20,8 @@ pub struct AimeSlot {
     block_id: BlockId,
 }
 
-pub fn aime_index(html: &Html) -> anyhow::Result<AimeIndex> {
+pub fn parse_aime_index(html: &Html) -> anyhow::Result<AimeIndex> {
+    fs_err::write("ignore/aime_index.html", html.html())?;
     let slots = html
         .select(selector!("li.c-myaime__target__item"))
         .map(parse_aime_slot)
@@ -39,8 +40,9 @@ fn parse_aime_slot(li: ElementRef) -> anyhow::Result<Option<AimeSlot>> {
         .select(selector!(r#"input[name="blockId"]"#))
         .next()
         .context("Block id not found")?
-        .text()
-        .collect::<String>()
+        .attr("value")
+        .context("Attribute `value` not found for block id")?
+        .to_owned()
         .into();
     Ok(Some(AimeSlot {
         access_code,

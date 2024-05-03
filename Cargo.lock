@@ -234,7 +234,9 @@ name = "aime-net"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "derive_more",
+ "env_logger 0.11.3",
  "fs-err",
  "getset",
  "itertools 0.12.1",
@@ -244,6 +246,8 @@ dependencies = [
  "reqwest",
  "reqwest_cookie_store",
  "scraper",
+ "serde",
+ "tokio",
 ]
 
 [[package]]
