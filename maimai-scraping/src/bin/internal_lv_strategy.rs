@@ -308,23 +308,24 @@ fn songs<'of, 'os, 'ns, 'nst>(
                 Known(lv) => Some(u8::from(lv)),
                 Unknown(_) => None,
             });
-        let estimation_override = || match (estimation.len(), splash_plus_lv) {
-            (1, _) => None,
-            (_, Some(lv)) => {
-                // Ad-hoc fitting
-                let level = match lv {
-                    124 => Some(129),
-                    123 => Some(128),
-                    122 => Some(127),
-                    121 => Some(127),
-                    120 => Some(127),
-                    _ => None,
-                };
-                Some(level?.try_into().unwrap())
+        let estimation_override = splash_plus_lv.and_then(|lv| {
+            let lv12p = ScoreLevel::new(12, true).unwrap();
+            let is_lv12p = (entry.candidates().iter()).all(|&x| ScoreLevel::from(x) == lv12p);
+            if estimation.len() == 1 || !is_lv12p {
+                return None;
             }
-            (_, _) => None,
-        };
-        let (estimation, confident) = match estimation_override() {
+            // Heuristic guess
+            let level = match lv {
+                124 => 129,
+                123 => 128,
+                122 => 127,
+                121 => 127,
+                120 => 127,
+                _ => return None,
+            };
+            Some(level.try_into().unwrap())
+        });
+        let (estimation, confident) = match estimation_override {
             Some(level) => (vec![level], false),
             None => (estimation, true),
         };
