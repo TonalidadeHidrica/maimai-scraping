@@ -1,7 +1,11 @@
 use std::path::PathBuf;
 
-use aime_net::api::AimeApi;
-use anyhow::Context;
+use aime_net::{
+    api::AimeApi,
+    parser::AimeSlot,
+    schema::{AccessCode, CardName},
+};
+use anyhow::{bail, Context};
 use clap::{Args, Parser, Subcommand};
 use maimai_scraping_utils::fs_json_util::read_json;
 
@@ -15,12 +19,20 @@ struct Opts {
 
 #[derive(Clone, Subcommand)]
 enum Sub {
-    RemoveByIndex(RemoveByIndex),
+    Remove(Remove),
+    Add(Add),
 }
 
 #[derive(Clone, Args)]
-struct RemoveByIndex {
+struct Remove {
     index: usize,
+}
+
+#[derive(Clone, Args)]
+struct Add {
+    index: usize,
+    access_code: AccessCode,
+    card_name: CardName,
 }
 
 #[tokio::main]
@@ -32,15 +44,24 @@ async fn main() -> anyhow::Result<()> {
         .login(&read_json(opts.credentials_path)?)
         .await?;
     println!("{result:?}");
+    let get_slot = |index| {
+        result
+            .slots()
+            .get(index)
+            .with_context(|| format!("Index of out bounds: {index}"))
+    };
 
     match opts.sub {
-        Sub::RemoveByIndex(sub) => {
-            let slot = result
-                .slots()
-                .get(sub.index)
-                .with_context(|| format!("Index of out bounds: {}", sub.index))?
-                .as_ref()
-                .context("This slot is empty")?;
+        Sub::Add(sub) => {
+            let AimeSlot::Empty(slot) = get_slot(sub.index)? else {
+                bail!("The specified slot is not empty");
+            };
+            client.add(slot, sub.access_code, sub.card_name).await?;
+        }
+        Sub::Remove(sub) => {
+            let AimeSlot::Filled(slot) = get_slot(sub.index)? else {
+                bail!("The specified slot is empty");
+            };
             client.remove(slot.block_id()).await?;
         }
     }

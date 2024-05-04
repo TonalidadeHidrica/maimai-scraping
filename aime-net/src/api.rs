@@ -5,16 +5,20 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Context};
 use log::{error, info, warn};
 use maimai_scraping_utils::sega_id::{Credentials, Password, SegaId};
 use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use scraper::Html;
 use serde::Serialize;
+use serde_with::{serde_as, DisplayFromStr};
 
 use crate::{
-    parser::{parse_aime_index, parse_remove_confirm_form, AimeIndex},
-    schema::BlockId,
+    parser::{
+        parse_add_confirm_form, parse_add_input_page, parse_aime_index, parse_remove_confirm_page,
+        AimeIndex, EmptySlot,
+    },
+    schema::{AccessCode, BlockId, CardName, SlotNo},
 };
 
 pub struct MayNotBeLoggedIn;
@@ -122,10 +126,69 @@ impl AimeApi<MayNotBeLoggedIn> {
 }
 
 impl AimeApi<LoggedIn> {
+    pub async fn add(
+        &self,
+        empty_slot: &EmptySlot,
+        access_code: AccessCode,
+        card_name: CardName,
+    ) -> anyhow::Result<()> {
+        let slot_no = empty_slot.slot_no();
+        let url = format!("https://my-aime.net/myaime/add/input?slotNo={slot_no}");
+        let response = self.reqwest.get(&url).send().await?;
+        if response.url().as_str() != url {
+            bail!("Redirected to unexpected url: {}", response.url().as_str());
+        }
+
+        #[serde_as]
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct InputForm {
+            slot_no: SlotNo,
+            #[serde_as(as = "DisplayFromStr")]
+            access_code: AccessCode,
+            comment: CardName,
+            regist: &'static str,
+        }
+        let url = "https://my-aime.net/myaime/add/confirm";
+        let form = InputForm {
+            slot_no,
+            access_code,
+            comment: card_name,
+            regist: "",
+        };
+        let response = self.reqwest.post(url).form(&form).send().await?;
+        match response.url().as_str() {
+            "https://my-aime.net/myaime/add/confirm" => {} // OK
+            "https://my-aime.net/myaime/add/input" => {
+                let run = || async {
+                    let response =
+                        parse_add_input_page(&Html::parse_document(&response.text().await?))?;
+                    bail!(
+                        "The following error message was found: {:?}",
+                        response.error()
+                    )
+                };
+                run().await.context("Aime add confirmation failed")?;
+                bail!("Unreachable");
+            }
+            url => bail!("Redirected to unexpected url: {url}"),
+        };
+
+        let doc = Html::parse_document(&response.text().await?);
+        let form = parse_add_confirm_form(&doc)?;
+        let url = "https://my-aime.net/myaime/add/procregister";
+        let response = self.reqwest.post(url).form(&form).send().await?;
+        if response.url().as_str() != "https://my-aime.net/myaime/add/comp" {
+            bail!("Redirected to unexpected url: {}", response.url().as_str());
+        }
+
+        Ok(())
+    }
+
     pub async fn remove(&self, block_id: &BlockId) -> anyhow::Result<()> {
         #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
         struct Form<'a> {
-            #[serde(rename = "blockId")]
             block_id: &'a BlockId,
             redirect: &'static str,
         }
@@ -140,7 +203,7 @@ impl AimeApi<LoggedIn> {
         }
 
         let url = "https://my-aime.net/myaime/remove/procremove";
-        let form = parse_remove_confirm_form(&Html::parse_document(&response.text().await?))?;
+        let form = parse_remove_confirm_page(&Html::parse_document(&response.text().await?))?;
         let response = self.reqwest.post(url).form(&form).send().await?;
         if response.url().as_str() != "https://my-aime.net/myaime/remove/comp" {
             bail!("Redirected to unexpected url: {}", response.url().as_str());

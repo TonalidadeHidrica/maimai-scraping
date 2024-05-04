@@ -247,6 +247,7 @@ dependencies = [
  "reqwest_cookie_store",
  "scraper",
  "serde",
+ "serde_with",
  "tokio",
 ]
 

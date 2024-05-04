@@ -1,7 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use anyhow::{bail, Context};
-use derive_more::From;
+use derive_more::{Display, From, FromStr};
 use serde::Serialize;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -54,11 +54,17 @@ impl FromStr for AccessCode {
     }
 }
 
+#[derive(Clone, Debug, From, FromStr, Serialize)]
+pub struct CardName(String);
+
 #[derive(Debug, From, Serialize)]
 pub struct BlockId(String);
 
 #[derive(Debug, From, Serialize)]
 pub struct VcToken(String);
+
+#[derive(Clone, Copy, Debug, From, FromStr, Display, Serialize)]
+pub struct SlotNo(usize);
 
 #[cfg(test)]
 mod tests {
