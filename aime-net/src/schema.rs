@@ -1,7 +1,8 @@
 use std::{fmt::Display, str::FromStr};
 
 use anyhow::{bail, Context};
-use derive_more::{Display, From};
+use derive_more::From;
+use serde::Serialize;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct AccessCode([u16; 5]);
@@ -53,6 +54,12 @@ impl FromStr for AccessCode {
     }
 }
 
+#[derive(Debug, From, Serialize)]
+pub struct BlockId(String);
+
+#[derive(Debug, From, Serialize)]
+pub struct VcToken(String);
+
 #[cfg(test)]
 mod tests {
     use crate::schema::AccessCode;
@@ -65,6 +72,3 @@ mod tests {
         assert_eq!(&t.to_string(), s);
     }
 }
-
-#[derive(Debug, From, Display)]
-pub struct BlockId(String);

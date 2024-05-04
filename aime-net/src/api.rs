@@ -12,7 +12,10 @@ use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use scraper::Html;
 use serde::Serialize;
 
-use crate::parser::{parse_aime_index, AimeIndex};
+use crate::{
+    parser::{parse_aime_index, parse_remove_confirm_form, AimeIndex},
+    schema::BlockId,
+};
 
 pub struct MayNotBeLoggedIn;
 pub struct LoggedIn;
@@ -118,7 +121,34 @@ impl AimeApi<MayNotBeLoggedIn> {
     }
 }
 
-impl AimeApi<LoggedIn> {}
+impl AimeApi<LoggedIn> {
+    pub async fn remove(&self, block_id: &BlockId) -> anyhow::Result<()> {
+        #[derive(Serialize)]
+        struct Form<'a> {
+            #[serde(rename = "blockId")]
+            block_id: &'a BlockId,
+            redirect: &'static str,
+        }
+        let url = "https://my-aime.net/myaime/procswitch";
+        let form = Form {
+            block_id,
+            redirect: "remove/confirm",
+        };
+        let response = self.reqwest.post(url).form(&form).send().await?;
+        if response.url().as_str() != "https://my-aime.net/myaime/remove/confirm" {
+            bail!("Redirected to unexpected url: {}", response.url().as_str());
+        }
+
+        let url = "https://my-aime.net/myaime/remove/procremove";
+        let form = parse_remove_confirm_form(&Html::parse_document(&response.text().await?))?;
+        let response = self.reqwest.post(url).form(&form).send().await?;
+        if response.url().as_str() != "https://my-aime.net/myaime/remove/comp" {
+            bail!("Redirected to unexpected url: {}", response.url().as_str());
+        }
+
+        Ok(())
+    }
+}
 
 impl<T> AimeApi<T> {
     fn save_cookie(&self) {
