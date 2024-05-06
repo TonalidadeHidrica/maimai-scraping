@@ -166,7 +166,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
         let cookie_store_path = Cow::Borrowed(args.cookie_store_path);
         let cookie_store = CookieStore::load(cookie_store_path.as_ref());
 
-        let client = reqwest_client::<MaimaiIntl>(aime_submit_path)?;
+        let client = reqwest_client::<T>(aime_submit_path)?;
         let make_client = |cookie_store| Self {
             client,
             // credentials_path,
