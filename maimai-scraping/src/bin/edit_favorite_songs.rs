@@ -27,6 +27,8 @@ async fn main() -> anyhow::Result<()> {
         credentials_path: &opts.credentials_path,
         cookie_store_path: &opts.cookie_store_path,
         user_identifier: &opts.user_identifier,
+        // There is no need to be Standard member to edit favorite songs
+        force_paid: false,
     })
     .await?;
     let page = fetch_favorite_songs_form(&mut client).await?;

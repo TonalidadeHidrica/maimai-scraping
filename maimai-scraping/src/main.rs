@@ -3,6 +3,7 @@ use std::fmt::Display;
 use std::path::Path;
 use std::path::PathBuf;
 
+use anyhow::bail;
 use clap::Parser;
 use clap::ValueEnum;
 use log::info;
@@ -35,6 +36,8 @@ struct Opts {
     cookie_store_path: Option<PathBuf>,
     #[clap(flatten)]
     user_identifier: UserIdentifier,
+    #[arg(long)]
+    force_paid: bool,
 }
 #[derive(Clone, ValueEnum)]
 enum Game {
@@ -50,21 +53,35 @@ async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     match opts.game {
         Game::Maimai => {
-            let client = SegaClient::<Maimai>::new(make_initializer::<Maimai>(&opts)).await?;
+            let client =
+                SegaClient::<Maimai>::new(make_initializer::<Maimai>(&opts, opts.force_paid))
+                    .await?;
             run(&opts, client).await
         }
         Game::Ongeki => {
-            let client = SegaClient::<Ongeki>::new(make_initializer::<Maimai>(&opts)).await?;
+            if opts.force_paid {
+                bail!("Explicit paid course for ongeki is not implemented yet!");
+            }
+            let client =
+                SegaClient::<Ongeki>::new(make_initializer::<Ongeki>(&opts, opts.force_paid))
+                    .await?;
             run(&opts, client).await
         }
         Game::MaimaiIntl => {
-            let client = SegaClient::new_maimai_intl(make_initializer::<MaimaiIntl>(&opts)).await?;
+            if opts.force_paid {
+                bail!("There is no Standard Course for Maimai International.");
+            }
+            let client =
+                SegaClient::new_maimai_intl(make_initializer::<MaimaiIntl>(&opts, ())).await?;
             run(&opts, client).await
         }
     }
 }
 
-fn make_initializer<T: SegaTrait>(opts: &Opts) -> SegaClientInitializer<'_, '_> {
+fn make_initializer<T: SegaTrait>(
+    opts: &Opts,
+    force_paid: T::ForcePaidFlag,
+) -> SegaClientInitializer<'_, '_, T> {
     SegaClientInitializer {
         credentials_path: opts
             .credentials_path
@@ -75,6 +92,7 @@ fn make_initializer<T: SegaTrait>(opts: &Opts) -> SegaClientInitializer<'_, '_> 
             .as_deref()
             .unwrap_or_else(|| Path::new(T::COOKIE_STORE_PATH)),
         user_identifier: &opts.user_identifier,
+        force_paid,
     }
 }
 

@@ -30,10 +30,11 @@ use scraper::Html;
 use serde::Serialize;
 
 #[derive(Clone, Copy)]
-pub struct SegaClientInitializer<'p, 'q> {
+pub struct SegaClientInitializer<'p, 'q, T: SegaTrait> {
     pub credentials_path: &'p Path,
     pub cookie_store_path: &'p Path,
     pub user_identifier: &'q UserIdentifier,
+    pub force_paid: T::ForcePaidFlag,
 }
 
 pub struct SegaClient<'p, T: SegaTrait> {
@@ -49,20 +50,23 @@ pub type SegaClientAndRecordList<'p, T> = (SegaClient<'p, T>, Vec<(PlayTime<T>, 
 impl<'p, T: SegaTrait> SegaClient<'p, T> {
     pub async fn new_with_default_path(
         user_identifier: &UserIdentifier,
+        force_paid: bool,
     ) -> anyhow::Result<(SegaClient<'p, T>, Vec<(PlayTime<T>, Idx<T>)>)>
     where
         T: SegaJapaneseAuth,
+        T: SegaTrait<ForcePaidFlag = bool>,
     {
         Self::new(SegaClientInitializer {
             credentials_path: Path::new(T::CREDENTIALS_PATH),
             cookie_store_path: Path::new(T::COOKIE_STORE_PATH),
             user_identifier,
+            force_paid,
         })
         .await
     }
 
     pub async fn new(
-        args: SegaClientInitializer<'p, '_>,
+        args: SegaClientInitializer<'p, '_, T>,
     ) -> anyhow::Result<SegaClientAndRecordList<'p, T>>
     where
         T: SegaJapaneseAuth,
@@ -154,7 +158,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
     }
 
     async fn make_client<U, UFut, R>(
-        args: &SegaClientInitializer<'p, '_>,
+        args: &SegaClientInitializer<'p, '_, T>,
         aime_submit_path: Option<&'static str>,
         runner: R,
     ) -> anyhow::Result<Result<(Self, U), Self>>
@@ -294,7 +298,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
 
 impl<'p> SegaClient<'p, MaimaiIntl> {
     pub async fn new_maimai_intl(
-        args: SegaClientInitializer<'p, '_>,
+        args: SegaClientInitializer<'p, '_, MaimaiIntl>,
     ) -> anyhow::Result<SegaClientAndRecordList<'p, MaimaiIntl>> {
         if args.user_identifier.friend_code.is_some() || args.user_identifier.player_name.is_some()
         {

@@ -80,6 +80,8 @@ impl SegaTrait for Maimai {
 
     const CREDENTIALS_PATH: &'static str = "./ignore/credentials_maimai.json";
     const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_maimai.json";
+
+    type ForcePaidFlag = bool;
 }
 
 pub struct MaimaiIntl;
@@ -111,6 +113,8 @@ impl SegaTrait for MaimaiIntl {
 
     const CREDENTIALS_PATH: &'static str = "./ignore/credentials_maimai_intl.json";
     const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_maimai_intl.json";
+
+    type ForcePaidFlag = ();
 }
 
 #[derive(Default, Serialize, Deserialize)]

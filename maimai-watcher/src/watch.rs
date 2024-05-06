@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::Context;
-use log::{error, info};
+use log::{error, info, warn};
 use maimai_scraping::{
     api::{SegaClient, SegaClientAndRecordList, SegaClientInitializer},
     cookie_store::UserIdentifier,
@@ -55,6 +55,7 @@ pub struct Config {
     pub estimator_config: EstimatorConfig,
     pub user_identifier: UserIdentifier,
     pub international: bool,
+    pub force_paid: bool,
 }
 
 #[derive(Debug)]
@@ -226,10 +227,22 @@ impl<'c, 's> Runner<'c, 's> {
         T: MaimaiPossiblyIntl,
     {
         let config = self.config;
+        let (force_paid, warn) = T::force_paid(config.force_paid);
+        if warn {
+            warn!("There is no Standard Course for Maimai International!");
+            webhook_send(
+                &reqwest::Client::new(),
+                &config.slack_post_webhook,
+                &config.user_id,
+                "There is no Standard Course for Maimai International!",
+            )
+            .await;
+        }
         let init = SegaClientInitializer {
             credentials_path: &self.config.credentials_path,
             cookie_store_path: &self.config.cookie_store_path,
             user_identifier: &self.config.user_identifier,
+            force_paid,
         };
         let (mut client, index) = T::new_client(init).await?;
         let last_played = index.first().context("There is no play yet.")?.0;
@@ -307,8 +320,10 @@ where
     PlayedAt<Self>: Debug,
     <Self as SegaTrait>::PlayRecord: PlayRecordTrait<PlayTime = PlayTime>,
 {
+    fn force_paid(force_paid: bool) -> (Self::ForcePaidFlag, bool);
+
     async fn new_client<'p>(
-        init: SegaClientInitializer<'p, '_>,
+        init: SegaClientInitializer<'p, '_, Self>,
     ) -> anyhow::Result<SegaClientAndRecordList<'p, Self>>;
 
     async fn update_targets(
@@ -320,8 +335,12 @@ where
 }
 
 impl MaimaiPossiblyIntl for Maimai {
+    fn force_paid(force_paid: bool) -> (bool, bool) {
+        (force_paid, false)
+    }
+
     async fn new_client<'p>(
-        init: SegaClientInitializer<'p, '_>,
+        init: SegaClientInitializer<'p, '_, Self>,
     ) -> anyhow::Result<SegaClientAndRecordList<'p, Self>> {
         SegaClient::<Maimai>::new(init).await
     }
@@ -337,8 +356,12 @@ impl MaimaiPossiblyIntl for Maimai {
 }
 
 impl MaimaiPossiblyIntl for MaimaiIntl {
+    fn force_paid(force_paid: bool) -> ((), bool) {
+        ((), !force_paid)
+    }
+
     async fn new_client<'p>(
-        init: SegaClientInitializer<'p, '_>,
+        init: SegaClientInitializer<'p, '_, Self>,
     ) -> anyhow::Result<SegaClientAndRecordList<'p, Self>> {
         SegaClient::new_maimai_intl(init).await
     }

@@ -150,6 +150,8 @@ impl SegaTrait for Ongeki {
 
     const CREDENTIALS_PATH: &'static str = "./ignore/credentials_ongeki.json";
     const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_ongeki.json";
+
+    type ForcePaidFlag = bool;
 }
 
 #[derive(Default, Serialize, Deserialize)]

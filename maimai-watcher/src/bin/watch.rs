@@ -26,6 +26,7 @@ async fn main() -> anyhow::Result<()> {
         estimator_config: opts.estimator_config,
         user_identifier: opts.user_identifier,
         international: opts.international,
+        force_paid: opts.force_paid,
     })
     .await?;
 
@@ -52,4 +53,6 @@ struct Opts {
     user_identifier: UserIdentifier,
     #[clap(long)]
     international: bool,
+    #[clap(long)]
+    force_paid: bool,
 }

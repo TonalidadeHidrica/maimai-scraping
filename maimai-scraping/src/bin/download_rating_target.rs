@@ -21,8 +21,9 @@ struct Opts {
 async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let mut data = load_or_create_user_data::<Maimai, _>(&opts.maimai_user_data_path)?;
+    // This feature always needs Standard Course, so we force payment here
     let (mut client, index) =
-        SegaClient::<Maimai>::new_with_default_path(&opts.user_identifier).await?;
+        SegaClient::<Maimai>::new_with_default_path(&opts.user_identifier, true).await?;
     let last_played = index.first().context("There is no play yet.")?.0;
     update_targets(
         &mut client,

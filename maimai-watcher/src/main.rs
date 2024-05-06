@@ -54,6 +54,8 @@ struct UserConfig {
     user_identifier: UserIdentifier,
     #[serde(default)]
     international: bool,
+    #[serde(default)]
+    force_paid: bool,
 }
 
 #[tokio::main]
@@ -323,6 +325,7 @@ fn watch_config(
         estimator_config: user_config.estimator_config,
         user_identifier: user_config.user_identifier.clone(),
         international: user_config.international,
+        force_paid: user_config.force_paid,
     }
 }
 

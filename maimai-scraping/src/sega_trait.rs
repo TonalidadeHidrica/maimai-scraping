@@ -43,6 +43,8 @@ pub trait SegaTrait: Sized {
 
     const CREDENTIALS_PATH: &'static str;
     const COOKIE_STORE_PATH: &'static str;
+
+    type ForcePaidFlag;
 }
 
 pub type RecordMap<T> = BTreeMap<PlayTime<T>, <T as SegaTrait>::PlayRecord>;
