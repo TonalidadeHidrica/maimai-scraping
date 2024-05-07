@@ -5,13 +5,20 @@ use url::Url;
 
 use crate::cookie_store::{AimeIdx, FriendCode, PlayerName};
 
+#[derive(Debug)]
+pub struct AimeEntry {
+    pub idx: AimeIdx,
+    pub player_name: PlayerName,
+    pub paid: bool,
+}
+
 pub trait SegaJapaneseAuth {
     const LOGIN_FORM_URL: &'static str;
     fn login_form_token_selector() -> &'static Selector;
     const LOGIN_URL: &'static str;
 
     const AIME_LIST_URL: &'static str;
-    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>>;
+    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<AimeEntry>>;
     fn select_aime_list_url(idx: AimeIdx) -> String;
     const AIME_SUBMIT_PATH: &'static str;
 

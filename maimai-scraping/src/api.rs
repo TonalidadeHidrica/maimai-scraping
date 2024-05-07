@@ -9,6 +9,7 @@ use crate::cookie_store::CookieStoreLoadError;
 use crate::cookie_store::PlayerName;
 use crate::cookie_store::UserIdentifier;
 use crate::maimai::MaimaiIntl;
+use crate::sega_trait::AimeEntry;
 use crate::sega_trait::Idx;
 use crate::sega_trait::PlayTime;
 use crate::sega_trait::SegaJapaneseAuth;
@@ -70,6 +71,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
     ) -> anyhow::Result<SegaClientAndRecordList<'p, T>>
     where
         T: SegaJapaneseAuth,
+        T: SegaTrait<ForcePaidFlag = bool>,
     {
         let mut client =
             match Self::make_client(&args, Some(T::AIME_SUBMIT_PATH), |mut client| async {
@@ -193,10 +195,7 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
         }
     }
 
-    async fn try_login(
-        &mut self,
-        credentials: &Credentials,
-    ) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>>
+    async fn try_login(&mut self, credentials: &Credentials) -> anyhow::Result<Vec<AimeEntry>>
     where
         T: SegaJapaneseAuth,
     {
@@ -450,16 +449,16 @@ async fn get_token<T: SegaJapaneseAuth>(client: &reqwest::Client) -> Result<Stri
 }
 
 pub fn find_aime_idx<'p>(
-    aime_list: &[(AimeIdx, PlayerName)],
+    aime_list: &[AimeEntry],
     player_name: impl Into<Option<&'p PlayerName>>,
 ) -> anyhow::Result<AimeIdx> {
     let expected = player_name.into();
     match aime_list
         .iter()
-        .filter_map(|&(aime_idx, ref player_name)| {
+        .filter_map(|entry| {
             expected
-                .map_or(true, |expected| player_name == expected)
-                .then_some(aime_idx)
+                .map_or(true, |expected| &entry.player_name == expected)
+                .then_some(entry.idx)
         })
         .collect_vec()[..]
     {

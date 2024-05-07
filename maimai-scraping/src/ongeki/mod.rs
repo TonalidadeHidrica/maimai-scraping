@@ -14,9 +14,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     chrono_util::jst_now,
     compare_htmls::elements_are_equivalent,
-    cookie_store::{AimeIdx, FriendCode, PlayerName},
+    cookie_store::{AimeIdx, FriendCode},
     sega_trait::{
-        record_map_serde, PlayRecordTrait, RecordMap, SegaJapaneseAuth, SegaTrait, SegaUserData,
+        record_map_serde, AimeEntry, PlayRecordTrait, RecordMap, SegaJapaneseAuth, SegaTrait,
+        SegaUserData,
     },
 };
 
@@ -101,7 +102,7 @@ impl SegaJapaneseAuth for Ongeki {
     const LOGIN_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/submit/";
 
     const AIME_LIST_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/aimeList/";
-    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>> {
+    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<AimeEntry>> {
         aime_selection_parser::parse(html)
     }
     fn select_aime_list_url(idx: AimeIdx) -> String {

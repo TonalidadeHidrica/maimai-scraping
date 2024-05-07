@@ -14,13 +14,14 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{
-    cookie_store::{AimeIdx, FriendCode, PlayerName},
+    cookie_store::{AimeIdx, FriendCode},
     maimai::{
         parser::{play_record::parse_record_index, rating_target::RatingTargetFile},
         schema::latest::{Idx, PlayRecord, PlayTime, PlayedAt},
     },
     sega_trait::{
-        record_map_serde, PlayRecordTrait, RecordMap, SegaJapaneseAuth, SegaTrait, SegaUserData,
+        record_map_serde, AimeEntry, PlayRecordTrait, RecordMap, SegaJapaneseAuth, SegaTrait,
+        SegaUserData,
     },
 };
 
@@ -39,7 +40,7 @@ impl SegaJapaneseAuth for Maimai {
             aime_idx
         )
     }
-    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>> {
+    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<AimeEntry>> {
         parser::aime_selection::parse(html)
     }
     const AIME_SUBMIT_PATH: &'static str = "/maimai-mobile/aimeList/submit/";
