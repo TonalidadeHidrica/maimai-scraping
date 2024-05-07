@@ -21,6 +21,7 @@ maimai-scraping = { version = "0.1.0", path = "../maimai-scraping" }
 maimai-scraping-utils = { version = "0.1.0", path = "../maimai-scraping-utils" }
 reqwest = { version = "0.12.4", features = ["json"] }
 serde = "1.0.171"
+serde_with = "3.8.1"
 splitty = "1.0.1"
 tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread", "sync"] }
 toml = "0.8.1"

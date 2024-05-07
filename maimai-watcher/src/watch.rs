@@ -14,7 +14,7 @@ use anyhow::Context;
 use log::{error, info, warn};
 use maimai_scraping::{
     api::{SegaClient, SegaClientAndRecordList, SegaClientInitializer},
-    cookie_store::{AimeIdx, UserIdentifier},
+    cookie_store::UserIdentifier,
     data_collector::{load_or_create_user_data, update_records},
     maimai::{
         data_collector::update_targets,
@@ -27,6 +27,8 @@ use maimai_scraping::{
     sega_trait::{self, Idx, PlayRecordTrait, PlayedAt, SegaTrait},
 };
 use maimai_scraping_utils::fs_json_util::{read_json, write_json};
+use serde::Deserialize;
+use serde_with::{serde_as, DisplayFromStr};
 use tokio::{
     spawn,
     sync::mpsc::{self, error::TryRecvError},
@@ -64,13 +66,15 @@ pub struct Config {
     pub aime_switch_config: Option<AimeSwitchConfig>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct ForcePaidConfig {
     pub after_use: Option<UserIdentifier>,
 }
-#[derive(Debug)]
+#[serde_as]
+#[derive(Clone, Debug, Deserialize)]
 pub struct AimeSwitchConfig {
-    // pub slot_index: usize,
+    pub slot_index: usize,
+    #[serde_as(as = "DisplayFromStr")]
     pub access_code: AccessCode,
     pub card_name: CardName,
     pub cookie_store_path: PathBuf,
@@ -287,14 +291,14 @@ impl<'c, 's> Runner<'c, 's> {
             let (api, aimes) = AimeApi::new(aime.cookie_store_path.to_owned())?
                 .login(&credentials)
                 .await?;
-            let slot = match &aimes.slots()[0 /* aime.slot_index */] {
+            let slot = match &aimes.slots()[aime.slot_index] {
                 AimeSlot::Filled(filled) => api.remove(filled).await?,
                 AimeSlot::Empty(empty) => *empty,
             };
-            sleep(Duration::from_secs(1));
+            sleep(Duration::from_secs(1)).await;
             api.add(&slot, aime.access_code, "".to_owned().into())
                 .await?;
-            sleep(Duration::from_secs(1));
+            sleep(Duration::from_secs(1)).await;
             info!("Switched aime.")
         }
 

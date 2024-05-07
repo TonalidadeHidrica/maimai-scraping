@@ -2,7 +2,7 @@ use std::{fmt::Display, str::FromStr};
 
 use anyhow::{bail, Context};
 use derive_more::{Display, From, FromStr};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct AccessCode([u16; 5]);
@@ -54,7 +54,7 @@ impl FromStr for AccessCode {
     }
 }
 
-#[derive(Clone, Debug, From, FromStr, Serialize)]
+#[derive(Clone, Debug, From, FromStr, Serialize, Deserialize)]
 pub struct CardName(String);
 
 #[derive(Debug, From, Serialize)]

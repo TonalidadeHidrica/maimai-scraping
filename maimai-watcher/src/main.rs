@@ -55,7 +55,7 @@ struct UserConfig {
     #[serde(default)]
     international: bool,
     #[serde(default)]
-    force_paid: Option<ForcePaidConfig>,
+    force_paid_config: Option<ForcePaidConfig>,
     #[serde(default)]
     aime_switch_config: Option<AimeSwitchConfig>,
 }
@@ -327,8 +327,8 @@ fn watch_config(
         estimator_config: user_config.estimator_config,
         user_identifier: user_config.user_identifier.clone(),
         international: user_config.international,
-        force_paid_config: user_config.force_paid_config,
-        aime_switch_config: user_config.aime_switch_config,
+        force_paid_config: user_config.force_paid_config.clone(),
+        aime_switch_config: user_config.aime_switch_config.clone(),
     }
 }
 
