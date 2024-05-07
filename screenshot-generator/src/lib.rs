@@ -2,14 +2,16 @@ use std::{path::Path, thread::sleep, time::Duration};
 
 use anyhow::{bail, Context};
 use headless_chrome::{
+    browser::tab::element::BoxModel,
     protocol::cdp::Page::{CaptureScreenshotFormatOption::Png, Viewport},
-    Browser, LaunchOptionsBuilder,
+    Browser, LaunchOptionsBuilder, Tab,
 };
 use log::info;
 use maimai_scraping::{
     api::find_aime_idx,
     cookie_store::UserIdentifier,
     maimai::{
+        data_collector::RATING_TARGET_URL,
         parser::{self, aime_selection, play_record},
         Maimai,
     },
@@ -31,7 +33,7 @@ pub fn generate(
     let browser = Browser::new(
         LaunchOptionsBuilder::default()
             .port(port)
-            .window_size(Some((1920, 1920)))
+            .window_size(Some((1920, 19200))) // Wow, huge window...
             .build()?,
     )
     .expect("Failed to create browser");
@@ -71,8 +73,26 @@ pub fn generate(
     }
 
     wait();
+    tab.navigate_to(RATING_TARGET_URL)?;
+    tab.wait_until_navigated()?;
+    if tab.get_url().as_str() != RATING_TARGET_URL {
+        bail!("Failed to navigate to rating target");
+    }
+
+    let viewport = {
+        let top = tab.wait_for_element("img.title")?.get_box_model()?;
+        let bottom = tab.wait_for_element("div:has(+footer)")?.get_box_model()?;
+        viewport_by_top_and_bottom(top, bottom, 10.)
+    };
+    let screenshot = tab.capture_screenshot(Png, None, Some(viewport), true)?;
+    fs_err::write(img_save_dir.join("test.png"), screenshot)?;
+
+    return Ok(());
+
+    wait();
     tab.navigate_to(Maimai::RECORD_URL)?;
     tab.wait_until_navigated()?;
+    // resize_to_full_page(&tab)?;
     let records = play_record::parse_record_index(&Html::parse_document(&tab.get_content()?))?;
     for (_time, idx) in records {
         wait();
@@ -85,15 +105,8 @@ pub fn generate(
             let bottom = tab
                 .wait_for_element(".gray_block:has(.playlog_fl_block)")?
                 .get_box_model()?;
-            let margin = 5.;
-            let y = top.content.most_top();
-            Viewport {
-                x: top.content.most_left() - margin,
-                y: y - margin,
-                width: top.content.width() + margin * 2.,
-                height: bottom.padding.bottom_right.y - y + margin * 2.,
-                scale: 1.,
-            }
+            let margin = 10.;
+            viewport_by_top_and_bottom(top, bottom, margin)
         };
         let png_path = {
             let title_escaped = {
@@ -115,6 +128,28 @@ pub fn generate(
     }
 
     Ok(())
+}
+
+fn resize_to_full_page(tab: &Tab) -> anyhow::Result<()> {
+    let bounds = tab.get_bounds()?;
+    tab.set_bounds(headless_chrome::types::Bounds::Normal {
+        left: Some(bounds.left),
+        top: Some(bounds.top),
+        width: Some(1920.),
+        height: Some(1080.),
+    })?;
+    Ok(())
+}
+
+fn viewport_by_top_and_bottom(top: BoxModel, bottom: BoxModel, margin: f64) -> Viewport {
+    let y = top.content.most_top();
+    Viewport {
+        x: bottom.content.most_left() - margin,
+        y: y - margin,
+        width: bottom.content.width() + margin * 2.,
+        height: bottom.padding.bottom_right.y - y + margin * 2.,
+        scale: 1.,
+    }
 }
 
 fn disallowed_for_filename(c: char) -> bool {
