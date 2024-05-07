@@ -16,7 +16,7 @@ use maimai_scraping::{cookie_store::UserIdentifier, maimai::estimate_rating::Est
 use maimai_watcher::{
     misc,
     slack::webhook_send,
-    watch::{self, TimeoutConfig, UserId, WatchHandler},
+    watch::{self, AimeSwitchConfig, ForcePaidConfig, TimeoutConfig, UserId, WatchHandler},
 };
 use serde::Deserialize;
 use splitty::split_unquoted_whitespace;
@@ -55,7 +55,9 @@ struct UserConfig {
     #[serde(default)]
     international: bool,
     #[serde(default)]
-    force_paid: bool,
+    force_paid: Option<ForcePaidConfig>,
+    #[serde(default)]
+    aime_switch_config: Option<AimeSwitchConfig>,
 }
 
 #[tokio::main]
@@ -325,7 +327,8 @@ fn watch_config(
         estimator_config: user_config.estimator_config,
         user_identifier: user_config.user_identifier.clone(),
         international: user_config.international,
-        force_paid: user_config.force_paid,
+        force_paid_config: user_config.force_paid_config,
+        aime_switch_config: user_config.aime_switch_config,
     }
 }
 

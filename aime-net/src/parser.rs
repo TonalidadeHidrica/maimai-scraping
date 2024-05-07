@@ -25,9 +25,20 @@ pub struct FilledSlot {
     access_code: AccessCode,
     #[getset(get = "pub")]
     block_id: BlockId,
+    #[getset(get = "pub(crate)")]
+    slot_no: SlotNo,
+}
+impl FilledSlot {
+    // TODO: consume the value
+    pub(crate) fn to_empty(&self) -> EmptySlot {
+        EmptySlot {
+            slot_no: self.slot_no,
+        }
+    }
 }
 
-#[derive(Debug, CopyGetters)]
+// TODO do not copy
+#[derive(Clone, Copy, Debug, CopyGetters)]
 pub struct EmptySlot {
     #[getset(get_copy = "pub")]
     slot_no: SlotNo,
@@ -39,10 +50,9 @@ pub fn parse_aime_index(html: &Html) -> anyhow::Result<AimeIndex> {
         .select(selector!("li.c-myaime__target__item"))
         .enumerate()
         .map(|(slot_no, li)| {
-            anyhow::Ok(match parse_aime_slot(li)? {
-                None => AimeSlot::Empty(EmptySlot {
-                    slot_no: slot_no.into(),
-                }),
+            let slot_no = slot_no.into();
+            anyhow::Ok(match parse_aime_slot(li, slot_no)? {
+                None => AimeSlot::Empty(EmptySlot { slot_no }),
                 Some(slot) => AimeSlot::Filled(slot),
             })
         })
@@ -52,7 +62,7 @@ pub fn parse_aime_index(html: &Html) -> anyhow::Result<AimeIndex> {
     Ok(AimeIndex { slots })
 }
 
-fn parse_aime_slot(li: ElementRef) -> anyhow::Result<Option<FilledSlot>> {
+fn parse_aime_slot(li: ElementRef, slot_no: SlotNo) -> anyhow::Result<Option<FilledSlot>> {
     let access_code = match li.select(selector!("dd.c-aime__info__data")).next() {
         Some(dd) => dd.text().collect::<String>().parse()?,
         None => return Ok(None),
@@ -68,6 +78,7 @@ fn parse_aime_slot(li: ElementRef) -> anyhow::Result<Option<FilledSlot>> {
     Ok(Some(FilledSlot {
         access_code,
         block_id,
+        slot_no,
     }))
 }
 
@@ -118,12 +129,12 @@ pub fn parse_add_input_page(html: &Html) -> anyhow::Result<AddInputPage> {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AddConfirmForm<'a> {
+pub struct AddConfirmForm {
     #[serde(rename = "vctoken")]
-    vc_token: &'a str,
-    slot_no: &'a str,
-    access_code: &'a str,
-    comment: &'a str,
+    vc_token: String,
+    slot_no: String,
+    access_code: String,
+    comment: String,
 }
 
 pub fn parse_add_confirm_form(html: &Html) -> anyhow::Result<AddConfirmForm> {
@@ -132,25 +143,29 @@ pub fn parse_add_confirm_form(html: &Html) -> anyhow::Result<AddConfirmForm> {
         .next()
         .context("vctoken element not found")?
         .attr("value")
-        .context("vctoken value not found")?;
+        .context("vctoken value not found")?
+        .to_owned();
     let slot_no = html
         .select(selector!(r#"input[name="slotNo"]"#))
         .next()
         .context("slotNo element not found")?
         .attr("value")
-        .context("slotNo value not found")?;
+        .context("slotNo value not found")?
+        .to_owned();
     let access_code = html
         .select(selector!(r#"input[name="accessCode"]"#))
         .next()
         .context("accessCode element not found")?
         .attr("value")
-        .context("accessCode value not found")?;
+        .context("accessCode value not found")?
+        .to_owned();
     let comment = html
         .select(selector!(r#"input[name="comment"]"#))
         .next()
         .context("comment element not found")?
         .attr("value")
-        .context("comment value not found")?;
+        .context("comment value not found")?
+        .to_owned();
     Ok(AddConfirmForm {
         vc_token,
         slot_no,

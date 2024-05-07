@@ -5,11 +5,16 @@ use std::{
     time::{Duration, Instant},
 };
 
+use aime_net::{
+    api::AimeApi,
+    parser::AimeSlot,
+    schema::{AccessCode, CardName},
+};
 use anyhow::Context;
 use log::{error, info, warn};
 use maimai_scraping::{
     api::{SegaClient, SegaClientAndRecordList, SegaClientInitializer},
-    cookie_store::UserIdentifier,
+    cookie_store::{AimeIdx, UserIdentifier},
     data_collector::{load_or_create_user_data, update_records},
     maimai::{
         data_collector::update_targets,
@@ -55,7 +60,20 @@ pub struct Config {
     pub estimator_config: EstimatorConfig,
     pub user_identifier: UserIdentifier,
     pub international: bool,
-    pub force_paid: bool,
+    pub force_paid_config: Option<ForcePaidConfig>,
+    pub aime_switch_config: Option<AimeSwitchConfig>,
+}
+
+#[derive(Debug)]
+pub struct ForcePaidConfig {
+    pub after_use: Option<UserIdentifier>,
+}
+#[derive(Debug)]
+pub struct AimeSwitchConfig {
+    // pub slot_index: usize,
+    pub access_code: AccessCode,
+    pub card_name: CardName,
+    pub cookie_store_path: PathBuf,
 }
 
 #[derive(Debug)]
@@ -161,6 +179,41 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
                 break;
             }
         }
+
+        if let Some(force_paid) = config.force_paid_config {
+            if config.international {
+                error!("There is no paid course for maimai interantional!  Skipping the swithcing back process.");
+            } else if let Some(after_use) = force_paid.after_use {
+                let init = SegaClientInitializer {
+                    credentials_path: &config.credentials_path,
+                    cookie_store_path: &config.cookie_store_path,
+                    user_identifier: &after_use,
+                    force_paid: true,
+                };
+                match Maimai::new_client(init).await {
+                    Ok(_) => {
+                        webhook_send(
+                            &reqwest::Client::new(),
+                            &config.slack_post_webhook,
+                            &config.user_id,
+                            "Standard course has been given back to the original account.",
+                        )
+                        .await;
+                    }
+                    Err(e) => {
+                        let e = e.context("Failed to switch back the paid account");
+                        error!("{e:#}");
+                        webhook_send(
+                            &reqwest::Client::new(),
+                            &config.slack_post_webhook,
+                            &config.user_id,
+                            format!("{e:#}"),
+                        )
+                        .await;
+                    }
+                }
+            }
+        }
     });
     Ok(WatchHandler(tx))
 }
@@ -227,7 +280,25 @@ impl<'c, 's> Runner<'c, 's> {
         T: MaimaiPossiblyIntl,
     {
         let config = self.config;
-        let (force_paid, warn) = T::force_paid(config.force_paid);
+
+        // Select aime if specified
+        if let Some(aime) = &config.aime_switch_config {
+            let credentials = read_json(&config.credentials_path)?;
+            let (api, aimes) = AimeApi::new(aime.cookie_store_path.to_owned())?
+                .login(&credentials)
+                .await?;
+            let slot = match &aimes.slots()[0 /* aime.slot_index */] {
+                AimeSlot::Filled(filled) => api.remove(filled).await?,
+                AimeSlot::Empty(empty) => *empty,
+            };
+            sleep(Duration::from_secs(1));
+            api.add(&slot, aime.access_code, "".to_owned().into())
+                .await?;
+            sleep(Duration::from_secs(1));
+            info!("Switched aime.")
+        }
+
+        let (force_paid, warn) = T::force_paid(config.force_paid_config.is_some());
         if warn {
             warn!("There is no Standard Course for Maimai International!");
             webhook_send(

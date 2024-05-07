@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
             let AimeSlot::Filled(slot) = get_slot(sub.index)? else {
                 bail!("The specified slot is empty");
             };
-            client.remove(slot.block_id()).await?;
+            client.remove(slot).await?;
         }
     }
 

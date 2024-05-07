@@ -2004,6 +2004,7 @@ name = "maimai-watcher"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "aime-net",
  "anyhow",
  "clap",
  "ctrlc",

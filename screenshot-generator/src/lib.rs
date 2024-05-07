@@ -47,10 +47,11 @@ pub fn generate(
     tab.wait_for_element(aime_selection::DIV)?;
     let aime_list = aime_selection::parse(&Html::parse_document(&tab.get_content()?))?;
     info!("{aime_list:?}");
-    let aime_idx = find_aime_idx(&aime_list, user_identifier.player_name.as_ref())?;
+    let aime_entry = find_aime_idx(&aime_list, user_identifier.player_name.as_ref())?;
     wait();
     tab.wait_for_element(&format!(
-        r#"input[name="idx"][value="{aime_idx}"] + button"#
+        r#"input[name="idx"][value="{}"] + button"#,
+        aime_entry.idx,
     ))?
     .click()?;
 

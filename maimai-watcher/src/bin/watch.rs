@@ -6,7 +6,7 @@ use maimai_scraping::{
     maimai::{estimate_rating::EstimatorConfig, Maimai},
     sega_trait::SegaTrait,
 };
-use maimai_watcher::watch::{self, TimeoutConfig};
+use maimai_watcher::watch::{self, ForcePaidConfig, TimeoutConfig};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -26,7 +26,10 @@ async fn main() -> anyhow::Result<()> {
         estimator_config: opts.estimator_config,
         user_identifier: opts.user_identifier,
         international: opts.international,
-        force_paid: opts.force_paid,
+        force_paid_config: opts
+            .force_paid
+            .then_some(ForcePaidConfig { after_use: None }),
+        aime_switch_config: None,
     })
     .await?;
 

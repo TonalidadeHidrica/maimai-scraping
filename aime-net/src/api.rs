@@ -16,7 +16,7 @@ use serde_with::{serde_as, DisplayFromStr};
 use crate::{
     parser::{
         parse_add_confirm_form, parse_add_input_page, parse_aime_index, parse_remove_confirm_page,
-        AimeIndex, EmptySlot,
+        AimeIndex, EmptySlot, FilledSlot,
     },
     schema::{AccessCode, BlockId, CardName, SlotNo},
 };
@@ -174,8 +174,7 @@ impl AimeApi<LoggedIn> {
             url => bail!("Redirected to unexpected url: {url}"),
         };
 
-        let doc = Html::parse_document(&response.text().await?);
-        let form = parse_add_confirm_form(&doc)?;
+        let form = parse_add_confirm_form(&Html::parse_document(&response.text().await?))?;
         let url = "https://my-aime.net/myaime/add/procregister";
         let response = self.reqwest.post(url).form(&form).send().await?;
         if response.url().as_str() != "https://my-aime.net/myaime/add/comp" {
@@ -185,7 +184,7 @@ impl AimeApi<LoggedIn> {
         Ok(())
     }
 
-    pub async fn remove(&self, block_id: &BlockId) -> anyhow::Result<()> {
+    pub async fn remove(&self, filled_slot: &FilledSlot) -> anyhow::Result<EmptySlot> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
         struct Form<'a> {
@@ -194,7 +193,7 @@ impl AimeApi<LoggedIn> {
         }
         let url = "https://my-aime.net/myaime/procswitch";
         let form = Form {
-            block_id,
+            block_id: filled_slot.block_id(),
             redirect: "remove/confirm",
         };
         let response = self.reqwest.post(url).form(&form).send().await?;
@@ -209,7 +208,7 @@ impl AimeApi<LoggedIn> {
             bail!("Redirected to unexpected url: {}", response.url().as_str());
         }
 
-        Ok(())
+        Ok(filled_slot.to_empty())
     }
 }
 
