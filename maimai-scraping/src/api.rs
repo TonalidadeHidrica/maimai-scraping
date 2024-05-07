@@ -3,7 +3,6 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::path::Path;
 
-use crate::cookie_store::AimeIdx;
 use crate::cookie_store::CookieStore;
 use crate::cookie_store::CookieStoreLoadError;
 use crate::cookie_store::PlayerName;
@@ -19,6 +18,7 @@ use anyhow::bail;
 use itertools::Itertools;
 use log::debug;
 use log::info;
+use log::warn;
 use maimai_scraping_utils::fs_json_util::read_json;
 use maimai_scraping_utils::sega_id::Credentials;
 use maimai_scraping_utils::sega_id::Password;
@@ -122,10 +122,31 @@ impl<'p, T: SegaTrait> SegaClient<'p, T> {
         debug!("Available Aimes: {aime_list:?}");
 
         // Determine which Aime to use
-        let aime_idx = find_aime_idx(&aime_list, args.user_identifier.player_name.as_ref())?;
+        let aime_entry = find_aime_idx(&aime_list, args.user_identifier.player_name.as_ref())?;
+
+        if args.force_paid && !aime_entry.paid {
+            info!("This account is not paid!  Switching to paid account.");
+            if !aime_list.iter().any(|x| x.paid) {
+                warn!("No paid aime was found in the retrieved aime list!  The following operations is likely to fail.");
+            }
+            let url = T::switch_to_paid_url(aime_entry.idx);
+            let response = client.client.get(&url).send().await?;
+            let form = T::parse_paid_confirmation(&Html::parse_document(&response.text().await?))?;
+            let url = T::SWITCH_PAID_CONFIRMATION_URL;
+            let response = client.client.post(url).form(&form).send().await?;
+            if response.url().as_str() != T::AIME_LIST_URL {
+                bail!("Error: redirected to unexpected url while logging in: {url}");
+            }
+            let aime_list =
+                T::parse_aime_selection_page(&Html::parse_document(&response.text().await?))?;
+            if !aime_list.iter().any(|x| x.idx == aime_entry.idx && x.paid) {
+                bail!("Failed to switch to paid")
+            }
+            info!("Successfully switched to paid account.")
+        }
 
         // Select Aime
-        let url = T::select_aime_list_url(aime_idx);
+        let url = T::select_aime_list_url(aime_entry.idx);
         // let (_, location) = client.fetch_authenticated(&url).await?;
         let response = client.client.get(&url).send().await?;
         let location = Self::get_location(&response);
@@ -451,18 +472,14 @@ async fn get_token<T: SegaJapaneseAuth>(client: &reqwest::Client) -> Result<Stri
 pub fn find_aime_idx<'p>(
     aime_list: &[AimeEntry],
     player_name: impl Into<Option<&'p PlayerName>>,
-) -> anyhow::Result<AimeIdx> {
+) -> anyhow::Result<&AimeEntry> {
     let expected = player_name.into();
     match aime_list
         .iter()
-        .filter_map(|entry| {
-            expected
-                .map_or(true, |expected| &entry.player_name == expected)
-                .then_some(entry.idx)
-        })
+        .filter(|entry| expected.map_or(true, |expected| &entry.player_name == expected))
         .collect_vec()[..]
     {
-        [aime_idx] => Ok(aime_idx),
+        [aime] => Ok(aime),
         _ => bail!("The Aime with player name {expected:?} cannot be uniquely determined"),
     }
 }

@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, fmt::Debug};
 
 use scraper::{Html, Selector};
+use serde::Serialize;
 use url::Url;
 
 use crate::cookie_store::{AimeIdx, FriendCode, PlayerName};
@@ -26,6 +27,10 @@ pub trait SegaJapaneseAuth {
     fn parse_friend_code_page(html: &Html) -> anyhow::Result<FriendCode>;
 
     const HOME_URL: &'static str;
+    fn switch_to_paid_url(aime_idx: AimeIdx) -> String;
+    type ResetChargedAimeForm: Serialize;
+    fn parse_paid_confirmation(html: &Html) -> anyhow::Result<Self::ResetChargedAimeForm>;
+    const SWITCH_PAID_CONFIRMATION_URL: &'static str;
 }
 
 pub type Idx<T> = <<T as SegaTrait>::PlayRecord as PlayRecordTrait>::Idx;

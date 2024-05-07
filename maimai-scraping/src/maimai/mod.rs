@@ -25,6 +25,8 @@ use crate::{
     },
 };
 
+use self::parser::aime_selection::ResetChargedAimeForm;
+
 pub struct Maimai;
 impl SegaJapaneseAuth for Maimai {
     const LOGIN_FORM_URL: &'static str = "https://maimaidx.jp/maimai-mobile/";
@@ -52,6 +54,15 @@ impl SegaJapaneseAuth for Maimai {
     }
 
     const HOME_URL: &'static str = "https://maimaidx.jp/maimai-mobile/home/";
+    fn switch_to_paid_url(aime_idx: AimeIdx) -> String {
+        format!("https://maimaidx.jp/maimai-mobile/resetChargeAime/?idx={aime_idx}")
+    }
+    type ResetChargedAimeForm = ResetChargedAimeForm;
+    fn parse_paid_confirmation(html: &Html) -> anyhow::Result<ResetChargedAimeForm> {
+        parser::aime_selection::parse_paid_confirmation(html)
+    }
+    const SWITCH_PAID_CONFIRMATION_URL: &'static str =
+        "https://maimaidx.jp/maimai-mobile/resetChargeAime/submit/";
 }
 impl SegaTrait for Maimai {
     const ERROR_PATH: &'static str = "/maimai-mobile/error/";

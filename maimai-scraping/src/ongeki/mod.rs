@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use fs_err::File;
 use log::{error, info, trace};
 use maimai_scraping_utils::selector;
@@ -120,6 +120,17 @@ impl SegaJapaneseAuth for Ongeki {
     }
 
     const HOME_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/home/";
+
+    fn switch_to_paid_url(aime_idx: AimeIdx) -> String {
+        format!("https://ongeki-net.com/ongeki-mobile/resetChargeAime/?idx={aime_idx}")
+    }
+    type ResetChargedAimeForm = ();
+    fn parse_paid_confirmation(_html: &Html) -> anyhow::Result<Self::ResetChargedAimeForm> {
+        // TODO: implement?
+        bail!("Switching to paid is not supported yet")
+    }
+    const SWITCH_PAID_CONFIRMATION_URL: &'static str =
+        "https://ongeki-net.com/ongeki-mobile/resetChargeAime/submit/";
 }
 impl SegaTrait for Ongeki {
     const ERROR_PATH: &'static str = "/ongeki-mobile/error/";

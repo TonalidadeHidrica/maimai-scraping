@@ -19,6 +19,8 @@ struct Opts {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    pretty_env_logger::init();
+
     let opts = Opts::parse();
     let mut data = load_or_create_user_data::<Maimai, _>(&opts.maimai_user_data_path)?;
     // This feature always needs Standard Course, so we force payment here
