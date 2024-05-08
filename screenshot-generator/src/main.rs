@@ -13,10 +13,12 @@ struct Opts {
     user_identifier: UserIdentifier,
     #[clap(long)]
     remote_debugging_port: Option<u16>,
+    #[clap(long)]
+    run_tool: bool,
 }
 
 fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    env_logger::builder().format_timestamp_nanos().init();
     let opts = Opts::parse();
 
     let credentials = read_json(opts.credentials_path)?;
@@ -25,6 +27,7 @@ fn main() -> anyhow::Result<()> {
         credentials,
         opts.user_identifier,
         opts.remote_debugging_port,
+        opts.run_tool,
     )?;
     Ok(())
 }

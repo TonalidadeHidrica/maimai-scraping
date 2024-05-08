@@ -1,11 +1,20 @@
-use std::{collections::BTreeSet, path::Path, thread::sleep, time::Duration};
+use std::{
+    collections::BTreeSet,
+    path::Path,
+    sync::{mpsc, Arc},
+    thread::sleep,
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail, Context};
-use chrono::NaiveDateTime;
+use chrono::{DateTime, FixedOffset, NaiveDateTime};
 use headless_chrome::{
-    browser::tab::element::BoxModel,
-    protocol::cdp::Page::{CaptureScreenshotFormatOption::Png, Viewport},
-    Browser, LaunchOptionsBuilder,
+    browser::tab::{element::BoxModel, RequestPausedDecision},
+    protocol::cdp::{
+        Fetch::{events::RequestPausedEvent, RequestPattern, RequestStage},
+        Page::{CaptureScreenshotFormatOption::Png, Viewport},
+    },
+    Browser, LaunchOptionsBuilder, Tab,
 };
 use itertools::Itertools;
 use log::info;
@@ -29,6 +38,7 @@ pub fn generate(
     credentials: Credentials,
     user_identifier: UserIdentifier,
     port: Option<u16>,
+    run_tool: bool,
 ) -> anyhow::Result<()> {
     let wait = || sleep(Duration::from_secs(1));
 
@@ -66,6 +76,15 @@ pub fn generate(
     )
     .expect("Failed to create browser");
     let tab = browser.new_tab()?;
+    tab.enable_fetch(
+        Some(&[RequestPattern {
+            url_pattern: None,
+            resource_Type: None,
+            request_stage: Some(RequestStage::Response),
+        }]),
+        None,
+    )?;
+
     tab.navigate_to(Maimai::LOGIN_FORM_URL)?;
     tab.wait_for_element("input[name='segaId']")?
         .type_into(credentials.sega_id.as_ref())?;
@@ -146,6 +165,7 @@ pub fn generate(
         .map(|r| r.1.timestamp_jst().unwrap().get())
         .max()
         .context("No record?  Unlikely to happen.")?;
+    let latest_timestamp_fmt = latest_timestamp.format(TIMESTAMP_FORMAT);
     if !rating_target_existing.contains(&latest_timestamp) {
         info!("Retrieving rating targets.");
         wait();
@@ -155,33 +175,96 @@ pub fn generate(
             bail!("Failed to navigate to rating target");
         }
 
-        let viewport = {
-            let top = tab.wait_for_element("img.title")?.get_box_model()?;
-            let screen = tab.wait_for_element(".screw_block")?.get_box_model()?;
-            let bottom = tab.wait_for_element("div:has(+footer)")?.get_box_model()?;
-            let margin = 10.;
-            let y = top.content.most_top();
-            Viewport {
-                x: screen.border.most_left() - margin,
-                y: y - margin,
-                width: screen.border.width() + margin * 2.,
-                height: bottom.border.bottom_right.y - y + margin * 2.,
-                scale: 1.,
-            }
-        };
-        let png_path = {
-            let timestamp = latest_timestamp.format(TIMESTAMP_FORMAT);
-            img_save_dir
-                .to_owned()
-                .join(format!("{timestamp}_ratingTarget.png"))
-        };
-        let screenshot = tab.capture_screenshot(Png, None, Some(viewport), true)?;
+        let png_path = img_save_dir
+            .to_owned()
+            .join(format!("{latest_timestamp_fmt}_ratingTarget.png"));
+        let screenshot = screenshot_rating_target(&tab)?;
         fs_err::write(png_path, screenshot)?;
     } else {
         info!("Rating target is already saved.");
     }
 
+    if run_tool {
+        info!("Running the tool.");
+        if tab.get_url() != RATING_TARGET_URL {
+            info!("Not in the rating target page!  Navigating there first.");
+            tab.navigate_to(RATING_TARGET_URL)?;
+            tab.wait_until_navigated()?;
+            wait();
+            info!("Navigation done.");
+        }
+        let update_time = {
+            // Run the tool, and get the date
+            let (rx, tx) = mpsc::channel();
+            tab.enable_request_interception(Arc::new(move |_, _, request: RequestPausedEvent| {
+                if let Some(time) = get_last_modified(request) {
+                    let _ = rx.send(time);
+                }
+                RequestPausedDecision::Continue(None)
+            }))?;
+            tab.evaluate(include_str!("bookmarklet.js"), true)?;
+            match tx.recv_timeout(Duration::from_secs(20)) {
+                Ok(date) => date.format(TIMESTAMP_FORMAT),
+                Err(err) => bail!("Failed to get last-modified header: {err:?}"),
+            }
+        };
+        info!("The tool was updated at {update_time}.");
+
+        // Get the screenshot of song list in text format
+        {
+            wait_until_loaded(&tab)?;
+            let png_path = img_save_dir.to_owned().join(format!(
+                "{latest_timestamp_fmt}_tool_{update_time}_list.png"
+            ));
+            let screenshot = screenshot_rating_target(&tab)?;
+            fs_err::write(png_path, screenshot)?;
+            info!("List view has been captured.");
+        }
+
+        // Get the screenshot of song list as icon grid
+        {
+            tab.wait_for_element("img.title")?.click()?;
+            wait_until_loaded(&tab)?;
+            let png_path = img_save_dir.to_owned().join(format!(
+                "{latest_timestamp_fmt}_tool_{update_time}_tiles.png"
+            ));
+            let screenshot = screenshot_rating_target(&tab)?;
+            fs_err::write(png_path, screenshot)?;
+            info!("Grid view has been captured.");
+        }
+    }
+
     info!("Done.");
+    Ok(())
+}
+
+fn screenshot_rating_target(tab: &Arc<Tab>) -> anyhow::Result<Vec<u8>> {
+    let viewport = {
+        let top = tab.wait_for_element("img.title")?.get_box_model()?;
+        let screen = tab.wait_for_element(".screw_block")?.get_box_model()?;
+        let bottom = tab.wait_for_element("div:has(+footer)")?.get_box_model()?;
+        let margin = 10.;
+        let y = top.content.most_top();
+        Viewport {
+            x: screen.border.most_left() - margin,
+            y: y - margin,
+            width: screen.border.width() + margin * 2.,
+            height: bottom.border.bottom_right.y - y + margin * 2.,
+            scale: 1.,
+        }
+    };
+    let screenshot = tab.capture_screenshot(Png, None, Some(viewport), true)?;
+    Ok(screenshot)
+}
+
+fn wait_until_loaded(tab: &Arc<Tab>) -> anyhow::Result<()> {
+    while {
+        info!("Waiting for DOM to be drawn");
+        sleep(Duration::from_secs(1));
+        tab.evaluate("document.readyState", false)?.value
+            != Some(serde_json::Value::String("complete".to_owned()))
+    } {}
+    info!("The page is ready to be captured.");
     Ok(())
 }
 
@@ -201,4 +284,15 @@ fn disallowed_for_filename(c: char) -> bool {
         c,
         '\u{0}'..='\u{1F}' | '<' | '>' | ':' | '\\' | '|' | '?' | '*' | '"' | '/'
     )
+}
+
+fn get_last_modified(request: RequestPausedEvent) -> Option<DateTime<FixedOffset>> {
+    if request.params.request.url != "https://sgimera.github.io/mai_RatingAnalyzer/maidx_tools.js" {
+        return None;
+    }
+    let mut headers = request.params.response_headers.iter().flatten();
+    let header = headers.find(|header| (header.name.to_lowercase() == "last-modified"))?;
+    let time = NaiveDateTime::parse_from_str(&header.value, "%a, %d %b %Y %H:%M:%S GMT").ok()?;
+    let timezone = FixedOffset::east_opt(9 * 60 * 60).unwrap();
+    Some(time.and_utc().with_timezone(&timezone))
 }
