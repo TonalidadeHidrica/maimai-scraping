@@ -1,11 +1,13 @@
-use std::{path::Path, thread::sleep, time::Duration};
+use std::{collections::BTreeSet, path::Path, thread::sleep, time::Duration};
 
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
+use chrono::NaiveDateTime;
 use headless_chrome::{
     browser::tab::element::BoxModel,
     protocol::cdp::Page::{CaptureScreenshotFormatOption::Png, Viewport},
-    Browser, LaunchOptionsBuilder, Tab,
+    Browser, LaunchOptionsBuilder,
 };
+use itertools::Itertools;
 use log::info;
 use maimai_scraping::{
     api::find_aime_idx,
@@ -20,6 +22,8 @@ use maimai_scraping::{
 use maimai_scraping_utils::sega_id::Credentials;
 use scraper::Html;
 
+const TIMESTAMP_FORMAT: &str = "%Y-%m-%d_%H-%M-%S";
+
 pub fn generate(
     img_save_dir: &Path,
     credentials: Credentials,
@@ -29,7 +33,31 @@ pub fn generate(
     let wait = || sleep(Duration::from_secs(1));
 
     fs_err::create_dir_all(img_save_dir)?;
+    let files: Vec<_> = fs_err::read_dir(img_save_dir)?
+        .map(|entry| {
+            anyhow::Ok(
+                entry?
+                    .file_name()
+                    .into_string()
+                    .map_err(|e| anyhow!("Non-Unicode filename: {e:?}"))?,
+            )
+        })
+        .try_collect()?;
+    let get_timestamp = |delimiter: &'static str| {
+        move |s: &String| {
+            NaiveDateTime::parse_from_str(s.split_once(delimiter)?.0, TIMESTAMP_FORMAT).ok()
+        }
+    };
+    let playlog_existing: BTreeSet<_> = files
+        .iter()
+        .filter_map(get_timestamp("_playlogDetail_"))
+        .collect();
+    let rating_target_existing: BTreeSet<_> = files
+        .iter()
+        .filter_map(get_timestamp("_ratingTarget.png"))
+        .collect();
 
+    info!("Logging in...");
     let browser = Browser::new(
         LaunchOptionsBuilder::default()
             .port(port)
@@ -71,30 +99,19 @@ pub fn generate(
             bail!("Unexpected friend code: expected {friend_code:?}, found {found:?}")
         }
     }
+    info!("Successfully logged in.");
 
-    wait();
-    tab.navigate_to(RATING_TARGET_URL)?;
-    tab.wait_until_navigated()?;
-    if tab.get_url().as_str() != RATING_TARGET_URL {
-        bail!("Failed to navigate to rating target");
-    }
-
-    let viewport = {
-        let top = tab.wait_for_element("img.title")?.get_box_model()?;
-        let bottom = tab.wait_for_element("div:has(+footer)")?.get_box_model()?;
-        viewport_by_top_and_bottom(top, bottom, 10.)
-    };
-    let screenshot = tab.capture_screenshot(Png, None, Some(viewport), true)?;
-    fs_err::write(img_save_dir.join("test.png"), screenshot)?;
-
-    return Ok(());
-
+    info!("Retrieving play records.");
     wait();
     tab.navigate_to(Maimai::RECORD_URL)?;
     tab.wait_until_navigated()?;
-    // resize_to_full_page(&tab)?;
     let records = play_record::parse_record_index(&Html::parse_document(&tab.get_content()?))?;
-    for (_time, idx) in records {
+    for &(_time, idx) in &records {
+        let timestamp = idx.timestamp_jst().context("Timestamp exists")?.get();
+        if playlog_existing.contains(&timestamp) {
+            info!("The following playlog is already saved: {idx:?}");
+            continue;
+        }
         wait();
         tab.navigate_to(&Maimai::play_log_detail_url(idx))?;
         tab.wait_until_navigated()?;
@@ -115,10 +132,7 @@ pub fn generate(
                 let title: &str = record.song_metadata().name().as_ref();
                 title.replace(disallowed_for_filename, "_")
             };
-            let timestamp = {
-                let time = idx.timestamp_jst().context("Timestamp exists")?.get();
-                time.format("%Y-%m-%d_%H-%M-%S")
-            };
+            let timestamp = timestamp.format(TIMESTAMP_FORMAT);
             img_save_dir
                 .to_owned()
                 .join(format!("{timestamp}_playlogDetail_{title_escaped}.png"))
@@ -127,17 +141,38 @@ pub fn generate(
         fs_err::write(png_path, screenshot)?;
     }
 
-    Ok(())
-}
+    let latest_timestamp = records
+        .iter()
+        .map(|r| r.1.timestamp_jst().unwrap().get())
+        .max()
+        .context("No record?  Unlikely to happen.")?;
+    if !rating_target_existing.contains(&latest_timestamp) {
+        info!("Retrieving rating targets.");
+        wait();
+        tab.navigate_to(RATING_TARGET_URL)?;
+        tab.wait_until_navigated()?;
+        if tab.get_url().as_str() != RATING_TARGET_URL {
+            bail!("Failed to navigate to rating target");
+        }
 
-fn resize_to_full_page(tab: &Tab) -> anyhow::Result<()> {
-    let bounds = tab.get_bounds()?;
-    tab.set_bounds(headless_chrome::types::Bounds::Normal {
-        left: Some(bounds.left),
-        top: Some(bounds.top),
-        width: Some(1920.),
-        height: Some(1080.),
-    })?;
+        let viewport = {
+            let top = tab.wait_for_element("img.title")?.get_box_model()?;
+            let bottom = tab.wait_for_element("div:has(+footer)")?.get_box_model()?;
+            viewport_by_top_and_bottom(top, bottom, 10.)
+        };
+        let png_path = {
+            let timestamp = latest_timestamp.format(TIMESTAMP_FORMAT);
+            img_save_dir
+                .to_owned()
+                .join(format!("{timestamp}_ratingTarget.png"))
+        };
+        let screenshot = tab.capture_screenshot(Png, None, Some(viewport), true)?;
+        fs_err::write(png_path, screenshot)?;
+    } else {
+        info!("Rating target is already saved.");
+    }
+
+    info!("Done.");
     Ok(())
 }
 
