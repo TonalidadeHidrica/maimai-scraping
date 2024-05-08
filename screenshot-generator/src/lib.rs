@@ -218,6 +218,7 @@ pub fn generate(
         if !files_existing.contains(&png_name) {
             info!("Getting the screenshot of song list in text format.");
             wait_until_loaded(&tab)?;
+            sleep(Duration::from_secs(10)); // Very safe sleep
             let screenshot = screenshot_rating_target(&tab)?;
             fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
             info!("List view has been captured.");
