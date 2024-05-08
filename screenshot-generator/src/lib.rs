@@ -157,8 +157,17 @@ pub fn generate(
 
         let viewport = {
             let top = tab.wait_for_element("img.title")?.get_box_model()?;
+            let screen = tab.wait_for_element(".screw_block")?.get_box_model()?;
             let bottom = tab.wait_for_element("div:has(+footer)")?.get_box_model()?;
-            viewport_by_top_and_bottom(top, bottom, 10.)
+            let margin = 10.;
+            let y = top.content.most_top();
+            Viewport {
+                x: screen.border.most_left() - margin,
+                y: y - margin,
+                width: screen.border.width() + margin * 2.,
+                height: bottom.border.bottom_right.y - y + margin * 2.,
+                scale: 1.,
+            }
         };
         let png_path = {
             let timestamp = latest_timestamp.format(TIMESTAMP_FORMAT);
