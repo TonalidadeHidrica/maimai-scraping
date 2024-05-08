@@ -64,10 +64,7 @@ pub fn generate(
         .iter()
         .filter_map(get_timestamp("_playlogDetail_"))
         .collect();
-    let rating_target_existing: BTreeSet<_> = files
-        .iter()
-        .filter_map(get_timestamp("_ratingTarget.png"))
-        .collect();
+    let files_existing = BTreeSet::from_iter(files);
 
     info!("Logging in...");
     let browser = Browser::new(
@@ -167,13 +164,16 @@ pub fn generate(
         fs_err::write(png_path, screenshot)?;
     }
 
-    let latest_timestamp = records
-        .iter()
-        .map(|r| r.1.timestamp_jst().unwrap().get())
-        .max()
-        .context("No record?  Unlikely to happen.")?;
-    let latest_timestamp_fmt = latest_timestamp.format(TIMESTAMP_FORMAT);
-    if !rating_target_existing.contains(&latest_timestamp) {
+    let latest_timestamp_fmt = {
+        let latest_timestamp = records
+            .iter()
+            .map(|r| r.1.timestamp_jst().unwrap().get())
+            .max()
+            .context("No record?  Unlikely to happen.")?;
+        latest_timestamp.format(TIMESTAMP_FORMAT)
+    };
+    let png_name = format!("{latest_timestamp_fmt}_ratingTarget.png");
+    if !files_existing.contains(&png_name) {
         info!("Retrieving rating targets.");
         wait();
         tab.navigate_to(RATING_TARGET_URL)?;
@@ -182,11 +182,8 @@ pub fn generate(
             bail!("Failed to navigate to rating target");
         }
 
-        let png_path = img_save_dir
-            .to_owned()
-            .join(format!("{latest_timestamp_fmt}_ratingTarget.png"));
         let screenshot = screenshot_rating_target(&tab)?;
-        fs_err::write(png_path, screenshot)?;
+        fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
     } else {
         info!("Rating target is already saved.");
     }
@@ -217,27 +214,27 @@ pub fn generate(
         };
         info!("The tool was updated at {update_time}.");
 
-        // Get the screenshot of song list in text format
-        {
+        let png_name = format!("{latest_timestamp_fmt}_tool_{update_time}_list.png");
+        if !files_existing.contains(&png_name) {
+            info!("Getting the screenshot of song list in text format.");
             wait_until_loaded(&tab)?;
-            let png_path = img_save_dir.to_owned().join(format!(
-                "{latest_timestamp_fmt}_tool_{update_time}_list.png"
-            ));
             let screenshot = screenshot_rating_target(&tab)?;
-            fs_err::write(png_path, screenshot)?;
+            fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
             info!("List view has been captured.");
+        } else {
+            info!("Screenshot of song list in text format is already retrieved.");
         }
 
-        // Get the screenshot of song list as icon grid
-        {
+        let png_name = format!("{latest_timestamp_fmt}_tool_{update_time}_tiles.png");
+        if !files_existing.contains(&png_name) {
+            info!("Getting the screenshot of song list as icon grid.");
             tab.wait_for_element("img.title")?.click()?;
             wait_until_loaded(&tab)?;
-            let png_path = img_save_dir.to_owned().join(format!(
-                "{latest_timestamp_fmt}_tool_{update_time}_tiles.png"
-            ));
             let screenshot = screenshot_rating_target(&tab)?;
-            fs_err::write(png_path, screenshot)?;
+            fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
             info!("Grid view has been captured.");
+        } else {
+            info!("Screenshot of song list in grid view is already retrieved.");
         }
     }
 
