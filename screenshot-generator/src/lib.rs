@@ -24,6 +24,7 @@ use maimai_scraping::{
     maimai::{
         data_collector::RATING_TARGET_URL,
         parser::{self, aime_selection, play_record},
+        schema::latest::{Idx, PlayTime},
         Maimai,
     },
     sega_trait::{SegaJapaneseAuth, SegaTrait},
@@ -37,6 +38,7 @@ pub fn generate(
     img_save_dir: &Path,
     credentials: Credentials,
     user_identifier: UserIdentifier,
+    records: Option<Vec<(PlayTime, Idx)>>,
     port: Option<u16>,
     run_tool: bool,
 ) -> anyhow::Result<()> {
@@ -121,10 +123,15 @@ pub fn generate(
     info!("Successfully logged in.");
 
     info!("Retrieving play records.");
-    wait();
-    tab.navigate_to(Maimai::RECORD_URL)?;
-    tab.wait_until_navigated()?;
-    let records = play_record::parse_record_index(&Html::parse_document(&tab.get_content()?))?;
+    let records = match records {
+        Some(records) => records,
+        None => {
+            wait();
+            tab.navigate_to(Maimai::RECORD_URL)?;
+            tab.wait_until_navigated()?;
+            play_record::parse_record_index(&Html::parse_document(&tab.get_content()?))?
+        }
+    };
     for &(_time, idx) in &records {
         let timestamp = idx.timestamp_jst().context("Timestamp exists")?.get();
         if playlog_existing.contains(&timestamp) {

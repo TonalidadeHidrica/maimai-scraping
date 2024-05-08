@@ -3,6 +3,7 @@ use std::{
     marker::PhantomData,
     path::PathBuf,
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{anyhow, bail, Context};
@@ -12,11 +13,12 @@ use reqwest_cookie_store::{CookieStore, CookieStoreMutex};
 use scraper::Html;
 use serde::Serialize;
 use serde_with::{serde_as, DisplayFromStr};
+use tokio::time::sleep;
 
 use crate::{
     parser::{
         parse_add_confirm_form, parse_add_input_page, parse_aime_index, parse_remove_confirm_page,
-        AimeIndex, EmptySlot, FilledSlot,
+        AimeIndex, AimeSlot, EmptySlot, FilledSlot,
     },
     schema::{AccessCode, BlockId, CardName, SlotNo},
 };
@@ -209,6 +211,29 @@ impl AimeApi<LoggedIn> {
         }
 
         Ok(filled_slot.to_empty())
+    }
+
+    pub async fn overwrite_if_absent(
+        &self,
+        aimes: &AimeIndex,
+        index: usize,
+        access_code: AccessCode,
+        card_name: CardName,
+    ) -> anyhow::Result<()> {
+        if aimes.slots().iter().any(
+            |slot| matches!(slot, AimeSlot::Filled(filled) if filled.access_code() == access_code),
+        ) {
+            info!("Aime is already registered.");
+            return Ok(());
+        }
+
+        let slot = match &aimes.slots()[index] {
+            AimeSlot::Filled(filled) => self.remove(filled).await?,
+            AimeSlot::Empty(empty) => *empty,
+        };
+        sleep(Duration::from_secs(1)).await;
+        self.add(&slot, access_code, card_name).await?;
+        Ok(())
     }
 }
 

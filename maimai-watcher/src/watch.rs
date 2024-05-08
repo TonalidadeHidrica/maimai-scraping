@@ -291,13 +291,13 @@ impl<'c, 's> Runner<'c, 's> {
             let (api, aimes) = AimeApi::new(aime.cookie_store_path.to_owned())?
                 .login(&credentials)
                 .await?;
-            let slot = match &aimes.slots()[aime.slot_index] {
-                AimeSlot::Filled(filled) => api.remove(filled).await?,
-                AimeSlot::Empty(empty) => *empty,
-            };
-            sleep(Duration::from_secs(1)).await;
-            api.add(&slot, aime.access_code, "".to_owned().into())
-                .await?;
+            api.overwrite_if_absent(
+                &aimes,
+                aime.slot_index,
+                aime.access_code,
+                aime.card_name.clone(),
+            )
+            .await?;
             sleep(Duration::from_secs(1)).await;
             info!("Switched aime.")
         }
