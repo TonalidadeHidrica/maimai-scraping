@@ -7,7 +7,6 @@ use std::{
 
 use aime_net::{
     api::AimeApi,
-    parser::AimeSlot,
     schema::{AccessCode, CardName},
 };
 use anyhow::Context;
