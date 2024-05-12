@@ -129,7 +129,7 @@ pub fn generate(
             play_record::parse_record_index(&Html::parse_document(&tab.get_content()?))?
         }
     };
-    for &(_time, idx) in &records {
+    for &(_time, idx) in records.iter().rev() {
         let timestamp = idx.timestamp_jst().context("Timestamp exists")?.get();
         if playlog_existing.contains(&timestamp) {
             info!("The following playlog is already saved: {idx:?}");
