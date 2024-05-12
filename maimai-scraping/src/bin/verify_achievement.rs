@@ -76,8 +76,13 @@ fn main() -> anyhow::Result<()> {
                     // (score / note_sum * 100 + bonus / bonus_sum) * 10000
                     let num = (score * 100 * bonus_sum + bonus * note_sum) * 10000;
                     let den = note_sum * bonus_sum;
-                    let a: AchievementValue = u32::try_from(num / den)?.try_into().unwrap();
+                    let a: AchievementValue = u32::try_from(num / den).unwrap().try_into().unwrap();
                     if a == record.achievement_result().value() {
+                        println!(
+                            "{a} => {score}/{note_sum} {:?} + {bonus}/{bonus_sum} {:?}",
+                            [gg, g, break_great - gg - g],
+                            [p, break_perfect - p]
+                        );
                         combinations += 1;
                     }
                 }
@@ -87,7 +92,7 @@ fn main() -> anyhow::Result<()> {
             0 => println!("Not found: {record:?}"),
             1 => {}
             _ => {
-                // println!("{c} combs were found")
+                println!("{combinations} combinations were found")
             }
         }
     }
