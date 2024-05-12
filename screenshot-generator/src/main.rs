@@ -6,6 +6,7 @@ use aime_net::{
 };
 use anyhow::Context;
 use clap::Parser;
+use env_logger::Env;
 use log::info;
 use maimai_scraping::{
     api::{SegaClient, SegaClientInitializer},
@@ -47,7 +48,10 @@ struct UserConfig {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::builder().format_timestamp_nanos().init();
+    env_logger::Builder::from_env(
+        Env::default().filter_or("RUST_LOG", "info,maimai_scraping=debug"),
+    )
+    .init();
     let opts = Opts::parse();
     let config: Config = toml::from_str(&fs_err::read_to_string(&opts.config_toml)?)?;
 
