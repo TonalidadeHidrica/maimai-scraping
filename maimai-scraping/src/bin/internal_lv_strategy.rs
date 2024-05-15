@@ -75,6 +75,9 @@ struct Opts {
 
     #[clap(long)]
     hide_history: bool,
+
+    #[clap(long)]
+    difficulty: Option<ScoreDifficulty>,
 }
 // #[derive(Clone)]
 // struct Levels(Vec<ScoreConstant>);
@@ -346,7 +349,8 @@ fn songs<'of, 'os, 'ns, 'nst>(
                 || key.difficulty == ScoreDifficulty::ReMaster);
         let dx_master =
             if_then(opts.dx_master, dx_master) && if_then(opts.no_dx_master, !dx_master);
-        if previous && current && undetermined && dx_master {
+        let difficulty = opts.difficulty.map_or(true, |d| key.difficulty == d);
+        if previous && current && undetermined && dx_master && difficulty {
             ret.push(SongsRet {
                 song,
                 details,
