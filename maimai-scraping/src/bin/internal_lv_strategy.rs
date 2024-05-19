@@ -75,9 +75,16 @@ struct Opts {
 
     #[clap(long)]
     hide_history: bool,
+    #[clap(long)]
+    hide_current: bool,
+    #[clap(long, default_value = "Master")]
+    highlight_difficulty: ScoreDifficulty,
 
     #[clap(long)]
     difficulty: Option<ScoreDifficulty>,
+
+    #[clap(long)]
+    sort_only_by_name: bool,
 }
 // #[derive(Clone)]
 // struct Levels(Vec<ScoreConstant>);
@@ -166,10 +173,11 @@ async fn main() -> anyhow::Result<()> {
         let estimation = song.estimation.iter().map(|x| x.to_string()).join_with(" ");
         let confident = if song.confident { "? " } else { "??" };
         let estimation = format!("[{estimation}]{confident}");
+        let estimation = lazy_format!(if opts.hide_current => "" else => "{estimation:8}");
         let locked = if song.song.locked() { '!' } else { ' ' };
         println!(
-            "{i:>4} {history}{estimation:8} {locked} {}",
-            display_song(song.song_name(), song.details, song.key)
+            "{i:>4} {history}{estimation} {locked} {}",
+            display_song(song.song_name(), song.details, song.key, opts.highlight_difficulty)
         );
     }
 
@@ -201,7 +209,7 @@ async fn main() -> anyhow::Result<()> {
             {
                 [] => println!(
                     "Song not found: {}",
-                    display_song(song_name, song.details, song.key)
+                    display_song(song_name, song.details, song.key, opts.highlight_difficulty)
                 ),
                 [idx] => {
                     let len = idxs.len();
@@ -362,15 +370,19 @@ fn songs<'of, 'os, 'ns, 'nst>(
             });
         }
     }
-    ret.sort_by_key(|x| {
-        (
-            x.estimation.len(),
-            Reverse(x.estimation.last().copied()),
-            Reverse(x.confident),
-            x.song.title_kana(),
-            x.key.score_metadata(),
-        )
-    });
+    if opts.sort_only_by_name {
+        ret.sort_by_key(|x| x.song.title_kana());
+    } else {
+        ret.sort_by_key(|x| {
+            (
+                x.estimation.len(),
+                Reverse(x.estimation.last().copied()),
+                Reverse(x.confident),
+                x.song.title_kana(),
+                x.key.score_metadata(),
+            )
+        });
+    }
     Ok(ret)
 }
 
@@ -378,10 +390,11 @@ fn display_song<'a>(
     name: &'a SongName,
     details: &'a OrdinaryScore,
     key: ScoreKey,
+    highlight_difficulty: ScoreDifficulty,
 ) -> impl Display + 'a {
     let highlight_if = |b: bool| if b { "`" } else { "" };
     let x = highlight_if(details.standard().is_some() && details.deluxe().is_some());
-    let y = highlight_if(key.difficulty != ScoreDifficulty::Master);
+    let y = highlight_if(key.difficulty != highlight_difficulty);
     lazy_format!(
         "{name} ({x}{:?}{x} {y}{:?}{y})",
         key.generation,
