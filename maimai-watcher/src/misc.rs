@@ -35,7 +35,7 @@ pub async fn recent(
     let levels = load_score_level::load(levels_path)?;
     let removed_songs: Vec<RemovedSong> = read_json(removed_songs_path)?;
     let mut levels = ScoreConstantsStore::new(&levels, &removed_songs)?;
-    if count > 10 {
+    if count > 100 {
         bail!("Too many songs are requested!  (This is a safety guard to avoid a flood of message.  Please contact the author if you want more.)");
     }
     if let Err(e) = levels.do_everything(
