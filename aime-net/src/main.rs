@@ -33,6 +33,8 @@ struct Add {
     index: usize,
     access_code: AccessCode,
     card_name: CardName,
+    #[arg(long)]
+    replace: bool,
 }
 
 #[tokio::main]
@@ -53,10 +55,17 @@ async fn main() -> anyhow::Result<()> {
 
     match opts.sub {
         Sub::Add(sub) => {
-            let AimeSlot::Empty(slot) = get_slot(sub.index)? else {
-                bail!("The specified slot is not empty");
+            let slot = match get_slot(sub.index)? {
+                AimeSlot::Empty(slot) => *slot,
+                AimeSlot::Filled(slot) => {
+                    if sub.replace {
+                        client.remove(slot).await?
+                    } else {
+                        bail!("The specified slot is not empty");
+                    }
+                }
             };
-            client.add(slot, sub.access_code, sub.card_name).await?;
+            client.add(&slot, sub.access_code, sub.card_name).await?;
         }
         Sub::Remove(sub) => {
             let AimeSlot::Filled(slot) = get_slot(sub.index)? else {

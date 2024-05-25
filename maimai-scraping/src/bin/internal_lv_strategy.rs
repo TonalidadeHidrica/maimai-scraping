@@ -177,7 +177,12 @@ async fn main() -> anyhow::Result<()> {
         let locked = if song.song.locked() { '!' } else { ' ' };
         println!(
             "{i:>4} {history}{estimation} {locked} {}",
-            display_song(song.song_name(), song.details, song.key, opts.highlight_difficulty)
+            display_song(
+                song.song_name(),
+                song.details,
+                song.key,
+                opts.highlight_difficulty
+            )
         );
     }
 
