@@ -85,9 +85,11 @@ pub fn generate(
     )?;
 
     tab.navigate_to(Maimai::LOGIN_FORM_URL)?;
-    tab.wait_for_element("input[name='segaId']")?
+    tab.wait_for_element("input[name='segaId']")
+        .context("Failed to find sega id input box")?
         .type_into(credentials.sega_id.as_ref())?;
-    tab.wait_for_element("input[name='password']")?
+    tab.wait_for_element("input[name='password']")
+        .context("Failed to find password input box")?
         .type_into(credentials.password.as_ref())?;
     wait();
     tab.wait_for_element("button[type='submit']")?.click()?;
