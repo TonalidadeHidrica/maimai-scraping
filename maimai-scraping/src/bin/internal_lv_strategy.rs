@@ -22,7 +22,7 @@ use maimai_scraping::{
         estimate_rating::{EstimatorConfig, ScoreConstantsEntry, ScoreConstantsStore, ScoreKey},
         estimator_config_multiuser::{self, update_all},
         favorite_songs::{fetch_favorite_songs_form, song_name_to_idx_map, SetFavoriteSong},
-        load_score_level::{self, make_map, InternalScoreLevel, MaimaiVersion},
+        load_score_level::{self, make_map, InternalScoreLevel, MaimaiVersion, RemovedSong},
         official_song_list::{self, OrdinaryScore, ScoreDetails},
         rating::{ScoreConstant, ScoreLevel},
         schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
@@ -40,6 +40,9 @@ struct Opts {
     new_json: PathBuf,
     offical_songs_json: PathBuf,
     config_toml: PathBuf,
+
+    #[clap(long)]
+    removed_songs: Option<PathBuf>,
 
     // Constraints
     // #[clap(long)]
@@ -140,7 +143,11 @@ async fn main() -> anyhow::Result<()> {
         read_json(&opts.in_lv_history_json)?;
     let in_lvs: HashMap<_, _> = in_lvs.iter().map(|(k, v)| (ScoreKey::from(k), v)).collect();
     let new = load_score_level::load(&opts.new_json)?;
-    let mut new = ScoreConstantsStore::new(&new, &[])?;
+    let removed_songs: Vec<RemovedSong> = opts
+        .removed_songs
+        .as_ref()
+        .map_or_else(|| Ok(Vec::new()), read_json)?;
+    let mut new = ScoreConstantsStore::new(&new, &removed_songs)?;
 
     let config: estimator_config_multiuser::Root =
         toml::from_str(&read_to_string(&opts.config_toml)?)?;
@@ -285,6 +292,9 @@ fn songs<'of, 'os, 'ns, 'nst>(
     for (&key, entry) in new.scores() {
         use InternalScoreLevel::*;
 
+        if new.removed(key.icon) {
+            continue;
+        }
         let (song, details) = official
             .get(key.icon)
             .with_context(|| format!("No score was found for icon {:?}", key.icon))?;

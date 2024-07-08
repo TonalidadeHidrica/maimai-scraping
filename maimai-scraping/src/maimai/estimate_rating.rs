@@ -734,6 +734,10 @@ impl<'s> ScoreConstantsStore<'s> {
         }
         Ok(())
     }
+
+    pub fn removed(&self, icon: &SongIcon) -> bool {
+        self.removed_songs.contains_key(icon)
+    }
 }
 
 fn display_played_by(user: Option<&UserName>) -> impl Display + '_ {

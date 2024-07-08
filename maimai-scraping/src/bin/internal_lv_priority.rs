@@ -10,12 +10,13 @@ use maimai_scraping::{
     maimai::{
         estimate_rating::{KeyFromTargetEntry, PrintResult, ScoreConstantsStore, ScoreKey},
         estimator_config_multiuser::{self, update_all},
-        load_score_level::{self, MaimaiVersion},
+        load_score_level::{self, MaimaiVersion, RemovedSong},
         rating::ScoreConstant,
         schema::latest::{AchievementValue, PlayTime, ScoreDifficulty, ScoreGeneration, SongName},
         MaimaiUserData,
     },
 };
+use maimai_scraping_utils::fs_json_util::read_json;
 use ordered_float::OrderedFloat;
 
 #[derive(Parser)]
@@ -23,6 +24,9 @@ struct Opts {
     old_levels_json: PathBuf,
     levels_json: PathBuf,
     config: PathBuf,
+
+    #[clap(long)]
+    removed_songs: Option<PathBuf>,
 
     #[clap(default_value = "10")]
     level_update_factor: f64,
@@ -43,7 +47,11 @@ fn main() -> anyhow::Result<()> {
     let old_store = ScoreConstantsStore::new(&old_levels, &[])?;
 
     let levels = load_score_level::load(&args.levels_json)?;
-    let mut store = ScoreConstantsStore::new(&levels, &[])?;
+    let removed_songs: Vec<RemovedSong> = args
+        .removed_songs
+        .as_ref()
+        .map_or_else(|| Ok(Vec::new()), read_json)?;
+    let mut store = ScoreConstantsStore::new(&levels, &removed_songs)?;
     store.show_details = args.estimator_detail;
 
     update_all(&datas, &mut store)?;
