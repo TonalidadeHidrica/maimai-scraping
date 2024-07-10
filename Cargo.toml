@@ -3,7 +3,7 @@ resolver = "2"
 
 members = [
 	"aime-net",
-	"edit-rating-analyzer-js",
+	"edit-rating-analyzer-js", "generate-config",
 	"maimai-scraping",
 	"maimai-scraping-utils",
 	"maimai-watcher",
