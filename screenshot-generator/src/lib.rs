@@ -75,170 +75,180 @@ pub fn generate(
     )
     .expect("Failed to create browser");
     let tab = browser.new_tab()?;
-    tab.enable_fetch(
-        Some(&[RequestPattern {
-            url_pattern: None,
-            resource_Type: None,
-            request_stage: Some(RequestStage::Response),
-        }]),
-        None,
-    )?;
+    if let Err(ret) = (|| {
+        tab.enable_fetch(
+            Some(&[RequestPattern {
+                url_pattern: None,
+                resource_Type: None,
+                request_stage: Some(RequestStage::Response),
+            }]),
+            None,
+        )?;
 
-    tab.navigate_to(Maimai::LOGIN_FORM_URL)?;
-    tab.wait_for_element("input[name='segaId']")
-        .context("Failed to find sega id input box")?
-        .type_into(credentials.sega_id.as_ref())?;
-    tab.wait_for_element("input[name='password']")
-        .context("Failed to find password input box")?
-        .type_into(credentials.password.as_ref())?;
-    wait();
-    tab.wait_for_element("button[type='submit']")?.click()?;
-
-    tab.wait_for_element(aime_selection::DIV)?;
-    let aime_list = aime_selection::parse(&Html::parse_document(&tab.get_content()?))?;
-    info!("{aime_list:?}");
-    let aime_entry = find_aime_idx(&aime_list, user_identifier.player_name.as_ref())?;
-    wait();
-    tab.wait_for_element(&format!(
-        r#"input[name="idx"][value="{}"] + button"#,
-        aime_entry.idx,
-    ))?
-    .click()?;
-
-    tab.wait_for_element("div.see_through_block")?;
-    if tab.get_url() != Maimai::HOME_URL {
-        bail!("Failed to log in");
-    }
-    if let Some(friend_code) = &user_identifier.friend_code {
+        tab.navigate_to(Maimai::LOGIN_FORM_URL)?;
+        tab.wait_for_element("input[name='segaId']")
+            .context("Failed to find sega id input box")?
+            .type_into(credentials.sega_id.as_ref())?;
+        tab.wait_for_element("input[name='password']")
+            .context("Failed to find password input box")?
+            .type_into(credentials.password.as_ref())?;
         wait();
-        tab.navigate_to(Maimai::FRIEND_CODE_URL)?;
-        let found = tab
-            .wait_for_element(parser::friend_code::DIV)?
-            .get_inner_text()?;
-        if &found != friend_code.as_ref() {
-            bail!("Unexpected friend code: expected {friend_code:?}, found {found:?}")
-        }
-    }
-    info!("Successfully logged in.");
+        tab.wait_for_element("button[type='submit']")?.click()?;
 
-    info!("Retrieving play records.");
-    let records = match records {
-        Some(records) => records,
-        None => {
+        tab.wait_for_element(aime_selection::DIV)?;
+        let aime_list = aime_selection::parse(&Html::parse_document(&tab.get_content()?))?;
+        info!("{aime_list:?}");
+        let aime_entry = find_aime_idx(&aime_list, user_identifier.player_name.as_ref())?;
+        wait();
+        tab.wait_for_element(&format!(
+            r#"input[name="idx"][value="{}"] + button"#,
+            aime_entry.idx,
+        ))?
+        .click()?;
+
+        tab.wait_for_element("div.see_through_block")?;
+        if tab.get_url() != Maimai::HOME_URL {
+            bail!("Failed to log in");
+        }
+        if let Some(friend_code) = &user_identifier.friend_code {
             wait();
-            tab.navigate_to(Maimai::RECORD_URL)?;
-            tab.wait_until_navigated()?;
-            play_record::parse_record_index(&Html::parse_document(&tab.get_content()?))?
+            tab.navigate_to(Maimai::FRIEND_CODE_URL)?;
+            let found = tab
+                .wait_for_element(parser::friend_code::DIV)?
+                .get_inner_text()?;
+            if &found != friend_code.as_ref() {
+                bail!("Unexpected friend code: expected {friend_code:?}, found {found:?}")
+            }
         }
-    };
-    for &(_time, idx) in records.iter().rev() {
-        let timestamp = idx.timestamp_jst().context("Timestamp exists")?.get();
-        if playlog_existing.contains(&timestamp) {
-            info!("The following playlog is already saved: {idx:?}");
-            continue;
-        }
-        wait();
-        tab.navigate_to(&Maimai::play_log_detail_url(idx))?;
-        tab.wait_until_navigated()?;
-        let viewport = {
-            let top = tab
-                .wait_for_element("div.playlog_top_container")?
-                .get_box_model()?;
-            let bottom = tab
-                .wait_for_element(".gray_block:has(.playlog_fl_block)")?
-                .get_box_model()?;
-            let margin = 10.;
-            viewport_by_top_and_bottom(top, bottom, margin)
-        };
-        let png_path = {
-            let title_escaped = {
-                let record =
-                    play_record::parse(&Html::parse_document(&tab.get_content()?), idx, true)?;
-                let title: &str = record.song_metadata().name().as_ref();
-                title.replace(disallowed_for_filename, "_")
-            };
-            let timestamp = timestamp.format(TIMESTAMP_FORMAT);
-            img_save_dir
-                .to_owned()
-                .join(format!("{timestamp}_playlogDetail_{title_escaped}.png"))
-        };
-        let screenshot = tab.capture_screenshot(Png, None, Some(viewport), true)?;
-        fs_err::write(png_path, screenshot)?;
-    }
+        info!("Successfully logged in.");
 
-    let latest_timestamp_fmt = {
-        let latest_timestamp = records
-            .iter()
-            .map(|r| r.1.timestamp_jst().unwrap().get())
-            .max()
-            .context("No record?  Unlikely to happen.")?;
-        latest_timestamp.format(TIMESTAMP_FORMAT)
-    };
-    let png_name = format!("{latest_timestamp_fmt}_ratingTarget.png");
-    if !files_existing.contains(&png_name) {
-        info!("Retrieving rating targets.");
-        wait();
-        tab.navigate_to(RATING_TARGET_URL)?;
-        tab.wait_until_navigated()?;
-        if tab.get_url().as_str() != RATING_TARGET_URL {
-            bail!("Failed to navigate to rating target");
-        }
-
-        let screenshot = screenshot_rating_target(&tab)?;
-        fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
-    } else {
-        info!("Rating target is already saved.");
-    }
-
-    if run_tool {
-        info!("Running the tool.");
-        if tab.get_url() != RATING_TARGET_URL {
-            info!("Not in the rating target page!  Navigating there first.");
-            tab.navigate_to(RATING_TARGET_URL)?;
-            tab.wait_until_navigated()?;
-            wait();
-            info!("Navigation done.");
-        }
-        let update_time = {
-            // Run the tool, and get the date
-            let (rx, tx) = mpsc::channel();
-            tab.enable_request_interception(Arc::new(move |_, _, request: RequestPausedEvent| {
-                if let Some(time) = get_last_modified(request) {
-                    let _ = rx.send(time);
-                }
-                RequestPausedDecision::Continue(None)
-            }))?;
-            tab.evaluate(include_str!("bookmarklet.js"), true)?;
-            match tx.recv_timeout(Duration::from_secs(20)) {
-                Ok(date) => date.format(TIMESTAMP_FORMAT),
-                Err(err) => bail!("Failed to get last-modified header: {err:?}"),
+        info!("Retrieving play records.");
+        let records = match records {
+            Some(records) => records,
+            None => {
+                wait();
+                tab.navigate_to(Maimai::RECORD_URL)?;
+                tab.wait_until_navigated()?;
+                play_record::parse_record_index(&Html::parse_document(&tab.get_content()?))?
             }
         };
-        info!("The tool was updated at {update_time}.");
-
-        let png_name = format!("{latest_timestamp_fmt}_tool_{update_time}_list.png");
-        if !files_existing.contains(&png_name) {
-            info!("Getting the screenshot of song list in text format.");
-            wait_until_loaded(&tab)?;
-            sleep(Duration::from_secs(10)); // Very safe sleep
-            let screenshot = screenshot_rating_target(&tab)?;
-            fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
-            info!("List view has been captured.");
-        } else {
-            info!("Screenshot of song list in text format is already retrieved.");
+        for &(_time, idx) in records.iter().rev() {
+            let timestamp = idx.timestamp_jst().context("Timestamp exists")?.get();
+            if playlog_existing.contains(&timestamp) {
+                info!("The following playlog is already saved: {idx:?}");
+                continue;
+            }
+            wait();
+            tab.navigate_to(&Maimai::play_log_detail_url(idx))?;
+            tab.wait_until_navigated()?;
+            let viewport = {
+                let top = tab
+                    .wait_for_element("div.playlog_top_container")?
+                    .get_box_model()?;
+                let bottom = tab
+                    .wait_for_element(".gray_block:has(.playlog_fl_block)")?
+                    .get_box_model()?;
+                let margin = 10.;
+                viewport_by_top_and_bottom(top, bottom, margin)
+            };
+            let png_path = {
+                let title_escaped = {
+                    let record =
+                        play_record::parse(&Html::parse_document(&tab.get_content()?), idx, true)?;
+                    let title: &str = record.song_metadata().name().as_ref();
+                    title.replace(disallowed_for_filename, "_")
+                };
+                let timestamp = timestamp.format(TIMESTAMP_FORMAT);
+                img_save_dir
+                    .to_owned()
+                    .join(format!("{timestamp}_playlogDetail_{title_escaped}.png"))
+            };
+            let screenshot = tab.capture_screenshot(Png, None, Some(viewport), true)?;
+            fs_err::write(png_path, screenshot)?;
         }
 
-        let png_name = format!("{latest_timestamp_fmt}_tool_{update_time}_tiles.png");
+        let latest_timestamp_fmt = {
+            let latest_timestamp = records
+                .iter()
+                .map(|r| r.1.timestamp_jst().unwrap().get())
+                .max()
+                .context("No record?  Unlikely to happen.")?;
+            latest_timestamp.format(TIMESTAMP_FORMAT)
+        };
+        let png_name = format!("{latest_timestamp_fmt}_ratingTarget.png");
         if !files_existing.contains(&png_name) {
-            info!("Getting the screenshot of song list as icon grid.");
-            tab.wait_for_element("img.title")?.click()?;
-            wait_until_loaded(&tab)?;
+            info!("Retrieving rating targets.");
+            wait();
+            tab.navigate_to(RATING_TARGET_URL)?;
+            tab.wait_until_navigated()?;
+            if tab.get_url().as_str() != RATING_TARGET_URL {
+                bail!("Failed to navigate to rating target");
+            }
+
             let screenshot = screenshot_rating_target(&tab)?;
             fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
-            info!("Grid view has been captured.");
         } else {
-            info!("Screenshot of song list in grid view is already retrieved.");
+            info!("Rating target is already saved.");
         }
+
+        if run_tool {
+            info!("Running the tool.");
+            if tab.get_url() != RATING_TARGET_URL {
+                info!("Not in the rating target page!  Navigating there first.");
+                tab.navigate_to(RATING_TARGET_URL)?;
+                tab.wait_until_navigated()?;
+                wait();
+                info!("Navigation done.");
+            }
+            let update_time = {
+                // Run the tool, and get the date
+                let (rx, tx) = mpsc::channel();
+                tab.enable_request_interception(Arc::new(
+                    move |_, _, request: RequestPausedEvent| {
+                        if let Some(time) = get_last_modified(request) {
+                            let _ = rx.send(time);
+                        }
+                        RequestPausedDecision::Continue(None)
+                    },
+                ))?;
+                tab.evaluate(include_str!("bookmarklet.js"), true)?;
+                match tx.recv_timeout(Duration::from_secs(20)) {
+                    Ok(date) => date.format(TIMESTAMP_FORMAT),
+                    Err(err) => bail!("Failed to get last-modified header: {err:?}"),
+                }
+            };
+            info!("The tool was updated at {update_time}.");
+
+            let png_name = format!("{latest_timestamp_fmt}_tool_{update_time}_list.png");
+            if !files_existing.contains(&png_name) {
+                info!("Getting the screenshot of song list in text format.");
+                wait_until_loaded(&tab)?;
+                sleep(Duration::from_secs(10)); // Very safe sleep
+                let screenshot = screenshot_rating_target(&tab)?;
+                fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
+                info!("List view has been captured.");
+            } else {
+                info!("Screenshot of song list in text format is already retrieved.");
+            }
+
+            let png_name = format!("{latest_timestamp_fmt}_tool_{update_time}_tiles.png");
+            if !files_existing.contains(&png_name) {
+                info!("Getting the screenshot of song list as icon grid.");
+                tab.wait_for_element("img.title")?.click()?;
+                wait_until_loaded(&tab)?;
+                let screenshot = screenshot_rating_target(&tab)?;
+                fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
+                info!("Grid view has been captured.");
+            } else {
+                info!("Screenshot of song list in grid view is already retrieved.");
+            }
+        }
+
+        anyhow::Ok(())
+    })() {
+        log::error!("{ret:#}");
+        log::info!("Press Enter to resume");
+        std::io::stdin().read_line(&mut String::new())?;
     }
 
     info!("Done.");
