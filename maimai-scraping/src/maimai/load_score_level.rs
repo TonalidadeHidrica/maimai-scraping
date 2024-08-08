@@ -5,11 +5,10 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use enum_iterator::Sequence;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
+use maimai_scraping_utils::fs_json_util::read_json;
 use serde::{Deserialize, Deserializer, Serialize};
 use strum::EnumString;
 use url::Url;
-
-use crate::fs_json_util::read_json;
 
 use super::{
     rating::{ScoreConstant, ScoreLevel},
@@ -20,16 +19,18 @@ pub fn load(path: impl Into<PathBuf> + Debug) -> anyhow::Result<Vec<Song>> {
     let songs: Vec<SongRaw> = read_json(path)?;
     songs.into_iter().map(Song::try_from).collect()
 }
-pub fn make_map<'t, T, U, F>(songs: &'t [T], mut key: F) -> anyhow::Result<HashMap<U, &'t T>>
+pub fn make_map<T, I, U, F>(songs: I, mut key: F) -> anyhow::Result<HashMap<U, T>>
 where
     T: std::fmt::Debug,
+    I: IntoIterator<Item = T>,
     U: std::hash::Hash + std::cmp::Eq,
-    F: FnMut(&'t T) -> U,
+    F: for<'t> FnMut(&'t T) -> U,
 {
     let mut map = HashMap::new();
     for song in songs {
-        if let Some(entry) = map.insert(key(song), song) {
-            bail!("Duplicating icon url: {entry:?}");
+        let key = key(&song);
+        if let Some(entry) = map.insert(key, song) {
+            bail!("Duplicating key: {entry:?}");
         }
     }
     Ok(map)
@@ -105,6 +106,7 @@ impl TryFrom<SongRaw> for Song {
             },
             song_name_abbrev: song.nn.to_owned().unwrap_or_else(|| song.n.to_owned()),
             song_name: song.n.into(),
+            // TODO: to support intl, cosider how to ignore domain
             icon: Url::parse(&format!(
                 "https://maimaidx.jp/maimai-mobile/img/Music/{}.png",
                 song.ico
@@ -114,7 +116,7 @@ impl TryFrom<SongRaw> for Song {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters)]
 pub struct ScoreLevels {
     basic: InternalScoreLevelEntry,
     advanced: InternalScoreLevelEntry,
@@ -162,7 +164,7 @@ impl InternalScoreLevelEntry {
         })
     }
 }
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum InternalScoreLevel {
     Unknown(ScoreLevel),
     Known(ScoreConstant),
@@ -205,7 +207,9 @@ impl InternalScoreLevel {
 }
 
 #[non_exhaustive]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, EnumString, Deserialize, Sequence)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, EnumString, Serialize, Deserialize, Sequence,
+)]
 pub enum MaimaiVersion {
     Maimai,
     MaimaiPlus,

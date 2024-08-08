@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use anyhow::Context;
 use getset::{CopyGetters, Getters};
 use itertools::{Itertools, PeekingNext};
+use maimai_scraping_utils::selector;
 use scraper::ElementRef;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;

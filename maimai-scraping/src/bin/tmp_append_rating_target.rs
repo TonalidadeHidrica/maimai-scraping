@@ -2,13 +2,11 @@ use std::path::PathBuf;
 
 use anyhow::bail;
 use clap::Parser;
-use maimai_scraping::{
-    fs_json_util::{read_json, write_json},
-    maimai::{
-        parser::{self, rating_target::RatingTargetFile},
-        schema::latest::PlayTime,
-    },
+use maimai_scraping::maimai::{
+    parser::{self, rating_target::RatingTargetFile},
+    schema::latest::PlayTime,
 };
+use maimai_scraping_utils::fs_json_util::{read_json, write_json};
 use scraper::Html;
 
 #[derive(Parser)]

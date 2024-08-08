@@ -7,16 +7,16 @@ use inquire::CustomType;
 use joinery::JoinableIterator;
 use maimai_scraping::{
     chrono_util::jst_now,
-    fs_json_util::read_json,
     maimai::{
         estimate_rating::{KeyFromTargetEntry, PrintResult, ScoreConstantsStore, ScoreKey},
-        estimator_config_multiuser,
-        load_score_level::{self, MaimaiVersion},
+        estimator_config_multiuser::{self, update_all},
+        load_score_level::{self, MaimaiVersion, RemovedSong},
         rating::ScoreConstant,
         schema::latest::{AchievementValue, PlayTime, ScoreDifficulty, ScoreGeneration, SongName},
         MaimaiUserData,
     },
 };
+use maimai_scraping_utils::fs_json_util::read_json;
 use ordered_float::OrderedFloat;
 
 #[derive(Parser)]
@@ -25,29 +25,41 @@ struct Opts {
     levels_json: PathBuf,
     config: PathBuf,
 
+    #[clap(long)]
+    removed_songs: Option<PathBuf>,
+
     #[clap(default_value = "10")]
     level_update_factor: f64,
 
     #[clap(long, value_enum, default_value = "quiet")]
     estimator_detail: PrintResult,
+
+    #[clap(long)]
+    only_estimate: bool,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Opts::parse();
     let config: estimator_config_multiuser::Root = toml::from_str(&read_to_string(args.config)?)?;
-    let datas = (config.users().iter())
-        .map(|config| anyhow::Ok((config, read_json::<_, MaimaiUserData>(config.data_path())?)))
-        .collect::<Result<Vec<_>, _>>()?;
+    let datas = config.read_all()?;
 
     let old_levels = load_score_level::load(&args.old_levels_json)?;
     let old_store = ScoreConstantsStore::new(&old_levels, &[])?;
 
     let levels = load_score_level::load(&args.levels_json)?;
-    let mut store = ScoreConstantsStore::new(&levels, &[])?;
+    let removed_songs: Vec<RemovedSong> = args
+        .removed_songs
+        .as_ref()
+        .map_or_else(|| Ok(Vec::new()), read_json)?;
+    let mut store = ScoreConstantsStore::new(&levels, &removed_songs)?;
     store.show_details = args.estimator_detail;
 
     update_all(&datas, &mut store)?;
     let count_initial = store.num_determined_songs();
+
+    if args.only_estimate {
+        return Ok(());
+    }
 
     let initial_rating = read_i16("Initial rating");
     let mut history: Vec<HistoryEntry> = vec![];
@@ -60,8 +72,7 @@ fn main() -> anyhow::Result<()> {
     }
     'outer_loop: loop {
         let mut store = store.clone();
-        let res = match (|| {
-            // store.show_details = PrintResult::Detailed;
+        let optimal_songs = (|| {
             for (i, entry) in history.iter().enumerate() {
                 let rating_before = history
                     .get(i.wrapping_sub(1))
@@ -70,6 +81,7 @@ fn main() -> anyhow::Result<()> {
                 store
                     .register_single_song_rating(
                         entry.key,
+                        None,
                         entry.achievement,
                         rating_delta,
                         entry.time,
@@ -77,10 +89,14 @@ fn main() -> anyhow::Result<()> {
                     .context("While registering single song rating")?;
             }
             update_all(&datas, &mut store).context("While updating under assumptions")?;
-            // store.show_details = PrintResult::Quiet;
+            println!(
+                "{} songs has been determined so far",
+                store.num_determined_songs() - count_initial
+            );
             get_optimal_song(&datas, &store, &old_store, args.level_update_factor)
                 .context("While getting optimal song")
-        })() {
+        })();
+        let res = match optimal_songs {
             Err(e) => {
                 println!("Error: {e:#}");
                 None
@@ -90,10 +106,6 @@ fn main() -> anyhow::Result<()> {
                 break;
             }
             Ok(Some(res)) => {
-                println!(
-                    "{} songs has been determined so far",
-                    store.num_determined_songs() - count_initial
-                );
                 println!(
                     "{} {:?} {:?}",
                     res.song.song_name(),
@@ -295,22 +307,4 @@ struct OptimalSongEntry<'s, 'o> {
     song: &'s load_score_level::Song,
     old_constants: &'o [ScoreConstant],
     constants: Vec<ScoreConstant>,
-}
-
-fn update_all(
-    datas: &[(&estimator_config_multiuser::User, MaimaiUserData)],
-    constants: &mut ScoreConstantsStore,
-) -> anyhow::Result<()> {
-    while {
-        let mut changed = false;
-        for (config, data) in datas {
-            changed |= constants.do_everything(
-                config.estimator_config(),
-                data.records.values(),
-                &data.rating_targets,
-            )?;
-        }
-        changed
-    } {}
-    Ok(())
 }

@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use maimai_scraping::{fs_json_util::read_json, maimai::schema::ver_20210316_2338::PlayRecord};
+use maimai_scraping::maimai::schema::ver_20210316_2338::PlayRecord;
+use maimai_scraping_utils::fs_json_util::read_json;
 
 #[derive(Parser)]
 struct Opts {

@@ -1,0 +1,12 @@
+[package]
+name = "generate-config"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aime-net = { version = "0.1.0", path = "../aime-net" }
+anyhow = "1.0.86"
+clap = { version = "4.5.9", features = ["derive"] }
+deranged = "0.3.11"
+itertools = "0.13.0"
+maimai-scraping = { version = "0.1.0", path = "../maimai-scraping" }

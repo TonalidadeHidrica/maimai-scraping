@@ -1,7 +1,11 @@
+use std::hash::Hash;
+
 use anyhow::bail;
 use chrono::naive::NaiveDateTime;
 use chrono::FixedOffset;
 use getset::{CopyGetters, Getters};
+use log::warn;
+use maimai_scraping_utils::regex;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fmt::Display;
@@ -51,7 +55,7 @@ pub struct PlayedAt {
     #[getset(get_copy = "pub")]
     time: PlayTime,
     #[getset(get = "pub")]
-    place: PlaceName,
+    place: Option<PlaceName>,
     #[getset(get_copy = "pub")]
     track: TrackIndex,
 }
@@ -174,6 +178,8 @@ pub struct SongMetadata {
     Clone,
     PartialEq,
     Eq,
+    PartialOrd,
+    Ord,
     Hash,
     Debug,
     derive_more::From,
@@ -187,20 +193,52 @@ pub struct SongMetadata {
 pub struct SongName(String);
 
 #[derive(
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Debug,
-    derive_more::From,
-    derive_more::FromStr,
-    derive_more::Display,
-    Serialize,
-    Deserialize,
+    Clone, derive_more::From, derive_more::FromStr, derive_more::Display, Serialize, Deserialize,
 )]
 pub struct SongIcon(Url);
+
+impl SongIcon {
+    fn comparator(&self) -> (bool, &str) {
+        let url = self.0.as_str();
+        match regex!(
+            r"https://(maimaidx.jp|maimaidx-eng.com)/maimai-mobile/img/Music/([0-9a-f]{16}).png"
+        )
+        .captures(url)
+        {
+            Some(url) => (true, url.get(2).unwrap().as_str()),
+            None => {
+                warn!("Song icon url is not in expcected format: {url:?}");
+                (false, url)
+            }
+        }
+    }
+}
+impl PartialEq for SongIcon {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other).is_eq()
+    }
+}
+impl Eq for SongIcon {}
+impl PartialOrd for SongIcon {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for SongIcon {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.comparator()).cmp(&other.comparator())
+    }
+}
+impl Hash for SongIcon {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.comparator().hash(state);
+    }
+}
+impl std::fmt::Debug for SongIcon {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.comparator().1)
+    }
+}
 
 #[derive(
     Clone,

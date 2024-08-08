@@ -15,6 +15,8 @@ use log::{info, warn};
 use scraper::Html;
 use url::Url;
 
+pub const RATING_TARGET_URL: &str = "https://maimaidx.jp/maimai-mobile/home/ratingTargetMusic/";
+
 pub async fn update_targets(
     client: &mut SegaClient<'_, Maimai>,
     rating_targets: &mut RatingTargetFile,
@@ -54,9 +56,7 @@ pub async fn update_targets(
     };
 
     let res = client
-        .fetch_authenticated(Url::parse(
-            "https://maimaidx.jp/maimai-mobile/home/ratingTargetMusic/",
-        )?)
+        .fetch_authenticated(Url::parse(RATING_TARGET_URL)?)
         .await?;
     let res = parser::rating_target::parse(&Html::parse_document(&res.0.text().await?))?;
     rating_targets.insert(key_to_store, res);

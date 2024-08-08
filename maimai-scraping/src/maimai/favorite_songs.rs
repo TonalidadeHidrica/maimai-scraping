@@ -12,6 +12,7 @@ use crate::{
 };
 
 use super::{
+    official_song_list::Category,
     parser::favorite_songs::{Idx, Page},
     schema::latest::SongName,
 };
@@ -19,6 +20,7 @@ use super::{
 pub async fn fetch_favorite_songs_form(
     client: &mut SegaClient<'_, Maimai>,
 ) -> anyhow::Result<favorite_songs::Page> {
+    // TODO: when supporting international ver., the domain should be updated
     favorite_songs::parse(&Html::parse_document(
         &client
             .fetch_authenticated(Url::parse(
@@ -31,12 +33,12 @@ pub async fn fetch_favorite_songs_form(
     ))
 }
 
-pub fn song_name_to_idx_map(page: &Page) -> HashMap<&SongName, Vec<&Idx>> {
+pub fn song_name_to_idx_map(page: &Page) -> HashMap<(Category, &SongName), Vec<&Idx>> {
     let mut ret = HashMap::<_, Vec<_>>::new();
-    for genre in &page.genres {
-        for song in &genre.songs {
-            ret.entry(&song.name).or_default().push(&song.idx);
-        }
+    for song in &page.songs {
+        ret.entry((song.category, &song.name))
+            .or_default()
+            .push(&song.idx);
     }
     ret
 }

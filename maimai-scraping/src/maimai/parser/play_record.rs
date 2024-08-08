@@ -7,6 +7,7 @@ use std::{
 use anyhow::{anyhow, bail};
 use chrono::NaiveDateTime;
 use itertools::Itertools;
+use maimai_scraping_utils::{regex, selector};
 use scraper::{ElementRef, Html};
 
 use crate::maimai::schema::latest::*;
@@ -46,7 +47,7 @@ fn parse_idx_from_playlog_main_container(playlog_top_container: ElementRef) -> a
         .map_err(|e| anyhow!("Could not parse Idx: {e:?}"))
 }
 
-pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
+pub fn parse(html: &Html, idx: Idx, place_expected: bool) -> anyhow::Result<PlayRecord> {
     let playlog_top_container = iterate_playlot_top_containers(html)
         .next()
         .ok_or_else(|| anyhow!("Playlog top container was not found."))?;
@@ -80,17 +81,20 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
         .map(parse_vs_user)
         .transpose()?;
 
-    let place_name_div = html
+    let place_name = html
         .select(selector!("#placeName > span"))
         .next()
-        .ok_or_else(|| anyhow!("Place name div not found"))?;
-    let place_name = place_name_div.text().collect::<String>().into();
+        .map(|place_name_div| PlaceName::from(place_name_div.text().collect::<String>()));
+    if place_expected && place_name.is_none() {
+        bail!("Place name expected, but not found")
+    }
 
-    let gray_block = place_name_div
+    let gray_block = playlog_top_container
         .parent()
-        .ok_or_else(|| anyhow!("No parent found for place name div"))?
-        .prev_siblings()
-        .find_map(ElementRef::wrap)
+        .ok_or_else(|| anyhow!("No parent found for playlog top container"))?
+        .next_siblings()
+        .filter_map(ElementRef::wrap)
+        .find(|e| selector!(".gray_block").matches(e))
         .ok_or_else(|| anyhow!("Gray block was not found"))?;
     let (tour_members, judge_count, rating_result, max_combo, max_sync) =
         parse_center_gray_block(gray_block)?;
@@ -227,7 +231,8 @@ fn parse_playlog_top_conatiner(
 pub fn parse_utage_metadata(div: ElementRef) -> anyhow::Result<UtageMetadata> {
     let utage_back_div = div
         .select(selector!(
-            r#"img[src="https://maimaidx.jp/maimai-mobile/img/music_utage.png"]"#
+            r#"img[src="https://maimaidx.jp/maimai-mobile/img/music_utage.png"],
+               img[src="https://maimaidx-eng.com/maimai-mobile/img/music_utage.png"]"#
         ))
         .next()
         .ok_or_else(|| anyhow!("Utage kind icon not found"))?;
@@ -250,7 +255,8 @@ pub fn parse_utage_metadata(div: ElementRef) -> anyhow::Result<UtageMetadata> {
     };
     let buddy = div
         .select(selector!(
-            r#"img[src="https://maimaidx.jp/maimai-mobile/img/music_utage_buddy.png"]"#
+            r#"img[src="https://maimaidx.jp/maimai-mobile/img/music_utage_buddy.png"],
+               img[src="https://maimaidx-eng.com/maimai-mobile/img/music_utage_buddy.png"]"#
         ))
         .next()
         .is_some();
@@ -265,6 +271,9 @@ pub fn parse_score_generation_img(img: ElementRef) -> anyhow::Result<ScoreGenera
     match img.value().attr("src") {
         Some("https://maimaidx.jp/maimai-mobile/img/music_dx.png") => Ok(Deluxe),
         Some("https://maimaidx.jp/maimai-mobile/img/music_standard.png") => Ok(Standard),
+        // International
+        Some("https://maimaidx-eng.com/maimai-mobile/img/music_dx.png") => Ok(Deluxe),
+        Some("https://maimaidx-eng.com/maimai-mobile/img/music_standard.png") => Ok(Standard),
         url => Err(anyhow!(
             "Unexpected image source for music generation: {:?}",
             url
@@ -281,6 +290,13 @@ pub fn parse_playlog_diff(img: ElementRef) -> anyhow::Result<ScoreDifficulty> {
         Some("https://maimaidx.jp/maimai-mobile/img/diff_master.png") => Ok(Master),
         Some("https://maimaidx.jp/maimai-mobile/img/diff_remaster.png") => Ok(ReMaster),
         Some("https://maimaidx.jp/maimai-mobile/img/diff_utage.png") => Ok(Utage),
+        // International
+        Some("https://maimaidx-eng.com/maimai-mobile/img/diff_basic.png") => Ok(Basic),
+        Some("https://maimaidx-eng.com/maimai-mobile/img/diff_advanced.png") => Ok(Advanced),
+        Some("https://maimaidx-eng.com/maimai-mobile/img/diff_expert.png") => Ok(Expert),
+        Some("https://maimaidx-eng.com/maimai-mobile/img/diff_master.png") => Ok(Master),
+        Some("https://maimaidx-eng.com/maimai-mobile/img/diff_remaster.png") => Ok(ReMaster),
+        Some("https://maimaidx-eng.com/maimai-mobile/img/diff_utage.png") => Ok(Utage),
         url => Err(anyhow!("Unexpected difficulty image: {:?}", url)),
     }
 }
@@ -328,6 +344,8 @@ fn parse_playlog_main_container(
         .map(|e| e.value().attr("src"))
     {
         Some(Some("https://maimaidx.jp/maimai-mobile/img/playlog/clear.png")) => true,
+        // International
+        Some(Some("https://maimaidx-eng.com/maimai-mobile/img/playlog/clear.png")) => true,
         Some(src) => return Err(anyhow!("Unexpected image source for cleared: {:?}", src)),
         _ => false,
     };
@@ -585,6 +603,22 @@ fn parse_achievement_rank(achievement_rank: ElementRef) -> anyhow::Result<Achiev
         "https://maimaidx.jp/maimai-mobile/img/playlog/b.png?ver=1.45" => B,
         "https://maimaidx.jp/maimai-mobile/img/playlog/c.png?ver=1.45" => C,
         "https://maimaidx.jp/maimai-mobile/img/playlog/d.png?ver=1.45" => D,
+        // International
+        // Ver 1.35
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/sssplus.png?ver=1.35" => SSSPlus,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/sss.png?ver=1.35" => SSS,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/ssplus.png?ver=1.35" => SSPlus,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/ss.png?ver=1.35" => SS,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/splus.png?ver=1.35" => SPlus,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/s.png?ver=1.35" => S,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/aaa.png?ver=1.35" => AAA,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/aa.png?ver=1.35" => AA,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/a.png?ver=1.35" => A,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/bbb.png?ver=1.35" => BBB,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/bb.png?ver=1.35" => BB,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/b.png?ver=1.35" => B,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/c.png?ver=1.35" => C,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/d.png?ver=1.35" => D,
         src => return Err(anyhow!("Unknown url: {}", src)),
     };
     Ok(res)
@@ -679,6 +713,12 @@ fn parse_dxstar(dxstar_img: ElementRef) -> anyhow::Result<DeluxscoreRank> {
         "https://maimaidx.jp/maimai-mobile/img/playlog/dxstar_3.png" => 3,
         "https://maimaidx.jp/maimai-mobile/img/playlog/dxstar_4.png" => 4,
         "https://maimaidx.jp/maimai-mobile/img/playlog/dxstar_5.png" => 5,
+        // International
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/dxstar_1.png" => 1,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/dxstar_2.png" => 2,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/dxstar_3.png" => 3,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/dxstar_4.png" => 4,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/dxstar_5.png" => 5,
         src => return Err(anyhow!("Unknown src for dxstar: {}", src)),
     };
     Ok(res.try_into().expect("value is always valid"))
@@ -739,6 +779,13 @@ fn parse_full_combo_img(full_combo_img: ElementRef) -> anyhow::Result<FullComboK
         "https://maimaidx.jp/maimai-mobile/img/playlog/fcplus.png?ver=1.45" => FullComboPlus,
         "https://maimaidx.jp/maimai-mobile/img/playlog/ap.png?ver=1.45" => AllPerfect,
         "https://maimaidx.jp/maimai-mobile/img/playlog/applus.png?ver=1.45" => AllPerfectPlus,
+        // International
+        // Ver 1.35
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/fc_dummy.png?ver=1.35" => Nothing,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/fc.png?ver=1.35" => FullCombo,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/fcplus.png?ver=1.35" => FullComboPlus,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/ap.png?ver=1.35" => AllPerfect,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/applus.png?ver=1.35" => AllPerfectPlus,
         src => return Err(anyhow!("Unknown src for full combo img: {}", src)),
     };
     Ok(res)
@@ -801,6 +848,14 @@ fn parse_full_sync_img(full_sync_img: ElementRef) -> anyhow::Result<FullSyncKind
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsplus.png?ver=1.45" => FullSyncPlus,
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsd.png?ver=1.45" => FullSyncDx,
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsdplus.png?ver=1.45" => FullSyncDxPlus,
+        // International
+        // Ver 1.35
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/sync_dummy.png?ver=1.35" => Nothing,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/sync.png?ver=1.35" => SyncPlay,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/fs.png?ver=1.35" => FullSync,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/fsplus.png?ver=1.35" => FullSyncPlus,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/fsd.png?ver=1.35" => FullSyncDx,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/fsdplus.png?ver=1.35" => FullSyncDxPlus,
         src => return Err(anyhow!("Unknown src for full sync img: {}", src)),
     };
     Ok(res)
@@ -816,6 +871,11 @@ fn parse_matching_rank_img(matching_rank_img: ElementRef) -> anyhow::Result<Matc
         "https://maimaidx.jp/maimai-mobile/img/playlog/2nd.png" => 2,
         "https://maimaidx.jp/maimai-mobile/img/playlog/3rd.png" => 3,
         "https://maimaidx.jp/maimai-mobile/img/playlog/4th.png" => 4,
+        // International
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/1st.png" => 1,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/2nd.png" => 2,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/3rd.png" => 3,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/4th.png" => 4,
         src => return Err(anyhow!("Unknown src for matching rank img: {}", src)),
     };
     Ok(res.try_into().expect("Value is always in the bounds"))
@@ -1211,6 +1271,19 @@ fn parse_rating_color(img: ElementRef) -> anyhow::Result<RatingBorderColor> {
         "https://maimaidx.jp/maimai-mobile/img/rating_base_gold.png?ver=1.45" => Gold,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_platinum.png?ver=1.45" => Platinum,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow.png?ver=1.45" => Rainbow,
+        // International
+        // Ver 1.35
+        "https://maimaidx-eng.com/maimai-mobile/img/rating_base_normal.png?ver=1.35" => Normal,
+        "https://maimaidx-eng.com/maimai-mobile/img/rating_base_blue.png?ver=1.35" => Blue,
+        "https://maimaidx-eng.com/maimai-mobile/img/rating_base_green.png?ver=1.35" => Green,
+        "https://maimaidx-eng.com/maimai-mobile/img/rating_base_orange.png?ver=1.35" => Orange,
+        "https://maimaidx-eng.com/maimai-mobile/img/rating_base_red.png?ver=1.35" => Red,
+        "https://maimaidx-eng.com/maimai-mobile/img/rating_base_purple.png?ver=1.35" => Purple,
+        "https://maimaidx-eng.com/maimai-mobile/img/rating_base_bronze.png?ver=1.35" => Bronze,
+        "https://maimaidx-eng.com/maimai-mobile/img/rating_base_silver.png?ver=1.35" => Silver,
+        "https://maimaidx-eng.com/maimai-mobile/img/rating_base_gold.png?ver=1.35" => Gold,
+        "https://maimaidx-eng.com/maimai-mobile/img/rating_base_platinum.png?ver=1.35" => Platinum,
+        "https://maimaidx-eng.com/maimai-mobile/img/rating_base_rainbow.png?ver=1.35" => Rainbow,
         src => return Err(anyhow!("Unexpected border color: {}", src)),
     };
     Ok(res)
@@ -1226,6 +1299,10 @@ fn parse_delta_sign(img: ElementRef) -> anyhow::Result<RatingDeltaSign> {
         "https://maimaidx.jp/maimai-mobile/img/playlog/rating_up.png" => Up,
         "https://maimaidx.jp/maimai-mobile/img/playlog/rating_keep.png" => Keep,
         "https://maimaidx.jp/maimai-mobile/img/playlog/rating_down.png" => Down,
+        // International
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/rating_up.png" => Up,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/rating_keep.png" => Keep,
+        "https://maimaidx-eng.com/maimai-mobile/img/playlog/rating_down.png" => Down,
         src => return Err(anyhow!("Unexpected border color: {}", src)),
     };
     Ok(res)
@@ -1306,6 +1383,9 @@ pub fn parse_playlog_vs_result(img: ElementRef) -> anyhow::Result<BattleWinOrLos
     match img.value().attr("src") {
         Some("https://maimaidx.jp/maimai-mobile/img/playlog/win.png") => Ok(Win),
         Some("https://maimaidx.jp/maimai-mobile/img/playlog/lose.png") => Ok(Lose),
+        // International
+        Some("https://maimaidx-eng.com/maimai-mobile/img/playlog/win.png") => Ok(Win),
+        Some("https://maimaidx-eng.com/maimai-mobile/img/playlog/lose.png") => Ok(Lose),
         url => Err(anyhow!(
             "Unexpected playlog vs result image image: {:?}",
             url
@@ -1383,6 +1463,9 @@ pub fn parse_battle_kind_img(img: ElementRef) -> anyhow::Result<BattleKind> {
     match img.value().attr("src") {
         Some("https://maimaidx.jp/maimai-mobile/img/playlog/vs.png") => Ok(VsFriend),
         Some("https://maimaidx.jp/maimai-mobile/img/playlog/boss.png") => Ok(Promotion),
+        // International
+        Some("https://maimaidx-eng.com/maimai-mobile/img/playlog/vs.png") => Ok(VsFriend),
+        Some("https://maimaidx-eng.com/maimai-mobile/img/playlog/boss.png") => Ok(Promotion),
         src => Err(anyhow!("Unknown src for battle kind img: {:?}", src)),
     }
 }
@@ -1414,6 +1497,13 @@ fn parse_life_block(div: ElementRef) -> anyhow::Result<LifeResult> {
             Ok(PerfectChallengeResult(life_value))
         }
         [Some("https://maimaidx.jp/maimai-mobile/img/course/icon_course_life.png"), Some("https://maimaidx.jp/maimai-mobile/img/course/icon_course.png")] => {
+            Ok(CourseResult(life_value))
+        }
+        // International
+        [Some("https://maimaidx-eng.com/maimai-mobile/img/icon_life.png"), Some("https://maimaidx-eng.com/maimai-mobile/img/icon_perfectchallenge.png")] => {
+            Ok(PerfectChallengeResult(life_value))
+        }
+        [Some("https://maimaidx-eng.com/maimai-mobile/img/course/icon_course_life.png"), Some("https://maimaidx-eng.com/maimai-mobile/img/course/icon_course.png")] => {
             Ok(CourseResult(life_value))
         }
         elements => Err(anyhow!(

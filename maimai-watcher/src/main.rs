@@ -16,7 +16,7 @@ use maimai_scraping::{cookie_store::UserIdentifier, maimai::estimate_rating::Est
 use maimai_watcher::{
     misc,
     slack::webhook_send,
-    watch::{self, TimeoutConfig, UserId, WatchHandler},
+    watch::{self, AimeSwitchConfig, ForcePaidConfig, TimeoutConfig, UserId, WatchHandler},
 };
 use serde::Deserialize;
 use splitty::split_unquoted_whitespace;
@@ -35,6 +35,7 @@ struct Config {
     webhook_endpoint: String,
     interval: Duration,
     levels_path: PathBuf,
+    levels_intl_path: PathBuf,
     removed_songs_path: PathBuf,
     slack_post_webhook: Option<Url>,
     users: HashMap<UserId, UserConfig>,
@@ -51,6 +52,12 @@ struct UserConfig {
     estimate_internal_levels: bool,
     estimator_config: EstimatorConfig,
     user_identifier: UserIdentifier,
+    #[serde(default)]
+    international: bool,
+    #[serde(default)]
+    force_paid_config: Option<ForcePaidConfig>,
+    #[serde(default)]
+    aime_switch_config: Option<AimeSwitchConfig>,
 }
 
 #[tokio::main]
@@ -300,13 +307,18 @@ fn watch_config(
     timeout_config: TimeoutConfig,
     report_no_updates: bool,
 ) -> watch::Config {
+    let levels_path = if user_config.international {
+        &state_config.levels_intl_path
+    } else {
+        &state_config.levels_path
+    };
     watch::Config {
         user_id,
         interval: state_config.interval,
         credentials_path: user_config.credentials_path.clone(),
         cookie_store_path: user_config.cookie_store_path.clone(),
         maimai_uesr_data_path: user_config.user_data_path.clone(),
-        levels_path: state_config.levels_path.clone(),
+        levels_path: levels_path.clone(),
         removed_songs_path: state_config.removed_songs_path.clone(),
         slack_post_webhook: state_config.slack_post_webhook.clone(),
         estimate_internal_levels: user_config.estimate_internal_levels,
@@ -314,6 +326,9 @@ fn watch_config(
         report_no_updates,
         estimator_config: user_config.estimator_config,
         user_identifier: user_config.user_identifier.clone(),
+        international: user_config.international,
+        force_paid_config: user_config.force_paid_config.clone(),
+        aime_switch_config: user_config.aime_switch_config.clone(),
     }
 }
 

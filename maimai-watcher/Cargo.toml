@@ -7,18 +7,21 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.3.1"
+aime-net = { version = "0.1.0", path = "../aime-net" }
 anyhow = "1.0.72"
 clap = { version = "4.3.16", features = ["derive"] }
 ctrlc = "3.4.0"
-env_logger = "0.10.0"
+env_logger = "0.11.3"
 fs-err = "2.9.0"
-itertools = "0.11.0"
+itertools = "0.12.1"
 joinery = "3.1.0"
 lazy_format = "2.0.0"
 log = "0.4.19"
 maimai-scraping = { version = "0.1.0", path = "../maimai-scraping" }
-reqwest = { version = "0.11.18", features = ["json"] }
+maimai-scraping-utils = { version = "0.1.0", path = "../maimai-scraping-utils" }
+reqwest = { version = "0.12.4", features = ["json"] }
 serde = "1.0.171"
+serde_with = "3.8.1"
 splitty = "1.0.1"
 tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread", "sync"] }
 toml = "0.8.1"

@@ -3,13 +3,14 @@ use std::{convert::TryInto, io::BufWriter, ops::Range, path::PathBuf};
 use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
-use maimai_scraping::{
-    fs_json_util::read_json,
-    maimai::schema::{
-        latest::{PlayRecord, ScoreDifficulty, SongName},
+use maimai_scraping::maimai::{
+    schema::{
+        latest::{ScoreDifficulty, SongName},
         ver_20210316_2338::AchievementValue,
     },
+    MaimaiUserData,
 };
+use maimai_scraping_utils::fs_json_util::read_json;
 use svg::{
     node::element::{Circle, Line, Rectangle, Text},
     Document,
@@ -25,9 +26,10 @@ struct Opts {
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let records: Vec<PlayRecord> = read_json(&opts.input_file)?;
-    let filtered = records
-        .iter()
+    let data: MaimaiUserData = read_json(&opts.input_file)?;
+    let filtered = data
+        .records
+        .values()
         .filter(|x| {
             x.song_metadata().name() == &opts.song_name
                 && x.score_metadata().difficulty() == opts.difficulty
@@ -110,8 +112,7 @@ fn main() -> anyhow::Result<()> {
         }
         let x = sum / count as f64;
         document = document.add(
-            Text::new()
-                .add(svg::node::Text::new(date.to_string()))
+            Text::new(date.to_string())
                 .set("font-size", 10)
                 .set("dominant-baseline", "central")
                 .set(

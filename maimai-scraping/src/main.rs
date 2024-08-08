@@ -3,21 +3,25 @@ use std::fmt::Display;
 use std::path::Path;
 use std::path::PathBuf;
 
+use anyhow::bail;
 use clap::Parser;
 use clap::ValueEnum;
 use log::info;
 use maimai_scraping::api::SegaClient;
+use maimai_scraping::api::SegaClientAndRecordList;
+use maimai_scraping::api::SegaClientInitializer;
 use maimai_scraping::cookie_store::UserIdentifier;
 use maimai_scraping::data_collector::load_or_create_user_data;
 use maimai_scraping::data_collector::update_records;
-use maimai_scraping::fs_json_util::write_json;
 use maimai_scraping::maimai::Maimai;
+use maimai_scraping::maimai::MaimaiIntl;
 use maimai_scraping::ongeki::Ongeki;
 use maimai_scraping::sega_trait::Idx;
 use maimai_scraping::sega_trait::PlayTime;
 use maimai_scraping::sega_trait::PlayedAt;
 use maimai_scraping::sega_trait::SegaTrait;
 use maimai_scraping::sega_trait::SegaUserData;
+use maimai_scraping_utils::fs_json_util::write_json;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -32,11 +36,14 @@ struct Opts {
     cookie_store_path: Option<PathBuf>,
     #[clap(flatten)]
     user_identifier: UserIdentifier,
+    #[arg(long)]
+    force_paid: bool,
 }
 #[derive(Clone, ValueEnum)]
 enum Game {
     Ongeki,
     Maimai,
+    MaimaiIntl,
 }
 
 #[tokio::main]
@@ -45,12 +52,54 @@ async fn main() -> anyhow::Result<()> {
 
     let opts = Opts::parse();
     match opts.game {
-        Game::Maimai => run::<Maimai>(&opts).await,
-        Game::Ongeki => run::<Ongeki>(&opts).await,
+        Game::Maimai => {
+            let client =
+                SegaClient::<Maimai>::new(make_initializer::<Maimai>(&opts, opts.force_paid))
+                    .await?;
+            run(&opts, client).await
+        }
+        Game::Ongeki => {
+            if opts.force_paid {
+                bail!("Explicit paid course for ongeki is not implemented yet!");
+            }
+            let client =
+                SegaClient::<Ongeki>::new(make_initializer::<Ongeki>(&opts, opts.force_paid))
+                    .await?;
+            run(&opts, client).await
+        }
+        Game::MaimaiIntl => {
+            if opts.force_paid {
+                bail!("There is no Standard Course for Maimai International.");
+            }
+            let client =
+                SegaClient::new_maimai_intl(make_initializer::<MaimaiIntl>(&opts, ())).await?;
+            run(&opts, client).await
+        }
     }
 }
 
-async fn run<T>(opts: &Opts) -> anyhow::Result<()>
+fn make_initializer<T: SegaTrait>(
+    opts: &Opts,
+    force_paid: T::ForcePaidFlag,
+) -> SegaClientInitializer<'_, '_, T> {
+    SegaClientInitializer {
+        credentials_path: opts
+            .credentials_path
+            .as_deref()
+            .unwrap_or_else(|| Path::new(T::CREDENTIALS_PATH)),
+        cookie_store_path: opts
+            .cookie_store_path
+            .as_deref()
+            .unwrap_or_else(|| Path::new(T::COOKIE_STORE_PATH)),
+        user_identifier: &opts.user_identifier,
+        force_paid,
+    }
+}
+
+async fn run<T>(
+    opts: &Opts,
+    (mut client, index): SegaClientAndRecordList<'_, T>,
+) -> anyhow::Result<()>
 where
     T: SegaTrait,
     Idx<T>: Copy + PartialEq + Display,
@@ -60,16 +109,6 @@ where
     for<'a> T::UserData: Default + Deserialize<'a>,
 {
     let mut data = load_or_create_user_data::<T, _>(&opts.user_data_path)?;
-    let (mut client, index) = SegaClient::<T>::new(
-        opts.credentials_path
-            .as_deref()
-            .unwrap_or_else(|| Path::new(T::CREDENTIALS_PATH)),
-        opts.cookie_store_path
-            .as_deref()
-            .unwrap_or_else(|| Path::new(T::COOKIE_STORE_PATH)),
-        &opts.user_identifier,
-    )
-    .await?;
     update_records(&mut client, data.records_mut(), index).await?;
     write_json(&opts.user_data_path, &data)?;
     info!("Successfully saved data to {:?}.", opts.user_data_path);

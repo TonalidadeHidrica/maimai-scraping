@@ -1,6 +1,6 @@
 #![allow(clippy::inconsistent_digit_grouping)]
 #![allow(clippy::zero_prefixed_literal)]
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, iter::successors, str::FromStr};
 
 use anyhow::bail;
 use serde::{Deserialize, Serialize};
@@ -97,7 +97,7 @@ pub fn single_song_rating(
     RatingValue::from((prod / 10 / 100_0000 / 10) as u16)
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct ScoreLevel {
     pub level: u8,
     pub plus: bool,
@@ -113,11 +113,18 @@ impl ScoreLevel {
         }
     }
     pub fn score_constant_candidates(self) -> impl Iterator<Item = ScoreConstant> + Clone {
+        // TODO: This function should be deprecated and every usage must be aware of its version.
+        self.score_constant_candidates_aware(true)
+    }
+
+    pub fn score_constant_candidates_aware(
+        self,
+        buddies_plus_or_later: bool,
+    ) -> impl Iterator<Item = ScoreConstant> + Clone {
         let range = match self.level {
             a @ 1..=6 => a * 10..(a + 1) * 10,
             a @ 7..=14 => {
-                // TODO: For versions prior than BuddiesPlus, this should be + 7 instead.
-                let boundary = a * 10 + 6;
+                let boundary = a * 10 + if buddies_plus_or_later { 6 } else { 7 };
                 if self.plus {
                     boundary..(a + 1) * 10
                 } else {
@@ -128,6 +135,19 @@ impl ScoreLevel {
             _ => unreachable!(),
         };
         range.map(ScoreConstant)
+    }
+
+    /// x..=y
+    pub fn range_inclusive(x: ScoreLevel, y: ScoreLevel) -> impl Iterator<Item = ScoreLevel> {
+        successors(Some(x), |x| {
+            let (level, plus) = match (x.level, x.plus) {
+                (15, _) => return None,
+                (x @ 7..=14, false) => (x, true),
+                (x, _) => (x + 1, false),
+            };
+            Some(ScoreLevel::new(level, plus).unwrap())
+        })
+        .filter(move |&x| x <= y)
     }
 }
 
@@ -156,5 +176,27 @@ impl From<ScoreConstant> for ScoreLevel {
             level,
             plus: (7..=14).contains(&level) && value % 10 >= 6,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use itertools::Itertools;
+
+    use super::ScoreLevel;
+
+    #[test]
+    fn test_song_level_range_inclusive() {
+        let levels =
+            ScoreLevel::range_inclusive("1".parse().unwrap(), "15".parse().unwrap()).collect_vec();
+        // 1-15 + 7-14 = 15 + 8 = 23
+        assert!(levels.len() == 23);
+        // All element are different, elements are sorted
+        let set = BTreeSet::from_iter(levels.iter().copied())
+            .into_iter()
+            .collect_vec();
+        assert!(levels == set);
     }
 }

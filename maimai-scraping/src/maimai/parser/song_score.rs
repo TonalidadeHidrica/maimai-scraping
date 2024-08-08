@@ -1,5 +1,6 @@
 use anyhow::{bail, Context};
 use itertools::Itertools;
+use maimai_scraping_utils::selector;
 use scraper::ElementRef;
 use serde::{Deserialize, Serialize};
 

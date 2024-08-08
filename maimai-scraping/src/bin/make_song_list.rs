@@ -1,18 +1,19 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{BTreeSet, HashMap},
+    path::PathBuf,
+};
 
 use anyhow::{bail, Context};
 use clap::Parser;
 use itertools::Itertools;
-use maimai_scraping::{
-    fs_json_util::{read_json, write_json},
-    maimai::{
-        load_score_level::{self, MaimaiVersion, SongRaw},
-        rating::ScoreLevel,
-        schema::latest::{SongIcon, SongName},
-    },
+use maimai_scraping::maimai::{
+    load_score_level::{self, MaimaiVersion, SongRaw},
+    official_song_list,
+    rating::ScoreLevel,
+    schema::latest::{SongIcon, SongName},
 };
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
+use maimai_scraping_utils::fs_json_util::{read_json, write_json};
+use serde::Serialize;
 use url::Url;
 
 #[derive(Parser)]
@@ -26,54 +27,9 @@ struct Args {
     dictionary_json: Option<PathBuf>,
 }
 
-#[allow(unused)]
-#[serde_as]
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct SongListEntry {
-    title: String,
-    title_kana: String,
-    artist: String,
-    /// Category (in Japanese, can be enum)
-    catcode: String,
-    image_url: String,
-
-    /// Release date? (Can be "000000", unclear if it's reliable)
-    release: String,
-    /// Integer that decides default song order
-    #[serde_as(as = "DisplayFromStr")]
-    sort: u64,
-    /// Five-digit integer that seeminlgy corresponds to the release date of score
-    version: String,
-
-    /// "NEW" if new song (or score?)
-    date: Option<String>,
-    dx_lev_adv: Option<String>,
-    dx_lev_bas: Option<String>,
-    dx_lev_exp: Option<String>,
-    dx_lev_mas: Option<String>,
-    dx_lev_remas: Option<String>,
-    /// "○" if unlocking song is required
-    key: Option<String>,
-    lev_adv: Option<String>,
-    lev_bas: Option<String>,
-    lev_exp: Option<String>,
-    lev_mas: Option<String>,
-    lev_remas: Option<String>,
-
-    /// Succeeded by "？" if utage
-    lev_utage: Option<String>,
-    /// Comment for utage score (perhaps)
-    comment: Option<String>,
-    /// Utage kanji
-    kanji: Option<String>,
-    /// "○" if the score is buddy
-    buddy: Option<String>,
-}
-
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let mut songs: Vec<SongListEntry> = read_json(args.songs_json)?;
+    let mut songs: Vec<official_song_list::SongRaw> = read_json(args.songs_json)?;
     songs.sort_by_key(|song| song.sort);
 
     let mut res = vec![];
@@ -161,6 +117,17 @@ fn main() -> anyhow::Result<()> {
 
         write_json(dictionary_json, &res)?;
     }
+
+    let official_songs = songs
+        .into_iter()
+        .map(official_song_list::Song::try_from)
+        .collect::<Result<Vec<_>, _>>()?;
+    let chars: BTreeSet<_> = official_songs
+        .iter()
+        .flat_map(|song| song.title_kana().as_ref().chars())
+        .collect();
+    println!("{:?}", chars);
+    println!("{}", chars.iter().collect::<String>());
 
     Ok(())
 }

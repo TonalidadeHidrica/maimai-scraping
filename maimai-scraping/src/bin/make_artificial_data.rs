@@ -1,11 +1,10 @@
 use std::{io::stdin, path::PathBuf};
 
 use anyhow::{anyhow, bail, Context};
-use chrono::NaiveDateTime;
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::{
-    fs_json_util::write_json,
+    chrono_util::jst_now,
     maimai::{
         parser::rating_target::{RatingTargetEntry, RatingTargetList},
         rating::ScoreLevel,
@@ -13,6 +12,7 @@ use maimai_scraping::{
         MaimaiUserData,
     },
 };
+use maimai_scraping_utils::fs_json_util::write_json;
 use maplit::btreemap;
 
 #[derive(Parser)]
@@ -52,7 +52,9 @@ fn main() -> anyhow::Result<()> {
         };
         let level = {
             let lv: u8 = lv.parse()?;
-            ScoreLevel::new(lv / 10, (7..=14).contains(&lv) && lv >= 6)?
+            let (x, y) = (lv / 10, lv % 10);
+            let plus = matches!((x, y), (7..=14, 6..));
+            ScoreLevel::new(x, plus)?
         };
         let idx = "dummy".to_owned().into();
         res[i].push(
@@ -70,7 +72,7 @@ fn main() -> anyhow::Result<()> {
                 .build(),
         );
     }
-    let date = NaiveDateTime::UNIX_EPOCH.into();
+    let date = jst_now().into();
     let targets = {
         let [a, b, c, d] = res;
         RatingTargetList::builder()

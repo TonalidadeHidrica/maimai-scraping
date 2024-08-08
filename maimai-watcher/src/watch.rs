@@ -1,23 +1,33 @@
 use std::{
+    fmt::{Debug, Display},
     iter::successors,
     path::PathBuf,
     time::{Duration, Instant},
 };
 
+use aime_net::{
+    api::AimeApi,
+    schema::{AccessCode, CardName},
+};
 use anyhow::Context;
-use log::error;
+use log::{error, info, warn};
 use maimai_scraping::{
-    api::SegaClient,
+    api::{SegaClient, SegaClientAndRecordList, SegaClientInitializer},
     cookie_store::UserIdentifier,
     data_collector::{load_or_create_user_data, update_records},
-    fs_json_util::{read_json, write_json},
     maimai::{
         data_collector::update_targets,
         estimate_rating::{EstimatorConfig, ScoreConstantsStore},
         load_score_level::{self, MaimaiVersion, RemovedSong, Song},
-        Maimai, MaimaiUserData,
+        parser::rating_target::RatingTargetFile,
+        schema::latest::{PlayRecord, PlayTime},
+        Maimai, MaimaiIntl, MaimaiUserData,
     },
+    sega_trait::{self, Idx, PlayRecordTrait, PlayedAt, SegaTrait},
 };
+use maimai_scraping_utils::fs_json_util::{read_json, write_json};
+use serde::Deserialize;
+use serde_with::{serde_as, DisplayFromStr};
 use tokio::{
     spawn,
     sync::mpsc::{self, error::TryRecvError},
@@ -50,6 +60,23 @@ pub struct Config {
     pub report_no_updates: bool,
     pub estimator_config: EstimatorConfig,
     pub user_identifier: UserIdentifier,
+    pub international: bool,
+    pub force_paid_config: Option<ForcePaidConfig>,
+    pub aime_switch_config: Option<AimeSwitchConfig>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ForcePaidConfig {
+    pub after_use: Option<UserIdentifier>,
+}
+#[serde_as]
+#[derive(Clone, Debug, Deserialize)]
+pub struct AimeSwitchConfig {
+    pub slot_index: usize,
+    #[serde_as(as = "DisplayFromStr")]
+    pub access_code: AccessCode,
+    pub card_name: CardName,
+    pub cookie_store_path: PathBuf,
 }
 
 #[derive(Debug)]
@@ -101,8 +128,14 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
 
         let mut last_update_time = Instant::now();
         let mut count = 0;
+
         'outer: while let Err(TryRecvError::Empty | TryRecvError::Disconnected) = rx.try_recv() {
-            match runner.run().await {
+            let run = if config.international {
+                runner.run::<MaimaiIntl>().await
+            } else {
+                runner.run::<Maimai>().await
+            };
+            match run {
                 Err(e) => {
                     error!("{e:#}");
                     webhook_send(
@@ -149,6 +182,41 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
                 break;
             }
         }
+
+        if let Some(force_paid) = config.force_paid_config {
+            if config.international {
+                error!("There is no paid course for maimai interantional!  Skipping the swithcing back process.");
+            } else if let Some(after_use) = force_paid.after_use {
+                let init = SegaClientInitializer {
+                    credentials_path: &config.credentials_path,
+                    cookie_store_path: &config.cookie_store_path,
+                    user_identifier: &after_use,
+                    force_paid: true,
+                };
+                match Maimai::new_client(init).await {
+                    Ok(_) => {
+                        webhook_send(
+                            &reqwest::Client::new(),
+                            &config.slack_post_webhook,
+                            &config.user_id,
+                            "Standard course has been given back to the original account.",
+                        )
+                        .await;
+                    }
+                    Err(e) => {
+                        let e = e.context("Failed to switch back the paid account");
+                        error!("{e:#}");
+                        webhook_send(
+                            &reqwest::Client::new(),
+                            &config.slack_post_webhook,
+                            &config.user_id,
+                            format!("{e:#}"),
+                        )
+                        .await;
+                    }
+                }
+            }
+        }
     });
     Ok(WatchHandler(tx))
 }
@@ -188,6 +256,7 @@ impl<'c, 's> Runner<'c, 's> {
             self.levels_actual
                 .do_everything(
                     self.config.estimator_config,
+                    None,
                     self.data.records.values(),
                     &self.data.rating_targets,
                 )
@@ -198,27 +267,65 @@ impl<'c, 's> Runner<'c, 's> {
             &self.config.slack_post_webhook,
             &self.config.user_id,
             self.levels_naive
-                .guess_from_rating_target_order(MaimaiVersion::latest(), &self.data.rating_targets)
+                .guess_from_rating_target_order(
+                    MaimaiVersion::latest(),
+                    false,
+                    None,
+                    &self.data.rating_targets,
+                )
                 .context("While estimating levels roughly"),
         )
         .await;
     }
 
-    async fn run(&mut self) -> anyhow::Result<bool> {
+    async fn run<T>(&mut self) -> anyhow::Result<bool>
+    where
+        T: MaimaiPossiblyIntl,
+    {
         let config = self.config;
-        let (mut client, index) = SegaClient::<Maimai>::new(
-            &self.config.credentials_path,
-            &self.config.cookie_store_path,
-            &self.config.user_identifier,
-        )
-        .await?;
+
+        // Select aime if specified
+        if let Some(aime) = &config.aime_switch_config {
+            let credentials = read_json(&config.credentials_path)?;
+            let (api, aimes) = AimeApi::new(aime.cookie_store_path.to_owned())?
+                .login(&credentials)
+                .await?;
+            api.overwrite_if_absent(
+                &aimes,
+                aime.slot_index,
+                aime.access_code,
+                aime.card_name.clone(),
+            )
+            .await?;
+            sleep(Duration::from_secs(1)).await;
+            info!("Switched aime.")
+        }
+
+        let (force_paid, warn) = T::force_paid(config.force_paid_config.is_some());
+        if warn {
+            warn!("There is no Standard Course for Maimai International!");
+            webhook_send(
+                &reqwest::Client::new(),
+                &config.slack_post_webhook,
+                &config.user_id,
+                "There is no Standard Course for Maimai International!",
+            )
+            .await;
+        }
+        let init = SegaClientInitializer {
+            credentials_path: &self.config.credentials_path,
+            cookie_store_path: &self.config.cookie_store_path,
+            user_identifier: &self.config.user_identifier,
+            force_paid,
+        };
+        let (mut client, index) = T::new_client(init).await?;
         let last_played = index.first().context("There is no play yet.")?.0;
         let inserted_records = update_records(&mut client, &mut self.data.records, index).await?;
         if inserted_records.is_empty() {
             return Ok(false);
         }
         write_json(&config.maimai_uesr_data_path, &self.data)?; // Save twice just in case
-        let update_targets_res = update_targets(
+        let update_targets_res = T::update_targets(
             &mut client,
             &mut self.data.rating_targets,
             last_played,
@@ -275,6 +382,72 @@ impl<'c, 's> Runner<'c, 's> {
         }
 
         Ok(true)
+    }
+}
+
+trait MaimaiPossiblyIntl
+where
+    Self: SegaTrait<PlayRecord = PlayRecord>,
+    // Self::UserData: SegaUserData<Maimai>,
+    Idx<Self>: Copy + PartialEq + Display,
+    sega_trait::PlayTime<Self>: Copy + Ord + Display,
+    PlayedAt<Self>: Debug,
+    <Self as SegaTrait>::PlayRecord: PlayRecordTrait<PlayTime = PlayTime>,
+{
+    fn force_paid(force_paid: bool) -> (Self::ForcePaidFlag, bool);
+
+    async fn new_client<'p>(
+        init: SegaClientInitializer<'p, '_, Self>,
+    ) -> anyhow::Result<SegaClientAndRecordList<'p, Self>>;
+
+    async fn update_targets(
+        client: &mut SegaClient<'_, Self>,
+        rating_targets: &mut RatingTargetFile,
+        last_played: PlayTime,
+        force: bool,
+    ) -> anyhow::Result<()>;
+}
+
+impl MaimaiPossiblyIntl for Maimai {
+    fn force_paid(force_paid: bool) -> (bool, bool) {
+        (force_paid, false)
+    }
+
+    async fn new_client<'p>(
+        init: SegaClientInitializer<'p, '_, Self>,
+    ) -> anyhow::Result<SegaClientAndRecordList<'p, Self>> {
+        SegaClient::<Maimai>::new(init).await
+    }
+
+    async fn update_targets(
+        client: &mut SegaClient<'_, Self>,
+        rating_targets: &mut RatingTargetFile,
+        last_played: PlayTime,
+        force: bool,
+    ) -> anyhow::Result<()> {
+        update_targets(client, rating_targets, last_played, force).await
+    }
+}
+
+impl MaimaiPossiblyIntl for MaimaiIntl {
+    fn force_paid(force_paid: bool) -> ((), bool) {
+        ((), !force_paid)
+    }
+
+    async fn new_client<'p>(
+        init: SegaClientInitializer<'p, '_, Self>,
+    ) -> anyhow::Result<SegaClientAndRecordList<'p, Self>> {
+        SegaClient::new_maimai_intl(init).await
+    }
+
+    async fn update_targets(
+        _client: &mut SegaClient<'_, Self>,
+        _rating_targets: &mut RatingTargetFile,
+        _last_played: PlayTime,
+        _force: bool,
+    ) -> anyhow::Result<()> {
+        info!("Maimai international has rating target available!");
+        Ok(())
     }
 }
 

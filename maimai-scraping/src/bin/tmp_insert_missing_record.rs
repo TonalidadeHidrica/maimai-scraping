@@ -3,10 +3,8 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use maimai_scraping::{
-    fs_json_util::read_json,
-    maimai::{parser::play_record, schema::latest::Idx, MaimaiUserData},
-};
+use maimai_scraping::maimai::{parser::play_record, schema::latest::Idx, MaimaiUserData};
+use maimai_scraping_utils::fs_json_util::read_json;
 use scraper::Html;
 
 #[derive(Parser)]
@@ -23,6 +21,7 @@ fn main() -> anyhow::Result<()> {
     let _record = play_record::parse(
         &Html::parse_document(&fs_err::read_to_string(opts.record_html)?),
         opts.idx,
+        true,
     );
     Ok(())
 }

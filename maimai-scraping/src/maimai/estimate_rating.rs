@@ -25,19 +25,20 @@ use clap::{Args, ValueEnum};
 use either::Either;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
-use itertools::{chain, Itertools};
+use itertools::{chain, repeat_n, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::{trace, warn};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use super::{
+    estimator_config_multiuser::UserName,
     load_score_level::{self, make_hash_multimap},
     schema::latest::{AchievementRank, ScoreMetadata},
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize)]
 pub struct ScoreKey<'a> {
     pub icon: &'a SongIcon,
     pub generation: ScoreGeneration,
@@ -77,11 +78,12 @@ pub struct ScoreConstantsStore<'s> {
     song_name_to_icon: HashMap<&'s SongName, HashSet<&'s SongIcon>>,
     pub show_details: PrintResult,
 }
-#[derive(Clone, Copy, ValueEnum)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, ValueEnum)]
 pub enum PrintResult {
+    Quiet,
     Summarize,
     Detailed,
-    Quiet,
+    Verbose,
 }
 impl<'s> ScoreConstantsStore<'s> {
     pub fn new(levels: &'s [Song], removed_songs: &'s [RemovedSong]) -> anyhow::Result<Self> {
@@ -171,15 +173,17 @@ impl<'s> ScoreConstantsStore<'s> {
         };
         let entry = entry.get_mut();
         let old_len = entry.candidates.len();
-
         let new: BTreeSet<_> = new.into_iter().collect();
+
+        trace!("{:?} will be contrained by {:?}", entry.candidates, new);
         entry.candidates.retain(|x| new.contains(x));
-        // println!("new = {new:?}");
+
+        let reason = entry.make_reason(reason);
+        let event = (key.with(entry.song.icon()), reason);
+        trace!("{event:?}");
 
         if entry.candidates.len() < old_len {
             entry.reasons.push(self.events.len());
-            let event = (key.with(entry.song.icon()), entry.make_reason(reason));
-            trace!("{event:?}");
             self.events.push(event);
             let print_reasons = || {
                 for &i in &entry.reasons {
@@ -197,14 +201,14 @@ impl<'s> ScoreConstantsStore<'s> {
             match entry.candidates[..] {
                 [] => {
                     let message = lazy_format!("No more candidates for {score_name} :(");
-                    if let PrintResult::Detailed = self.show_details {
+                    if PrintResult::Detailed <= self.show_details {
                         println!("  {message}");
                         print_reasons();
                     }
                     bail!("{message}");
                 }
                 [determined] => match self.show_details {
-                    PrintResult::Detailed => {
+                    PrintResult::Detailed | PrintResult::Verbose => {
                         println!("  Internal level determined! {score_name}: {determined}");
                         print_reasons();
                     }
@@ -278,7 +282,7 @@ pub enum KeyFromTargetEntry<'n, 's> {
     Multiple,
 }
 
-#[derive(Clone, Getters, CopyGetters)]
+#[derive(Clone, Debug, Getters, CopyGetters)]
 pub struct ScoreConstantsEntry<'s> {
     #[getset(get_copy = "pub")]
     song: &'s Song,
@@ -312,6 +316,9 @@ pub struct EstimatorConfig {
     pub new_songs_are_complete: bool,
     #[arg(long)]
     pub old_songs_are_complete: bool,
+    #[arg(long)]
+    #[serde(default)]
+    pub ignore_time: bool,
 }
 
 impl<'s> ScoreConstantsStore<'s> {
@@ -319,27 +326,34 @@ impl<'s> ScoreConstantsStore<'s> {
     pub fn do_everything<'r>(
         &mut self,
         config: EstimatorConfig,
+        name: Option<&UserName>,
         records: impl IntoIterator<Item = &'r PlayRecord> + Clone,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<bool> {
         let version = config.version.unwrap_or(MaimaiVersion::latest());
-        if let PrintResult::Detailed = self.show_details {
+        if let PrintResult::Verbose = self.show_details {
             println!("New songs");
         }
         if config.new_songs_are_complete {
-            self.determine_by_delta(version, records.clone(), false)?;
+            self.determine_by_delta(version, config.ignore_time, name, records.clone(), false)?;
         }
         if config.old_songs_are_complete {
-            self.determine_by_delta(version, records.clone(), true)?;
+            self.determine_by_delta(version, config.ignore_time, name, records.clone(), true)?;
         }
         let very_before_len = self.events().len();
         for i in 1.. {
-            if let PrintResult::Detailed = self.show_details {
+            if let PrintResult::Verbose = self.show_details {
                 println!("Iteration {i}");
             }
             let before_len = self.events().len();
-            self.guess_from_rating_target_order(version, rating_targets)?;
-            self.records_not_in_targets(version, records.clone(), rating_targets)?;
+            self.guess_from_rating_target_order(version, config.ignore_time, name, rating_targets)?;
+            self.records_not_in_targets(
+                version,
+                config.ignore_time,
+                name,
+                records.clone(),
+                rating_targets,
+            )?;
             if before_len == self.events().len() {
                 break;
             }
@@ -350,6 +364,8 @@ impl<'s> ScoreConstantsStore<'s> {
     fn determine_by_delta<'r>(
         &mut self,
         version: MaimaiVersion,
+        ignore_time: bool,
+        name: Option<&UserName>,
         records: impl IntoIterator<Item = &'r PlayRecord>,
         analyze_old_songs: bool,
     ) -> anyhow::Result<()> {
@@ -361,7 +377,7 @@ impl<'s> ScoreConstantsStore<'s> {
         let max_count = if analyze_old_songs { 35 } else { 15 };
         for record in records
             .into_iter()
-            .filter(|r| (start_time..end_time).contains(&r.played_at().time()))
+            .filter(|r| ignore_time || (start_time..end_time).contains(&r.played_at().time()))
             .filter(|r| r.score_metadata().difficulty() != ScoreDifficulty::Utage)
         {
             let score_key = ScoreKey::from(record);
@@ -413,6 +429,7 @@ impl<'s> ScoreConstantsStore<'s> {
 
                 self.register_single_song_rating(
                     score_key,
+                    name,
                     record.achievement_result().value(),
                     rating,
                     record.played_at().time(),
@@ -435,6 +452,7 @@ impl<'s> ScoreConstantsStore<'s> {
     pub fn register_single_song_rating(
         &mut self,
         score_key: ScoreKey<'_>,
+        name: Option<&UserName>,
         a: AchievementValue,
         rating: i16,
         time: PlayTime,
@@ -444,7 +462,8 @@ impl<'s> ScoreConstantsStore<'s> {
             ScoreConstant::candidates()
                 .filter(|&level| single_song_rating(level, a, rank_coef(a)).get() as i16 == rating),
             lazy_format!(
-                "beacuse record played at {time} determines the single-song rating to be {rating}",
+                "beacuse record played at {time} achieving {a}{} determines the single-song rating to be {rating}",
+                display_played_by(name),
             ),
         )?;
         Ok(())
@@ -453,6 +472,8 @@ impl<'s> ScoreConstantsStore<'s> {
     pub fn guess_from_rating_target_order(
         &mut self,
         version: MaimaiVersion,
+        ignore_time: bool,
+        name: Option<&UserName>,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
         let start_time: PlayTime = version.start_time().into();
@@ -471,7 +492,7 @@ impl<'s> ScoreConstantsStore<'s> {
         // println!("{removal_time:?}");
         for (&play_time, list) in rating_targets
             .iter()
-            .filter(|p| (start_time..end_time).contains(p.0))
+            .filter(|p| ignore_time || (start_time..end_time).contains(p.0))
         {
             let rating_sum_is_reliable =
                 removal_time.map_or(true, |removal_time| play_time.get() < removal_time);
@@ -558,7 +579,10 @@ impl<'s> ScoreConstantsStore<'s> {
             //     println!("{} {:?}", elem.rating_target_entry.song_name(), res);
             // }
             for (&key, res) in keys.iter().zip(res) {
-                let reason = lazy_format!("by the rating target list on {play_time}");
+                let reason = lazy_format!(
+                    "by the rating target list on {play_time}{}",
+                    display_played_by(name),
+                );
                 self.set(key, res.into_iter(), reason)?;
             }
         }
@@ -568,23 +592,30 @@ impl<'s> ScoreConstantsStore<'s> {
     pub fn records_not_in_targets<'r>(
         &mut self,
         version: MaimaiVersion,
+        ignore_time: bool,
+        name: Option<&UserName>,
         records: impl IntoIterator<Item = &'r PlayRecord>,
         rating_targets: &RatingTargetFile,
     ) -> anyhow::Result<()> {
         let start_time: PlayTime = version.start_time().into();
         let end_time: PlayTime = version.end_time().into();
 
+        let mut warned = false;
         'next_group: for (_, group) in &records
             .into_iter()
-            .filter(|record| (start_time..end_time).contains(&record.played_at().time()))
+            .filter(|record| {
+                ignore_time || (start_time..end_time).contains(&record.played_at().time())
+            })
             .filter(|r| r.score_metadata().difficulty() != ScoreDifficulty::Utage)
             .filter_map(
                 |record| match rating_targets.range(record.played_at().time()..).next() {
                     None => {
-                        warn!(
-                            "Rating target not collected for a record played at {}",
-                            record.played_at().time()
-                        );
+                        if !std::mem::replace(&mut warned, true) {
+                            warn!(
+                                "Rating target not collected for a record played at {} (and potentially anything afterwards)",
+                                record.played_at().time()
+                            );
+                        }
                         None
                     }
                     Some(pair) => Some((record, pair)),
@@ -691,9 +722,10 @@ impl<'s> ScoreConstantsStore<'s> {
                     min_pair >= this_pair || this_sssplus && border_pair >= this_pair
                 });
                 let message = lazy_format!(
-                    "because record played at {} achieving {} is not in list at {}, so it's below {:?}",
+                    "because record played at {} achieving {}{} is not in list at {}, so it's below {:?}",
                     record.played_at().time(),
                     this_a,
+                    display_played_by(name),
                     target_time,
                     if this_sssplus { border_pair } else { min_pair },
                 );
@@ -702,6 +734,17 @@ impl<'s> ScoreConstantsStore<'s> {
         }
         Ok(())
     }
+
+    pub fn removed(&self, icon: &SongIcon) -> bool {
+        self.removed_songs.contains_key(icon)
+    }
+}
+
+fn display_played_by(user: Option<&UserName>) -> impl Display + '_ {
+    lazy_format!(
+        if let Some(user) = user => " played by {user:?}"
+        else => ""
+    )
 }
 
 #[allow(unused)]
@@ -787,4 +830,40 @@ pub fn analyze_old_songs(
 
 fn compute_hash<K: Hash + ?Sized, S: BuildHasher>(hash_builder: &S, key: &K) -> u64 {
     hash_builder.hash_one(key)
+}
+
+pub fn visualize_rating_targets<'a>(
+    constants: &ScoreConstantsStore,
+    entries: impl IntoIterator<Item = &'a RatingTargetEntry>,
+    start_index: usize,
+) -> anyhow::Result<()> {
+    for (entry, i) in entries.into_iter().zip(start_index..) {
+        let Some((_, levels)) = constants.levels_from_target_entry(entry)? else {
+            bail!("Song unexpectedly removed!")
+        };
+        let levels = BTreeSet::from_iter(levels.iter().copied());
+        print!("    {i:4} {:<3} ", format!("{}", entry.level()));
+        let constants = || entry.level().score_constant_candidates();
+        let fill = repeat_n(None, 6usize.saturating_sub(constants().count()));
+        for constant in constants().map(Some).chain(fill) {
+            match constant {
+                Some(constant) if levels.contains(&constant) => {
+                    let value = single_song_rating_for_target_entry(constant, entry);
+                    print!("[{:>3}] ", value.get())
+                }
+                Some(_) => print!("[   ] "),
+                None => print!("      "),
+            }
+        }
+        let s = entry.score_metadata();
+        print!(
+            "{:>9} {} ({:?} {:?})",
+            entry.achievement().to_string(),
+            entry.song_name(),
+            s.generation(),
+            s.difficulty()
+        );
+        println!();
+    }
+    Ok(())
 }

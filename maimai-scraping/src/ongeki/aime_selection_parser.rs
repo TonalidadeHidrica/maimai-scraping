@@ -1,15 +1,16 @@
 use anyhow::Context;
+use maimai_scraping_utils::selector;
 use scraper::{ElementRef, Html};
 
-use crate::cookie_store::{AimeIdx, PlayerName};
+use crate::sega_trait::AimeEntry;
 
-pub fn parse(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>> {
+pub fn parse(html: &Html) -> anyhow::Result<Vec<AimeEntry>> {
     html.select(selector!("div.aime_main_block"))
         .map(parse_aime_block)
         .collect()
 }
 
-pub fn parse_aime_block(div: ElementRef) -> anyhow::Result<(AimeIdx, PlayerName)> {
+pub fn parse_aime_block(div: ElementRef) -> anyhow::Result<AimeEntry> {
     let aime_idx = div
         .select(selector!(r#"input[name="idx"]"#))
         .next()
@@ -26,5 +27,10 @@ pub fn parse_aime_block(div: ElementRef) -> anyhow::Result<(AimeIdx, PlayerName)
         .text()
         .collect::<String>()
         .into();
-    Ok((aime_idx, player_name))
+    // TODO: is it paid????
+    Ok(AimeEntry {
+        idx: aime_idx,
+        player_name,
+        paid: false,
+    })
 }

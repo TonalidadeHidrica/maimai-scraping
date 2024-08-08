@@ -1,16 +1,43 @@
 use std::{collections::BTreeMap, fmt::Debug};
 
 use scraper::{Html, Selector};
+use serde::Serialize;
 use url::Url;
 
 use crate::cookie_store::{AimeIdx, FriendCode, PlayerName};
+
+#[derive(Debug)]
+pub struct AimeEntry {
+    pub idx: AimeIdx,
+    pub player_name: PlayerName,
+    pub paid: bool,
+}
+
+pub trait SegaJapaneseAuth {
+    const LOGIN_FORM_URL: &'static str;
+    fn login_form_token_selector() -> &'static Selector;
+    const LOGIN_URL: &'static str;
+
+    const AIME_LIST_URL: &'static str;
+    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<AimeEntry>>;
+    fn select_aime_list_url(idx: AimeIdx) -> String;
+    const AIME_SUBMIT_PATH: &'static str;
+
+    const FRIEND_CODE_URL: &'static str;
+    fn parse_friend_code_page(html: &Html) -> anyhow::Result<FriendCode>;
+
+    const HOME_URL: &'static str;
+    fn switch_to_paid_url(aime_idx: AimeIdx) -> String;
+    type ResetChargedAimeForm: Serialize;
+    fn parse_paid_confirmation(html: &Html) -> anyhow::Result<Self::ResetChargedAimeForm>;
+    const SWITCH_PAID_CONFIRMATION_URL: &'static str;
+}
 
 pub type Idx<T> = <<T as SegaTrait>::PlayRecord as PlayRecordTrait>::Idx;
 pub type PlayTime<T> = <<T as SegaTrait>::PlayRecord as PlayRecordTrait>::PlayTime;
 pub type PlayedAt<T> = <<T as SegaTrait>::PlayRecord as PlayRecordTrait>::PlayedAt;
 pub trait SegaTrait: Sized {
     const ERROR_PATH: &'static str;
-    const AIME_SUBMIT_PATH: &'static str;
     const RECORD_URL: &'static str;
 
     type UserData: SegaUserData<Self>;
@@ -26,19 +53,10 @@ pub trait SegaTrait: Sized {
 
     fn play_log_detail_not_found(url: &Url) -> bool;
 
-    const LOGIN_FORM_URL: &'static str;
-    fn login_form_token_selector() -> &'static Selector;
-    const LOGIN_URL: &'static str;
-    const AIME_LIST_URL: &'static str;
-    fn select_aime_list_url(idx: AimeIdx) -> String;
-    const HOME_URL: &'static str;
-
-    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>>;
-    const FRIEND_CODE_URL: &'static str;
-    fn parse_friend_code_page(html: &Html) -> anyhow::Result<FriendCode>;
-
     const CREDENTIALS_PATH: &'static str;
     const COOKIE_STORE_PATH: &'static str;
+
+    type ForcePaidFlag;
 }
 
 pub type RecordMap<T> = BTreeMap<PlayTime<T>, <T as SegaTrait>::PlayRecord>;

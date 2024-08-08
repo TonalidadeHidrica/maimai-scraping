@@ -4,17 +4,21 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use fs_err::File;
 use log::{error, info, trace};
+use maimai_scraping_utils::selector;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     chrono_util::jst_now,
     compare_htmls::elements_are_equivalent,
-    cookie_store::{AimeIdx, FriendCode, PlayerName},
-    sega_trait::{record_map_serde, PlayRecordTrait, RecordMap, SegaTrait, SegaUserData},
+    cookie_store::{AimeIdx, FriendCode},
+    sega_trait::{
+        record_map_serde, AimeEntry, PlayRecordTrait, RecordMap, SegaJapaneseAuth, SegaTrait,
+        SegaUserData,
+    },
 };
 
 use self::{
@@ -72,10 +76,11 @@ pub fn check_no_loss(html: &scraper::Html, record: &PlayRecord) -> anyhow::Resul
 }
 
 fn try_write(path: &Path, description: &'static str, content: impl Display) {
-    match (|| {
+    let write_result = (|| {
         writeln!(BufWriter::new(File::create(path)?), "{content}")?;
         anyhow::Ok(())
-    })() {
+    })();
+    match write_result {
         Ok(_) => {
             info!("Saved {description} to {path:?}")
         }
@@ -87,9 +92,48 @@ fn try_write(path: &Path, description: &'static str, content: impl Display) {
 }
 
 pub struct Ongeki;
+impl SegaJapaneseAuth for Ongeki {
+    const LOGIN_FORM_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/";
+    fn login_form_token_selector() -> &'static Selector {
+        selector!(
+            r#"form[action="https://ongeki-net.com/ongeki-mobile/submit/"] input[name="token"]"#
+        )
+    }
+    const LOGIN_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/submit/";
+
+    const AIME_LIST_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/aimeList/";
+    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<AimeEntry>> {
+        aime_selection_parser::parse(html)
+    }
+    fn select_aime_list_url(idx: AimeIdx) -> String {
+        format!(
+            "https://ongeki-net.com/ongeki-mobile/aimeList/submit/?idx={}",
+            idx,
+        )
+    }
+    const AIME_SUBMIT_PATH: &'static str = "/ongeki-mobile/aimeList/submit/";
+
+    const FRIEND_CODE_URL: &'static str =
+        "https://ongeki-net.com/ongeki-mobile/friend/userFriendCode/";
+    fn parse_friend_code_page(html: &Html) -> anyhow::Result<FriendCode> {
+        friend_code_parser::parse(html)
+    }
+
+    const HOME_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/home/";
+
+    fn switch_to_paid_url(aime_idx: AimeIdx) -> String {
+        format!("https://ongeki-net.com/ongeki-mobile/resetChargeAime/?idx={aime_idx}")
+    }
+    type ResetChargedAimeForm = ();
+    fn parse_paid_confirmation(_html: &Html) -> anyhow::Result<Self::ResetChargedAimeForm> {
+        // TODO: implement?
+        bail!("Switching to paid is not supported yet")
+    }
+    const SWITCH_PAID_CONFIRMATION_URL: &'static str =
+        "https://ongeki-net.com/ongeki-mobile/resetChargeAime/submit/";
+}
 impl SegaTrait for Ongeki {
     const ERROR_PATH: &'static str = "/ongeki-mobile/error/";
-    const AIME_SUBMIT_PATH: &'static str = "/ongeki-mobile/aimeList/submit/";
     const RECORD_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/record/playlog/";
 
     type UserData = OngekiUserData;
@@ -116,32 +160,10 @@ impl SegaTrait for Ongeki {
         url.path() == "/ongeki-mobile/record/playlog/"
     }
 
-    const LOGIN_FORM_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/";
-    fn login_form_token_selector() -> &'static Selector {
-        selector!(
-            r#"form[action="https://ongeki-net.com/ongeki-mobile/submit/"] input[name="token"]"#
-        )
-    }
-    const LOGIN_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/submit/";
-    const AIME_LIST_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/aimeList/";
-    fn select_aime_list_url(idx: AimeIdx) -> String {
-        format!(
-            "https://ongeki-net.com/ongeki-mobile/aimeList/submit/?idx={}",
-            idx,
-        )
-    }
-    fn parse_aime_selection_page(html: &Html) -> anyhow::Result<Vec<(AimeIdx, PlayerName)>> {
-        aime_selection_parser::parse(html)
-    }
-    const HOME_URL: &'static str = "https://ongeki-net.com/ongeki-mobile/home/";
-    const FRIEND_CODE_URL: &'static str =
-        "https://ongeki-net.com/ongeki-mobile/friend/userFriendCode/";
-    fn parse_friend_code_page(html: &Html) -> anyhow::Result<FriendCode> {
-        friend_code_parser::parse(html)
-    }
-
     const CREDENTIALS_PATH: &'static str = "./ignore/credentials_ongeki.json";
     const COOKIE_STORE_PATH: &'static str = "./ignore/cookie_store_ongeki.json";
+
+    type ForcePaidFlag = bool;
 }
 
 #[derive(Default, Serialize, Deserialize)]

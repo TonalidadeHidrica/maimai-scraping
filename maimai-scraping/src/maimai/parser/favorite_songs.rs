@@ -1,9 +1,11 @@
 use anyhow::Context;
 use derive_more::{AsRef, Display, From};
+use itertools::Itertools;
+use maimai_scraping_utils::selector;
 use scraper::ElementRef;
 use serde::Serialize;
 
-use crate::maimai::schema::latest::SongName;
+use crate::maimai::{official_song_list::Category, schema::latest::SongName};
 
 pub fn parse(html: &scraper::Html) -> anyhow::Result<Page> {
     let token = html
@@ -15,21 +17,18 @@ pub fn parse(html: &scraper::Html) -> anyhow::Result<Page> {
         .context("Attribute `value` not found in the <input> for token")?
         .to_owned()
         .into();
-    let genres = html
+    let songs = html
         .select(selector!("#list > div.m_t_10"))
-        .map(parse_genre)
-        .collect::<anyhow::Result<Vec<_>>>()?;
-    Ok(Page { token, genres })
+        .map(parse_category)
+        .flatten_ok()
+        .map(|e| e?)
+        .try_collect()?;
+    Ok(Page { token, songs })
 }
 
 #[derive(Debug)]
 pub struct Page {
     pub token: Token,
-    pub genres: Vec<Genre>,
-}
-#[derive(Debug)]
-pub struct Genre {
-    pub name: GenreName,
     pub songs: Vec<Song>,
 }
 #[derive(Debug, From, AsRef, Display, Serialize)]
@@ -37,32 +36,33 @@ pub struct Genre {
 pub struct Token(String);
 #[derive(Debug)]
 pub struct Song {
+    pub category: Category,
     pub name: SongName,
     pub idx: Idx,
     pub checked: bool,
 }
 #[derive(Debug, From)]
-pub struct GenreName(String);
+pub struct GenreName(#[allow(unused)] String);
 #[derive(Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Hash, From, Serialize)]
 pub struct Idx(String);
 
-fn parse_genre(element: ElementRef) -> anyhow::Result<Genre> {
-    let name = element
+fn parse_category(
+    element: ElementRef,
+) -> anyhow::Result<impl Iterator<Item = anyhow::Result<Song>> + '_> {
+    let category = element
         .prev_siblings()
         .filter_map(ElementRef::wrap)
         .find(|e| selector!(".favorite_p_s").matches(e))
         .context("Genre name div not found")?
         .text()
         .collect::<String>()
-        .into();
-    let songs = element
+        .parse()?;
+    Ok(element
         .select(selector!("div.favorite_checkbox"))
-        .map(parse_song)
-        .collect::<anyhow::Result<Vec<_>>>()?;
-    Ok(Genre { name, songs })
+        .map(move |element| parse_song(category, element)))
 }
 
-fn parse_song(element: ElementRef) -> anyhow::Result<Song> {
+fn parse_song(category: Category, element: ElementRef) -> anyhow::Result<Song> {
     let name = element
         .select(selector!("div.favorite_music_name"))
         .next()
@@ -81,5 +81,10 @@ fn parse_song(element: ElementRef) -> anyhow::Result<Song> {
         .to_owned()
         .into();
     let checked = checkbox.attr("checked").is_some();
-    Ok(Song { name, idx, checked })
+    Ok(Song {
+        category,
+        name,
+        idx,
+        checked,
+    })
 }
