@@ -3,6 +3,7 @@ use std::{fmt::Debug, path::PathBuf};
 use anyhow::{anyhow, bail};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use enum_iterator::Sequence;
+use enum_map::Enum;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
 use maimai_scraping_utils::fs_json_util::read_json;
@@ -208,7 +209,18 @@ impl InternalScoreLevel {
 
 #[non_exhaustive]
 #[derive(
-    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, EnumString, Serialize, Deserialize, Sequence,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Debug,
+    EnumString,
+    Serialize,
+    Deserialize,
+    Sequence,
+    Enum,
 )]
 pub enum MaimaiVersion {
     Maimai,

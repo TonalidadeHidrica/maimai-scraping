@@ -3,6 +3,7 @@ use std::hash::Hash;
 use anyhow::bail;
 use chrono::naive::NaiveDateTime;
 use chrono::FixedOffset;
+use enum_map::Enum;
 use getset::{CopyGetters, Getters};
 use log::warn;
 use maimai_scraping_utils::regex;
@@ -260,7 +261,9 @@ pub struct ScoreMetadata {
     difficulty: ScoreDifficulty,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize, Enum,
+)]
 pub enum ScoreGeneration {
     Standard,
     Deluxe,

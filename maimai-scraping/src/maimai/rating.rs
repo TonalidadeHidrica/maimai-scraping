@@ -5,7 +5,10 @@ use std::{fmt::Display, iter::successors, str::FromStr};
 use anyhow::bail;
 use serde::{Deserialize, Serialize};
 
-use super::schema::latest::{AchievementValue, RatingValue};
+use super::{
+    load_score_level::MaimaiVersion,
+    schema::latest::{AchievementValue, RatingValue},
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
 pub struct RankCoefficient(pub u64);
@@ -168,6 +171,7 @@ impl Display for ScoreLevel {
     }
 }
 
+// TODO deprecate this method
 impl From<ScoreConstant> for ScoreLevel {
     fn from(value: ScoreConstant) -> Self {
         let value = value.0;
@@ -175,6 +179,21 @@ impl From<ScoreConstant> for ScoreLevel {
         Self {
             level,
             plus: (7..=14).contains(&level) && value % 10 >= 6,
+        }
+    }
+}
+impl ScoreConstant {
+    pub fn to_lv(self, version: MaimaiVersion) -> ScoreLevel {
+        let boundary = if version >= MaimaiVersion::BuddiesPlus {
+            6
+        } else {
+            7
+        };
+        let value = self.0;
+        let level = value / 10;
+        ScoreLevel {
+            level,
+            plus: (7..=14).contains(&level) && value % 10 >= boundary,
         }
     }
 }
