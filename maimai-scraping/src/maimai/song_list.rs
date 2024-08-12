@@ -13,7 +13,7 @@ use super::{
 /// and zero or more utage scores.
 #[derive(Debug)]
 pub struct Song {
-    pub name: SongName,
+    pub name: EnumMap<MaimaiVersion, Option<SongName>>,
     pub category: Option<Category>,
     pub artist: Option<SongArtist>,
     pub pronunciation: Option<SongPronunciation>,

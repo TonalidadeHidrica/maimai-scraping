@@ -3,12 +3,12 @@ use std::{collections::BTreeMap, iter::successors, path::PathBuf, str::FromStr};
 use anyhow::{anyhow, bail, Context};
 use clap::Parser;
 use enum_iterator::Sequence;
+use enum_map::EnumMap;
 use hashbrown::{hash_map::Entry as HEntry, HashMap};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::info;
 use maimai_scraping::maimai::{
-    estimate_rating::ScoreKey,
     load_score_level::{self, InternalScoreLevel, MaimaiVersion},
     rating::{ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon},
@@ -71,6 +71,7 @@ struct Results {
 }
 
 impl Results {
+    /// This function is to be called at most once per version.
     fn read_in_lv(
         &mut self,
         version: MaimaiVersion,
@@ -88,15 +89,12 @@ impl Results {
                 HEntry::Occupied(i) => {
                     let index = *i.get();
                     let song = self.songs.get_mut(index);
-                    if &song.name != data.song_name() || song.icon.as_ref() != Some(data.icon()) {
-                        bail!("Inconsistent song name or icon: song = {song:?}, data = {data:?}");
-                    }
                     (index, song)
                 }
                 HEntry::Vacant(e) => {
                     let index = self.songs.index_new();
                     self.songs.0.push(Song {
-                        name: data.song_name().to_owned(),
+                        name: EnumMap::default(),
                         category: None,
                         artist: None,
                         pronunciation: None,
@@ -108,6 +106,7 @@ impl Results {
                     (index, self.songs.get_mut(index))
                 }
             };
+            song.name[version] = Some(data.song_name().to_owned());
 
             // Update abbreviation map, check if contradiction occurs
             let abbrev: SongAbbreviation = data.song_name_abbrev().to_owned().into();
