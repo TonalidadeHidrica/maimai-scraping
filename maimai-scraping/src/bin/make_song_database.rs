@@ -1,10 +1,17 @@
-use std::{collections::BTreeMap, iter::successors, path::PathBuf, str::FromStr};
+use std::{
+    collections::BTreeMap,
+    iter::successors,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use anyhow::{anyhow, bail, Context};
 use clap::Parser;
 use enum_iterator::Sequence;
 use enum_map::EnumMap;
+use fs_err::read_to_string;
 use hashbrown::{hash_map::Entry as HEntry, HashMap};
+use itertools::Itertools;
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::info;
@@ -22,6 +29,7 @@ use serde::Deserialize;
 struct Opts {
     in_lv_dir: PathBuf,
     in_lv_data_dir: PathBuf,
+    database_dir: PathBuf,
     save_json: PathBuf,
     additional_nicknames: Option<PathBuf>,
 }
@@ -31,6 +39,7 @@ struct Opts {
 struct Resources {
     in_lv: BTreeMap<MaimaiVersion, Vec<load_score_level::Song>>,
     in_lv_data: BTreeMap<MaimaiVersion, InLvData>,
+    removed_songs_wiki: RemovedSongsWiki,
     additional_nicknames: Vec<(String, SongIcon)>,
 }
 impl Resources {
@@ -51,6 +60,9 @@ impl Resources {
             let data: InLvData = read_json(opts.in_lv_data_dir.join(path))?;
             ret.in_lv_data.insert(version, data);
         }
+
+        ret.removed_songs_wiki =
+            RemovedSongsWiki::read(opts.database_dir.join("removed_songs_wiki.txt"))?;
 
         // Read additional_nicknames
         ret.additional_nicknames = opts
@@ -610,5 +622,92 @@ impl Entry {
         } else {
             ScoreGeneration::Standard
         }
+    }
+}
+
+#[derive(Default, Debug)]
+struct RemovedSongsWiki {
+    songs: Vec<RemovedSongWiki>,
+}
+#[derive(Debug)]
+struct RemovedSongWiki {
+    date: String,
+    genre: String,
+    data: [String; 10],
+    another: Option<[String; 10]>,
+}
+
+impl RemovedSongsWiki {
+    fn read(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let mut songs: Vec<RemovedSongWiki> = vec![];
+        let mut current_genre = None;
+        let mut current_date = None;
+
+        let text = read_to_string(path)?;
+        for line in text.lines().filter_map(|s| s.strip_prefix('|')) {
+            let skip = [
+                "T:100%|c",
+                "center:40|center:230|center:200|CENTER:16|CENTER:17|CENTER:18|CENTER:25|CENTER:25|CENTER:25|center:30|c",
+                "center:40|center:230|center:200|CENTER:16|CENTER:17|CENTER:18|CENTER:25|CENTER:25|CENTER:25|center:30|center:40|c",
+                "!''ジャンル''|!''曲名''|!''アーティスト''|>|>|>|>|>|!center:''難易度''|!''BPM''|",
+                "!''ジャンル''|!''曲名''|!''アーティスト''|>|>|>|>|>|!center:''難易度''|!''BPM''|!''収録日''|",
+                "^|^|^|bgcolor(#00ced1):''&color(gray){Ea}''|bgcolor(#98fb98):''Ba''|bgcolor(#ffa500):''Ad''|bgcolor(#fa8080):''Ex''|bgcolor(#ee82ee):''Ma''|bgcolor(#ffceff):''Re:''|^|",
+                "^|^|^|bgcolor(#00ced1):''Ea''|bgcolor(#98fb98):''Ba''|bgcolor(#ffa500):''Ad''|bgcolor(#fa8080):''Ex''|bgcolor(#ee82ee):''Ma''|bgcolor(#ffceff):''Re:''|^|^|",
+                "center:|center:|center:|center:bgcolor(#87ceee)|bgcolor(#c0ff20):center|bgcolor(#ffe080):center|bgcolor(#ffa0c0):center|bgcolor(#e2a9f3):center|bgcolor(#ffdeff):center|c",
+                "center:|center:|center:|center:bgcolor(#87ceee)|bgcolor(#c0ff20):center|bgcolor(#ffe080):center|bgcolor(#ffa0c0):center|bgcolor(#E2A9F3):center|bgcolor(#ffdeff):center|center:|center:|c"
+            ];
+            if skip.iter().any(|&s| s == line) {
+                continue;
+            }
+
+            let p = regex!(
+                r"^(>\|){9,10}LEFT:''(【(?<version>.*) アップデート】 )?(?<date>\d+/\d+/\d+) - \d+曲\d+譜面(\(内.*\))?''\|$"
+            );
+            if let Some(captures) = p.captures(line) {
+                let _version = captures.name("version").map(|p| p.as_str());
+                let date = captures.name("date").unwrap().as_str();
+                current_date = Some(date);
+            } else {
+                let row = line.split('|').collect_vec();
+                if ![2, 11, 12].iter().any(|&x| x == row.len()) {
+                    bail!("Unexpected number of rows: {row:?}");
+                }
+                if row[0] != "^" {
+                    let p = regex!(r"^bgcolor\(#[0-9a-f]{6}\):''(.*)''$");
+                    let genre = p
+                        .captures(row[0])
+                        .with_context(|| format!("Unexpected genre: {:?}", row[0]))?
+                        .get(1)
+                        .unwrap()
+                        .as_str();
+                    current_genre = Some(genre);
+                }
+                if row.len() == 2 || current_genre == Some("宴") {
+                    continue;
+                }
+                let data: [&str; 10] = row[1..11].try_into().unwrap();
+                let data = data.map(|s| s.to_owned());
+                if data[8].ends_with("復活") {
+                    continue;
+                } else if data[0] == "^" {
+                    songs
+                        .last_mut()
+                        .with_context(|| format!("Unexpected continued `^`: {line:?}"))?
+                        .another = Some(data);
+                } else {
+                    songs.push(RemovedSongWiki {
+                        date: current_date.context("Date missing")?.to_owned(),
+                        genre: current_genre.context("Genre missing")?.to_owned(),
+                        data: data.map(|s| s.to_owned()),
+                        another: None,
+                    });
+                }
+            }
+        }
+        for song in &songs {
+            println!("{song:?}");
+        }
+
+        Ok(Self { songs })
     }
 }
