@@ -11,7 +11,7 @@ use super::{
 
 /// A song has zero or one standard score, zero or one deluxe score,
 /// and zero or more utage scores.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Song {
     pub name: EnumMap<MaimaiVersion, Option<SongName>>,
     pub category: Option<Category>,
@@ -40,7 +40,7 @@ pub struct SongPronunciation(String);
 #[as_ref(forward)]
 pub struct SongAbbreviation(String);
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct OrdinaryScores {
     pub easy: Option<OrdinaryScore>,
     pub basic: OrdinaryScore,
@@ -48,7 +48,7 @@ pub struct OrdinaryScores {
     pub expert: OrdinaryScore,
     pub master: OrdinaryScore,
     pub re_master: Option<OrdinaryScore>,
-    pub version: MaimaiVersion,
+    pub version: Option<MaimaiVersion>,
 }
 impl OrdinaryScores {
     pub fn get_score_mut(&mut self, difficulty: ScoreDifficulty) -> Option<&mut OrdinaryScore> {
@@ -63,7 +63,7 @@ impl OrdinaryScores {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct OrdinaryScore {
     pub levels: EnumMap<MaimaiVersion, Option<InternalScoreLevel>>,
 }

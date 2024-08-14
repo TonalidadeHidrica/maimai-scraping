@@ -7,7 +7,7 @@ use derive_more::{AsRef, From};
 use getset::{CopyGetters, Getters};
 use itertools::Itertools;
 use maimai_scraping_utils::fs_json_util::read_json;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 
 use super::{
@@ -120,7 +120,7 @@ pub struct OrdinaryScore {
     deluxe: Option<Levels>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 pub enum Category {
     GamesVariety,
     PopsAnime,
