@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    fmt::Debug,
     iter::successors,
     path::{Path, PathBuf},
     str::FromStr,
@@ -17,13 +18,15 @@ use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::info;
 use maimai_scraping::maimai::{
-    load_score_level::{self, InternalScoreLevel, MaimaiVersion},
+    load_score_level::{self, InternalScoreLevel, MaimaiVersion, Song as InLvSong, SongRaw},
     rating::{ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::{OrdinaryScore, OrdinaryScores, Song, SongAbbreviation},
 };
-use maimai_scraping_utils::fs_json_util::{read_json, write_json};
-use maimai_scraping_utils::regex;
+use maimai_scraping_utils::{
+    fs_json_util::{read_json, write_json},
+    regex,
+};
 use serde::Deserialize;
 
 #[derive(Parser)]
@@ -37,9 +40,10 @@ struct Opts {
 #[derive(Default)]
 /// Collects the resources for the song list.
 struct Resources {
-    in_lv: BTreeMap<MaimaiVersion, Vec<load_score_level::Song>>,
+    in_lv: BTreeMap<MaimaiVersion, Vec<InLvSong>>,
     in_lv_data: BTreeMap<MaimaiVersion, InLvData>,
     removed_songs_wiki: RemovedSongsWiki,
+    removed_songs_supplemental: Vec<RemovedSongSupplemental>,
     additional_nicknames: Vec<(String, SongIcon)>,
 }
 impl Resources {
@@ -64,6 +68,8 @@ impl Resources {
         ret.removed_songs_wiki =
             RemovedSongsWiki::read(opts.database_dir.join("removed_songs_wiki.txt"))?;
 
+        ret.removed_songs_supplemental = read_json(opts.database_dir.join("removed_songs.json"))?;
+
         // Read additional_nicknames
         ret.additional_nicknames = opts
             .additional_nicknames
@@ -85,11 +91,7 @@ struct Results {
 
 impl Results {
     /// This function is to be called at most once per version.
-    fn read_in_lv(
-        &mut self,
-        version: MaimaiVersion,
-        in_lv: &[load_score_level::Song],
-    ) -> anyhow::Result<()> {
+    fn read_in_lv(&mut self, version: MaimaiVersion, in_lv: &[InLvSong]) -> anyhow::Result<()> {
         // generation: ScoreGeneration,
         // version: MaimaiVersion,
         // levels: ScoreLevels,
@@ -121,51 +123,107 @@ impl Results {
             };
             song.name[version] = Some(data.song_name().to_owned());
 
-            // Update song name map
-            self.name_to_song
-                .entry(data.song_name().to_owned())
-                .or_default()
-                .insert(index);
+            // // Update song name map
+            // self.name_to_song
+            //     .entry(data.song_name().to_owned())
+            //     .or_default()
+            //     .insert(index);
 
-            // Update abbreviation map, check if contradiction occurs
-            let abbrev: SongAbbreviation = data.song_name_abbrev().to_owned().into();
-            match self.abbrev_to_song.entry(abbrev.clone()) {
-                HEntry::Occupied(i) => {
-                    if *i.get() != index {
-                        bail!(
-                            "At least two songs are associated to nickname {abbrev:?}: {:?} and {:?}",
-                            self.songs.get(index),
-                            self.songs.get(*i.get()),
-                        )
-                    }
-                }
-                HEntry::Vacant(e) => {
-                    e.insert(index);
+            // // Update abbreviation map, check if contradiction occurs
+            // let abbrev: SongAbbreviation = data.song_name_abbrev().to_owned().into();
+            // Self::register_abbrev(&mut self.abbrev_to_song, &abbrev, index)?;
+
+            // // Record `song_name_abbrev`
+            // song.abbreviation[version] = Some(abbrev.clone());
+
+            // // Record `levels` (indexed by `generation` and `version`)
+            // let scores = song.scores[data.generation()].get_or_insert_with(|| OrdinaryScores {
+            //     easy: None,
+            //     basic: Default::default(),
+            //     advanced: Default::default(),
+            //     expert: Default::default(),
+            //     master: Default::default(),
+            //     re_master: None,
+            //     version: Some(data.version()),
+            // });
+            // scores.basic.levels[version] = Some(data.levels().get(ScoreDifficulty::Basic).unwrap());
+            // scores.advanced.levels[version] =
+            //     Some(data.levels().get(ScoreDifficulty::Advanced).unwrap());
+            // scores.expert.levels[version] =
+            //     Some(data.levels().get(ScoreDifficulty::Expert).unwrap());
+            // scores.master.levels[version] =
+            //     Some(data.levels().get(ScoreDifficulty::Master).unwrap());
+            // if let Some(level) = data.levels().get(ScoreDifficulty::ReMaster) {
+            //     scores.re_master.get_or_insert_with(Default::default).levels[version] = Some(level);
+            // }
+            Self::read_in_lv_song(
+                &mut self.name_to_song,
+                &mut self.abbrev_to_song,
+                index,
+                song,
+                version,
+                data,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn read_in_lv_song(
+        name_to_song: &mut HashMap<SongName, HashSet<SongIndex>>,
+        abbrev_to_song: &mut HashMap<SongAbbreviation, SongIndex>,
+
+        index: SongIndex,
+        song: &mut Song,
+        version: MaimaiVersion,
+        data: &InLvSong,
+    ) -> Result<(), anyhow::Error> {
+        // Update song name map
+        name_to_song
+            .entry(data.song_name().to_owned())
+            .or_default()
+            .insert(index);
+
+        // Update abbreviation map, check if contradiction occurs
+        let abbrev: SongAbbreviation = data.song_name_abbrev().to_owned().into();
+        Self::register_abbrev(abbrev_to_song, &abbrev, index)?;
+
+        // Record `song_name_abbrev`
+        song.abbreviation[version] = Some(abbrev.clone());
+        let scores = song.scores[data.generation()].get_or_insert_with(|| OrdinaryScores {
+            easy: None,
+            basic: Default::default(),
+            advanced: Default::default(),
+            expert: Default::default(),
+            master: Default::default(),
+            re_master: None,
+            version: Some(data.version()),
+        });
+
+        // Record `levels` (indexed by `generation` and `version`)
+        scores.basic.levels[version] = Some(data.levels().get(ScoreDifficulty::Basic).unwrap());
+        scores.advanced.levels[version] =
+            Some(data.levels().get(ScoreDifficulty::Advanced).unwrap());
+        scores.expert.levels[version] = Some(data.levels().get(ScoreDifficulty::Expert).unwrap());
+        scores.master.levels[version] = Some(data.levels().get(ScoreDifficulty::Master).unwrap());
+        if let Some(level) = data.levels().get(ScoreDifficulty::ReMaster) {
+            scores.re_master.get_or_insert_with(Default::default).levels[version] = Some(level);
+        }
+        Ok(())
+    }
+
+    fn register_abbrev(
+        abbrev_to_song: &mut HashMap<SongAbbreviation, SongIndex>,
+        abbrev: &SongAbbreviation,
+        index: SongIndex,
+    ) -> anyhow::Result<()> {
+        match abbrev_to_song.entry(abbrev.clone()) {
+            HEntry::Occupied(i) => {
+                if *i.get() != index {
+                    bail!("At least two songs are associated to nickname {abbrev:?}")
                 }
             }
-
-            // Record `song_name_abbrev`
-            song.abbreviation[version] = Some(abbrev.clone());
-
-            // Record `levels` (indexed by `generation` and `version`)
-            let scores = song.scores[data.generation()].get_or_insert_with(|| OrdinaryScores {
-                easy: None,
-                basic: Default::default(),
-                advanced: Default::default(),
-                expert: Default::default(),
-                master: Default::default(),
-                re_master: None,
-                version: Some(data.version()),
-            });
-            scores.basic.levels[version] = Some(data.levels().get(ScoreDifficulty::Basic).unwrap());
-            scores.advanced.levels[version] =
-                Some(data.levels().get(ScoreDifficulty::Advanced).unwrap());
-            scores.expert.levels[version] =
-                Some(data.levels().get(ScoreDifficulty::Expert).unwrap());
-            scores.master.levels[version] =
-                Some(data.levels().get(ScoreDifficulty::Master).unwrap());
-            if let Some(level) = data.levels().get(ScoreDifficulty::ReMaster) {
-                scores.re_master.get_or_insert_with(Default::default).levels[version] = Some(level);
+            HEntry::Vacant(e) => {
+                e.insert(index);
             }
         }
         Ok(())
@@ -260,6 +318,53 @@ impl Results {
                     re_master: make(5),
                     version: None,
                 });
+            }
+        }
+        Ok(())
+    }
+
+    fn read_removed_songs_supplemental(
+        &mut self,
+        removed_songs_supplemental: &[RemovedSongSupplemental],
+    ) -> anyhow::Result<()> {
+        for data in removed_songs_supplemental {
+            let (index, song) = match self.name_to_song.get(&data.name) {
+                None => bail!("No song matches for {data:?}"),
+                Some(x) => match Vec::from_iter(x)[..] {
+                    [&index] => (index, self.songs.get_mut(index)),
+                    ref multiple => bail!(
+                        "Song name {:?} is not unique: {:?}",
+                        &data.name,
+                        multiple.iter().map(|&&s| self.songs.get(s)).collect_vec(),
+                    ),
+                },
+            };
+
+            // Register icon
+            merge_options(&mut song.icon, data.icon.as_ref())?;
+
+            // Regsiter the song name itself as abbreviation
+            if let Some(abbrev) = &data.abbrev {
+                Self::register_abbrev(&mut self.abbrev_to_song, abbrev, index)?;
+            }
+
+            // Register levels
+            for &(version, ref levels) in &data.levels {
+                let data = InLvSong::try_from(levels.clone())?;
+                // Before calling `read_in_lv_song`, we need to merge those fields not covered by that function.
+                // According to the implementation of `read_in_lv`, `icon` and `song_name` qualify.
+                merge_options(&mut song.name[version], Some(data.song_name()))?;
+                merge_options(&mut song.icon, Some(data.icon()))?;
+
+                // Now we can leave the rest to this function.
+                Self::read_in_lv_song(
+                    &mut self.name_to_song,
+                    &mut self.abbrev_to_song,
+                    index,
+                    song,
+                    version,
+                    &data,
+                )?;
             }
         }
         Ok(())
@@ -443,6 +548,19 @@ fn merge_levels(
     }
 }
 
+fn merge_options<T>(x: &mut Option<T>, y: Option<&T>) -> anyhow::Result<()>
+where
+    T: Eq + Clone + Debug,
+{
+    if let Some(y) = y {
+        match x {
+            Some(x) if x != y => bail!("Value mismatch: {x:?} stored, tried to assign {y:?}"),
+            _ => *x = Some(y.clone()),
+        }
+    }
+    Ok(())
+}
+
 #[derive(Default)]
 struct SongList(Vec<Song>);
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -470,6 +588,7 @@ fn main() -> anyhow::Result<()> {
         results.read_in_lv(version, in_lv)?;
     }
     results.read_removed_songs_wiki(&resources.removed_songs_wiki)?;
+    results.read_removed_songs_supplemental(&resources.removed_songs_supplemental)?;
     for (&version, in_lv_data) in &resources.in_lv_data {
         results.read_in_lv_data(version, in_lv_data)?;
     }
@@ -478,80 +597,6 @@ fn main() -> anyhow::Result<()> {
         opts.database_dir.join("maimai_song_database.json"),
         &results.songs.0,
     )?;
-
-    // for version in successors(Some(MaimaiVersion::SplashPlus), MaimaiVersion::next) {
-    //     info!("Processing {version:?}");
-    //     let path = format!("{}.json", i8::from(version));
-    //     let mut data: InLvData = read_json(opts.in_lv_data_dir.join(path))?;
-
-    //     if !data
-    //         .unknown
-    //         .remove(&UnknownKey::gen("14".parse()?))
-    //         .is_some_and(|x| x.is_empty())
-    //     {
-    //         bail!("Lv.14 is not empty");
-    //     }
-    //     for level in 10..14 {
-    //         for plus in [false, true] {
-    //             let level = ScoreLevel::new(level, plus)?;
-    //             let data = data
-    //                 .unknown
-    //                 .remove(&UnknownKey::gen(level))
-    //                 .with_context(|| format!("No unknown entry found for {level}"))?;
-    //             for entry in data {
-    //                 let entry = entry.parse()?;
-    //                 if let Some(icon) = songs.get(&entry.entry.song_nickname) {
-    //                     let key = entry.entry.score_key(icon);
-    //                     res.entry(key)
-    //                         .or_default()
-    //                         .insert(version, InternalScoreLevel::Unknown(level));
-    //                     for (difficulty, level) in entry.additional {
-    //                         let key = ScoreKey { difficulty, ..key };
-    //                         res.entry(key)
-    //                             .or_default()
-    //                             .insert(version, InternalScoreLevel::Unknown(level));
-    //                     }
-    //                 } else {
-    //                     warn!("Missing song: {:?}", entry.entry.song_nickname);
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     if !data.unknown.is_empty() {
-    //         bail!("Additional data found: {:?}", data.unknown);
-    //     }
-
-    //     for level in 5..=15 {
-    //         let data = data
-    //             .known
-    //             .remove(&KnownKey::gen(level))
-    //             .with_context(|| format!("No known entry found for {level}"))?;
-    //         let expected_len = if level == 15 { 1 } else { 10 };
-    //         if data.len() != expected_len {
-    //             bail!(
-    //                 "Unexpected length for level {level}: expected {expected_len}, found {}",
-    //                 data.len()
-    //             );
-    //         }
-    //         for (entries, fractional) in data.iter().rev().zip(0..) {
-    //             let level = ScoreConstant::try_from(level * 10 + fractional)
-    //                 .map_err(|e| anyhow!("Unexpected internal lv: {e}"))?;
-    //             for entry in entries {
-    //                 let entry = entry.parse()?;
-    //                 if let Some(icon) = songs.get(&entry.song_nickname) {
-    //                     res.entry(entry.score_key(icon))
-    //                         .or_default()
-    //                         .insert(version, InternalScoreLevel::Known(level));
-    //                 } else {
-    //                     warn!("Missing song: {:?}", entry.song_nickname);
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     if !data.known.is_empty() {
-    //         bail!("Additional data found: {:?}", data.unknown);
-    //     }
-    // }
 
     Ok(())
 }
@@ -861,3 +906,25 @@ impl RemovedSongsWiki {
         Ok(Self { songs })
     }
 }
+
+#[derive(Debug, Deserialize)]
+pub struct RemovedSongSupplemental {
+    icon: Option<SongIcon>,
+    name: SongName,
+    #[allow(unused)]
+    date: NaiveDate,
+    abbrev: Option<SongAbbreviation>,
+    #[serde(default)]
+    levels: Vec<(MaimaiVersion, SongRaw)>,
+    // #[serde(default, deserialize_with = "deserialize_levels")]
+    // levels: Option<InLvSong>,
+}
+
+// fn deserialize_levels<'de, D>(deserializer: D) -> Result<Option<InLvSong>, D::Error>
+// where
+//     D: Deserializer<'de>,
+// {
+//     Option::<SongRaw>::deserialize(deserializer)?
+//         .map(|song| InLvSong::try_from(song).map_err(serde::de::Error::custom))
+//         .transpose()
+// }

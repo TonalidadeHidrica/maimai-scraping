@@ -49,7 +49,7 @@ where
     map
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SongRaw {
     pub dx: u8,
     pub v: i8,
