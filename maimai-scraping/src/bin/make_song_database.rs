@@ -34,7 +34,6 @@ struct Opts {
     in_lv_dir: PathBuf,
     in_lv_data_dir: PathBuf,
     database_dir: PathBuf,
-    additional_nicknames: Option<PathBuf>,
 }
 
 #[derive(Default)]
@@ -44,7 +43,7 @@ struct Resources {
     in_lv_data: BTreeMap<MaimaiVersion, InLvData>,
     removed_songs_wiki: RemovedSongsWiki,
     removed_songs_supplemental: Vec<RemovedSongSupplemental>,
-    additional_nicknames: Vec<(String, SongIcon)>,
+    additional_abbrevs: Vec<(SongAbbreviation, SongName)>,
 }
 impl Resources {
     fn load(opts: &Opts) -> anyhow::Result<Self> {
@@ -70,11 +69,11 @@ impl Resources {
 
         ret.removed_songs_supplemental = read_json(opts.database_dir.join("removed_songs.json"))?;
 
-        // Read additional_nicknames
-        ret.additional_nicknames = opts
-            .additional_nicknames
-            .as_ref()
-            .map_or_else(|| Ok(vec![]), read_json)?;
+        // Read additional_abbrevs
+        let abbrevs_path = opts.database_dir.join("additional_abbrevs.json");
+        if abbrevs_path.is_file() {
+            ret.additional_abbrevs = read_json(&abbrevs_path)?;
+        }
 
         Ok(ret)
     }
@@ -355,7 +354,8 @@ impl Results {
                     .with_context(|| format!("No unknown entry found for {level}"))?;
                 for entry in data {
                     let entry = entry.parse()?;
-                    let missing_song = || format!("Missing song: {:?}", entry.entry);
+                    let missing_song =
+                        || format!("Missing song: {:?} (on version {:?})", entry.entry, version);
 
                     let song = self.songs.get_mut(
                         *self
@@ -374,11 +374,12 @@ impl Results {
                                 .levels[version],
                             InternalScoreLevel::Unknown(level),
                             version,
-                        )?;
+                        )
+                        .with_context(|| format!("While processing {entry:?} in {version:?}"))?;
                         anyhow::Ok(())
                     };
                     set(entry.entry.difficulty, level)?;
-                    for (difficulty, level) in entry.additional {
+                    for &(difficulty, level) in &entry.additional {
                         set(difficulty, level)?;
                     }
                 }
@@ -407,7 +408,8 @@ impl Results {
                     .map_err(|e| anyhow!("Unexpected internal lv: {e}"))?;
                 for entry in entries {
                     let entry = entry.parse()?;
-                    let missing_song = || format!("Missing song: {:?}", entry);
+                    let missing_song =
+                        || format!("Missing song: {:?} (on version {:?})", entry, version);
 
                     let song = self.songs.get_mut(
                         *self
@@ -425,7 +427,8 @@ impl Results {
                             .levels[version],
                         InternalScoreLevel::Known(level),
                         version,
-                    )?;
+                    )
+                    .with_context(|| format!("While processing {entry:?} in {version:?}"))?;
                 }
             }
         }
@@ -433,6 +436,24 @@ impl Results {
             bail!("Additional data found: {:?}", data.unknown);
         }
 
+        Ok(())
+    }
+
+    fn read_additional_abbrevs(
+        &mut self,
+        additional_abbrevs: &[(SongAbbreviation, SongName)],
+    ) -> anyhow::Result<()> {
+        for (abbrev, name) in additional_abbrevs {
+            let indices = self
+                .name_to_song
+                .get(name)
+                .with_context(|| format!("No song named {name:?}"))?;
+            if indices.len() != 1 {
+                bail!("Multiple songs named {name:?}");
+            }
+            let &index = indices.iter().next().unwrap();
+            Self::register_abbrev(&mut self.abbrev_to_song, abbrev, index)?;
+        }
         Ok(())
     }
 }
@@ -486,7 +507,7 @@ fn merge_levels(
         *x = Some(y);
     }
     if let Inconsistent(x) = verdict {
-        bail!("Inconsitent levels: known to be {x:?}, found {y:?}")
+        bail!("Inconsistent levels: known to be {x:?}, found {y:?}")
     } else {
         Ok(())
     }
@@ -533,6 +554,7 @@ fn main() -> anyhow::Result<()> {
     }
     results.read_removed_songs_wiki(&resources.removed_songs_wiki)?;
     results.read_removed_songs_supplemental(&resources.removed_songs_supplemental)?;
+    results.read_additional_abbrevs(&resources.additional_abbrevs)?;
     for (&version, in_lv_data) in &resources.in_lv_data {
         results.read_in_lv_data(version, in_lv_data)?;
     }
@@ -821,7 +843,7 @@ impl RemovedSongsWiki {
                         .with_context(|| format!("Unexpected continued `^`: {line:?}"))?
                         .another = Some(levels);
                 } else {
-                    let song_name = regex!(r"\[\[(.*)\]\]")
+                    let song_name = regex!(r"\[\[([^>]*)(>.*)?\]\]")
                         .captures(row[1])
                         .with_context(|| format!("Unexpected song name: {line:?}"))?
                         .get(1)
