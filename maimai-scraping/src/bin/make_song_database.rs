@@ -123,39 +123,6 @@ impl Results {
             };
             song.name[version] = Some(data.song_name().to_owned());
 
-            // // Update song name map
-            // self.name_to_song
-            //     .entry(data.song_name().to_owned())
-            //     .or_default()
-            //     .insert(index);
-
-            // // Update abbreviation map, check if contradiction occurs
-            // let abbrev: SongAbbreviation = data.song_name_abbrev().to_owned().into();
-            // Self::register_abbrev(&mut self.abbrev_to_song, &abbrev, index)?;
-
-            // // Record `song_name_abbrev`
-            // song.abbreviation[version] = Some(abbrev.clone());
-
-            // // Record `levels` (indexed by `generation` and `version`)
-            // let scores = song.scores[data.generation()].get_or_insert_with(|| OrdinaryScores {
-            //     easy: None,
-            //     basic: Default::default(),
-            //     advanced: Default::default(),
-            //     expert: Default::default(),
-            //     master: Default::default(),
-            //     re_master: None,
-            //     version: Some(data.version()),
-            // });
-            // scores.basic.levels[version] = Some(data.levels().get(ScoreDifficulty::Basic).unwrap());
-            // scores.advanced.levels[version] =
-            //     Some(data.levels().get(ScoreDifficulty::Advanced).unwrap());
-            // scores.expert.levels[version] =
-            //     Some(data.levels().get(ScoreDifficulty::Expert).unwrap());
-            // scores.master.levels[version] =
-            //     Some(data.levels().get(ScoreDifficulty::Master).unwrap());
-            // if let Some(level) = data.levels().get(ScoreDifficulty::ReMaster) {
-            //     scores.re_master.get_or_insert_with(Default::default).levels[version] = Some(level);
-            // }
             Self::read_in_lv_song(
                 &mut self.name_to_song,
                 &mut self.abbrev_to_song,
@@ -414,21 +381,6 @@ impl Results {
                     for (difficulty, level) in entry.additional {
                         set(difficulty, level)?;
                     }
-
-                    // if let Some(icon) = songs.get(&entry.entry.song_nickname) {
-                    //     let key = entry.entry.score_key(icon);
-                    //     res.entry(key)
-                    //         .or_default()
-                    //         .insert(version, InternalScoreLevel::Unknown(level));
-                    //     for (difficulty, level) in entry.additional {
-                    //         let key = ScoreKey { difficulty, ..key };
-                    //         res.entry(key)
-                    //             .or_default()
-                    //             .insert(version, InternalScoreLevel::Unknown(level));
-                    //     }
-                    // } else {
-                    //     warn!("Missing song: {:?}", entry.entry.song_nickname);
-                    // }
                 }
             }
         }
@@ -474,14 +426,6 @@ impl Results {
                         InternalScoreLevel::Known(level),
                         version,
                     )?;
-
-                    // if let Some(icon) = songs.get(&entry.song_nickname) {
-                    //     res.entry(entry.score_key(icon))
-                    //         .or_default()
-                    //         .insert(version, InternalScoreLevel::Known(level));
-                    // } else {
-                    //     warn!("Missing song: {:?}", entry.song_nickname);
-                    // }
                 }
             }
         }
@@ -758,14 +702,6 @@ fn parse_entry(s: &str) -> anyhow::Result<EntryWithAdditional> {
     })
 }
 impl Entry {
-    // fn score_key<'a>(&self, icon: &'a SongIcon) -> ScoreKey<'a> {
-    //     ScoreKey {
-    //         icon,
-    //         generation: self.generation(),
-    //         difficulty: self.difficulty,
-    //     }
-    // }
-
     fn generation(&self) -> ScoreGeneration {
         if self.dx {
             ScoreGeneration::Deluxe
@@ -916,15 +852,4 @@ pub struct RemovedSongSupplemental {
     abbrev: Option<SongAbbreviation>,
     #[serde(default)]
     levels: Vec<(MaimaiVersion, SongRaw)>,
-    // #[serde(default, deserialize_with = "deserialize_levels")]
-    // levels: Option<InLvSong>,
 }
-
-// fn deserialize_levels<'de, D>(deserializer: D) -> Result<Option<InLvSong>, D::Error>
-// where
-//     D: Deserializer<'de>,
-// {
-//     Option::<SongRaw>::deserialize(deserializer)?
-//         .map(|song| InLvSong::try_from(song).map_err(serde::de::Error::custom))
-//         .transpose()
-// }
