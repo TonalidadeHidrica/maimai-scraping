@@ -218,7 +218,7 @@ struct Entry {
 fn parse_entry(s: &str) -> anyhow::Result<EntryWithAdditional> {
     let pattern = regex!(
         r#"(?x)
-            <span\ class='wk_(?<difficulty>[baemr])'>
+            <span\ class='wk_(?<difficulty>[baemr]) (?<new_song2> _n)?'>
                 (?<new_song> <u>)?
                     (?<song_name> .*?)
                     (?<dx> \[dx\])?
@@ -229,10 +229,14 @@ fn parse_entry(s: &str) -> anyhow::Result<EntryWithAdditional> {
             )?
             "#
     );
-    let captures = pattern.captures(s).context("Unexpected string: {self:?}")?;
+    let captures = pattern
+        .captures(s)
+        .with_context(|| format!("Unexpected string: {s:?}"))?;
     let difficulty = parse_difficulty(&captures["difficulty"])?;
     let new_song = captures.name("new_song").is_some();
+    let new_song2 = captures.name("new_song2").is_some();
     let song_nickname = captures["song_name"].to_owned();
+    // let song_nickname = captures["song_name"].to_owned().into();
     let dx = captures.name("dx").is_some();
     let additional = match captures.name("additional") {
         None => vec![],
@@ -272,8 +276,9 @@ fn parse_entry(s: &str) -> anyhow::Result<EntryWithAdditional> {
             else => ("({})", make_additional())
         );
         format!(
-            "<span class='wk_{d}'>{us}{song_nickname}{dx}{ut}</span>{additional}",
+            "<span class='wk_{d}{n}'>{us}{song_nickname}{dx}{ut}</span>{additional}",
             d = difficulty_char(difficulty),
+            n = if new_song2 { "_n" } else { "" },
             us = if new_song { "<u>" } else { "" },
             dx = if dx { "[dx]" } else { "" },
             ut = if new_song { "</u>" } else { "" },
