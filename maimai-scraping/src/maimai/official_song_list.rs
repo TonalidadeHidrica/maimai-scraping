@@ -1,9 +1,9 @@
-use std::{cmp::Ordering, path::PathBuf, str::FromStr};
+use std::{borrow::Cow, cmp::Ordering, path::PathBuf, str::FromStr};
 
 use anyhow::{bail, Context};
 use chrono::NaiveDate;
 use deranged::RangedU8;
-use derive_more::{AsRef, From};
+use derive_more::{AsRef, Display, From, FromStr};
 use getset::{CopyGetters, Getters};
 use itertools::Itertools;
 use maimai_scraping_utils::fs_json_util::read_json;
@@ -17,7 +17,7 @@ use super::{
 };
 
 #[serde_as]
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SongRaw {
     pub title: String,
@@ -89,10 +89,15 @@ pub struct Song {
     details: ScoreDetails,
 }
 
-#[derive(Debug, From, AsRef)]
+#[derive(Clone, Debug, From, AsRef, FromStr, Display, Serialize, Deserialize)]
+// FIXME: Commenting out because otherwise `.as_ref()` seems to require explicit target type
+// #[as_ref(forward)]
 pub struct SongKana(String);
 
-#[derive(Debug, From, AsRef)]
+#[derive(
+    Clone, PartialEq, Eq, Hash, Debug, From, AsRef, FromStr, Display, Serialize, Deserialize,
+)]
+#[as_ref(forward)]
 pub struct ArtistName(String);
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, From)]
@@ -140,7 +145,7 @@ pub struct Levels {
     re_master: Option<ScoreLevel>,
 }
 
-#[derive(Debug, Getters, CopyGetters)]
+#[derive(Clone, PartialEq, Eq, Debug, Getters, CopyGetters, Serialize, Deserialize)]
 pub struct UtageScore {
     #[getset(get_copy = "pub")]
     level: ScoreLevel,
@@ -152,7 +157,24 @@ pub struct UtageScore {
     buddy: bool,
 }
 
-#[derive(Debug, From, AsRef)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct UtageIdentifier<'a>(Cow<'a, UtageKindRaw>, ScoreLevel);
+impl<'a> UtageIdentifier<'a> {
+    pub fn to_owned(&self) -> UtageIdentifier<'static> {
+        let e: UtageKindRaw = self.0.as_ref().clone();
+        UtageIdentifier(Cow::Owned(e), self.1)
+    }
+}
+
+impl UtageScore {
+    /// For now, we assume that this uniquely specifies an utage score in a song.
+    /// Otherwise, how on earth can we determine the score???
+    pub fn identifier(&self) -> UtageIdentifier {
+        UtageIdentifier(Cow::Borrowed(&self.kanji), self.level)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, From, AsRef, Serialize, Deserialize)]
 pub struct UtageComment(String);
 
 impl TryFrom<SongRaw> for Song {

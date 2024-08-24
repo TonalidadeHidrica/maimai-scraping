@@ -614,7 +614,17 @@ pub enum UtageKind {
 }
 
 #[derive(
-    Clone, PartialEq, Eq, PartialOrd, Ord, Debug, derive_more::From, Serialize, Deserialize,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Debug,
+    derive_more::From,
+    derive_more::Display,
+    Serialize,
+    Deserialize,
 )]
 pub struct UtageKindRaw(String);
 

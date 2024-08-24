@@ -100,7 +100,7 @@ pub fn single_song_rating(
     RatingValue::from((prod / 10 / 100_0000 / 10) as u16)
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 pub struct ScoreLevel {
     pub level: u8,
     pub plus: bool,

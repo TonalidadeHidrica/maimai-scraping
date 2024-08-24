@@ -19,7 +19,7 @@ use lazy_format::lazy_format;
 use log::info;
 use maimai_scraping::maimai::{
     load_score_level::{self, InternalScoreLevel, MaimaiVersion, Song as InLvSong, SongRaw},
-    official_song_list,
+    official_song_list::{self, ScoreDetails},
     rating::{ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::{OrdinaryScore, OrdinaryScores, Song, SongAbbreviation},
@@ -120,6 +120,144 @@ struct Results {
 }
 
 impl Results {
+    fn read_official_song_list(&mut self, list: &OfficialSongList) -> anyhow::Result<()> {
+        let mut found_utage = HashSet::new();
+
+        for data in &list.songs {
+            let data: official_song_list::Song = data.clone().try_into()?;
+            let (index, song) = match self.icon_to_song.entry(data.image().clone()) {
+                HEntry::Occupied(e) => {
+                    let index = *e.get();
+                    let song = self.songs.get_mut(index);
+                    (index, song)
+                }
+                HEntry::Vacant(e) => {
+                    let (index, song) = self.songs.create_new();
+                    e.insert(index);
+                    (index, song)
+                }
+            };
+
+            (|| {
+                let version = MaimaiVersion::of_time(list.timestamp + chrono::Duration::hours(9))
+                    .with_context(|| {
+                    format!("No matching version for timestamp {:?}", list.timestamp)
+                })?;
+
+                // Song name
+                match data.details() {
+                    ScoreDetails::Ordinary(_) => {
+                        merge_options(&mut song.name[version], Some(data.title()))?;
+                        self.name_to_song
+                            .entry(data.title().clone())
+                            .or_default()
+                            .insert(index);
+                    }
+                    ScoreDetails::Utage(u) => {
+                        if let Some(name) = &song.name[version] {
+                            if format!("[{}]{name}", u.kanji()) != data.title().as_ref() {
+                                bail!("Unexpected title: {data:?}");
+                            }
+                        }
+                    }
+                }
+
+                // Song kana
+                merge_options(&mut song.pronunciation, Some(data.title_kana()))?;
+                // Artist
+                merge_options(&mut song.artist[version], Some(data.artist()))?;
+                // Icon
+                merge_options(&mut song.icon, Some(data.image()))?;
+                // Unused: release, sort, new, locked
+
+                if version < data.version().version() {
+                    bail!("Conflicting version: song {data:?} found in version {version:?}");
+                }
+
+                match data.details() {
+                    ScoreDetails::Ordinary(ordinary_data) => {
+                        merge_options(
+                            &mut song.category[version],
+                            Some(&ordinary_data.category()),
+                        )?;
+                        for (generation, scores_data) in [
+                            (ScoreGeneration::Standard, ordinary_data.standard()),
+                            (ScoreGeneration::Deluxe, ordinary_data.deluxe()),
+                        ] {
+                            let Some(scores_data) = scores_data else {
+                                continue;
+                            };
+                            let scores =
+                                song.scores[generation].get_or_insert_with(|| OrdinaryScores {
+                                    easy: None,
+                                    basic: Default::default(),
+                                    advanced: Default::default(),
+                                    expert: Default::default(),
+                                    master: Default::default(),
+                                    re_master: None,
+                                    version: Some(data.version().version()),
+                                });
+                            merge_levels(
+                                &mut scores.basic.levels[version],
+                                InternalScoreLevel::Unknown(scores_data.basic()),
+                                version,
+                            )?;
+                            merge_levels(
+                                &mut scores.advanced.levels[version],
+                                InternalScoreLevel::Unknown(scores_data.advanced()),
+                                version,
+                            )?;
+                            merge_levels(
+                                &mut scores.expert.levels[version],
+                                InternalScoreLevel::Unknown(scores_data.expert()),
+                                version,
+                            )?;
+                            merge_levels(
+                                &mut scores.master.levels[version],
+                                InternalScoreLevel::Unknown(scores_data.master()),
+                                version,
+                            )?;
+                            if let Some(level) = scores_data.re_master() {
+                                let re_master =
+                                    scores.re_master.get_or_insert_with(Default::default);
+                                merge_levels(
+                                    &mut re_master.levels[version],
+                                    InternalScoreLevel::Unknown(level),
+                                    version,
+                                )?;
+                            }
+                        }
+                    }
+                    ScoreDetails::Utage(utage_data) => {
+                        if !found_utage.insert((index, utage_data.identifier().to_owned())) {
+                            bail!("Duplicate utage scores found: {:?}", data);
+                        }
+                        let identifier = utage_data.identifier();
+                        match song
+                            .utage_scores
+                            .iter()
+                            .find(|u| u.identifier() == identifier)
+                        {
+                            Some(u) => {
+                                if u != utage_data {
+                                    bail!(
+                                        "Utage score conflict: stored {u:?}, found {utage_data:?}",
+                                    );
+                                }
+                            }
+                            None => {
+                                song.utage_scores.push(utage_data.clone());
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            })()
+            .with_context(|| format!("While incorporating {data:?} into {song:?}"))?;
+        }
+        Ok(())
+    }
+
     /// This function is to be called at most once per version.
     fn read_in_lv(&mut self, version: MaimaiVersion, in_lv: &[InLvSong]) -> anyhow::Result<()> {
         // generation: ScoreGeneration,
@@ -137,20 +275,12 @@ impl Results {
                     (index, song)
                 }
                 HEntry::Vacant(e) => {
-                    let index = self.songs.index_new();
-                    self.songs.0.push(Song {
-                        name: EnumMap::default(),
-                        category: None,
-                        artist: None,
-                        pronunciation: None,
-                        abbreviation: Default::default(),
-                        scores: Default::default(),
-                        icon: Some(data.icon().to_owned()),
-                    });
+                    let (index, song) = self.songs.create_new();
                     e.insert(index);
-                    (index, self.songs.get_mut(index))
+                    (index, song)
                 }
             };
+            merge_options(&mut song.icon, Some(data.icon()))?;
             song.name[version] = Some(data.song_name().to_owned());
 
             Self::read_in_lv_song(
@@ -245,18 +375,9 @@ impl Results {
                 },
                 // Song is unique in removed_songs_wiki
                 HEntry::Vacant(e) => {
-                    let index = self.songs.index_new();
-                    self.songs.0.push(Song {
-                        name: Default::default(),
-                        category: None,
-                        artist: None,
-                        pronunciation: None,
-                        abbreviation: Default::default(),
-                        scores: Default::default(),
-                        icon: None,
-                    });
+                    let (index, song) = self.songs.create_new();
                     e.insert(HashSet::from_iter([index]));
-                    (index, self.songs.get_mut(index))
+                    (index, song)
                 }
             };
 
@@ -569,8 +690,10 @@ impl SongList {
     fn get_mut(&mut self, index: SongIndex) -> &mut Song {
         &mut self.0[index.0]
     }
-    fn index_new(&self) -> SongIndex {
-        SongIndex(self.0.len())
+    fn create_new(&mut self) -> (SongIndex, &mut Song) {
+        let index = SongIndex(self.0.len());
+        self.0.push(Song::default());
+        (index, self.get_mut(index))
     }
 }
 
@@ -580,6 +703,14 @@ fn main() -> anyhow::Result<()> {
 
     let resources = Resources::load(&opts)?;
     let mut results = Results::default();
+    for list in &resources.official_song_lists {
+        results.read_official_song_list(list).with_context(|| {
+            format!(
+                "While processing official song list at {:?}",
+                list.timestamp
+            )
+        })?;
+    }
     for (&version, in_lv) in &resources.in_lv {
         results.read_in_lv(version, in_lv)?;
     }

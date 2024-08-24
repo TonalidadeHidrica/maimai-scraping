@@ -4,35 +4,23 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     load_score_level::{InternalScoreLevel, MaimaiVersion},
-    official_song_list::Category,
-    rating::ScoreLevel,
+    official_song_list::{ArtistName, Category, SongKana, UtageScore},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
 };
 
 /// A song has zero or one standard score, zero or one deluxe score,
 /// and zero or more utage scores.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Song {
     pub name: EnumMap<MaimaiVersion, Option<SongName>>,
-    pub category: Option<Category>,
-    pub artist: Option<SongArtist>,
-    pub pronunciation: Option<SongPronunciation>,
+    pub category: EnumMap<MaimaiVersion, Option<Category>>,
+    pub artist: EnumMap<MaimaiVersion, Option<ArtistName>>,
+    pub pronunciation: Option<SongKana>,
     pub abbreviation: EnumMap<MaimaiVersion, Option<SongAbbreviation>>,
     pub scores: EnumMap<ScoreGeneration, Option<OrdinaryScores>>,
+    pub utage_scores: Vec<UtageScore>,
     pub icon: Option<SongIcon>,
 }
-
-#[derive(
-    Clone, PartialEq, Eq, Hash, Debug, From, AsRef, FromStr, Display, Serialize, Deserialize,
-)]
-#[as_ref(forward)]
-pub struct SongArtist(String);
-
-#[derive(
-    Clone, PartialEq, Eq, Hash, Debug, From, AsRef, FromStr, Display, Serialize, Deserialize,
-)]
-#[as_ref(forward)]
-pub struct SongPronunciation(String);
 
 #[derive(
     Clone, PartialEq, Eq, Hash, Debug, From, AsRef, FromStr, Display, Serialize, Deserialize,
@@ -67,22 +55,3 @@ impl OrdinaryScores {
 pub struct OrdinaryScore {
     pub levels: EnumMap<MaimaiVersion, Option<InternalScoreLevel>>,
 }
-
-pub struct UtageScore {
-    pub level: ScoreLevel,
-    pub comment: UtageComment,
-    pub kanji: UtageKanji,
-    pub buddy: bool,
-}
-
-#[derive(
-    Clone, PartialEq, Eq, Hash, Debug, From, AsRef, FromStr, Display, Serialize, Deserialize,
-)]
-#[as_ref(forward)]
-pub struct UtageComment(String);
-
-#[derive(
-    Clone, PartialEq, Eq, Hash, Debug, From, AsRef, FromStr, Display, Serialize, Deserialize,
-)]
-#[as_ref(forward)]
-pub struct UtageKanji(String);

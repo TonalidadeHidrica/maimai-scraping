@@ -340,15 +340,19 @@ impl MaimaiVersion {
     }
     pub fn start_time(self) -> NaiveDateTime {
         self.start_date()
-            .and_time(NaiveTime::from_hms_opt(5, 0, 0).unwrap())
+            .and_time(NaiveTime::from_hms_opt(6, 0, 0).unwrap())
     }
     pub fn end_time(self) -> NaiveDateTime {
         match self.next() {
             Some(next) => next
                 .start_date()
-                .and_time(NaiveTime::from_hms_opt(5, 0, 0).unwrap()),
+                .and_time(NaiveTime::from_hms_opt(6, 0, 0).unwrap()),
             None => NaiveDateTime::MAX,
         }
+    }
+    pub fn of_time(time: NaiveDateTime) -> Option<MaimaiVersion> {
+        enum_iterator::all()
+            .find(|v: &MaimaiVersion| (v.start_time()..v.end_time()).contains(&time))
     }
     pub fn latest() -> Self {
         Self::BuddiesPlus
