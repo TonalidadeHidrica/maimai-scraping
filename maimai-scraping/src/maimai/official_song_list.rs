@@ -28,7 +28,7 @@ pub struct SongRaw {
     pub image_url: String,
 
     /// Release date? (Can be "000000", unclear if it's reliable)
-    pub release: String,
+    pub release: Option<String>,
     /// Integer that decides default song order
     #[serde_as(as = "DisplayFromStr")]
     pub sort: u64,
@@ -203,9 +203,9 @@ impl TryFrom<SongRaw> for Song {
             )
             .parse()?,
 
-            release: match &song.release[..] {
-                "000000" => None,
-                s => Some(
+            release: match song.release.as_deref() {
+                None | Some("000000") => None,
+                Some(s) => Some(
                     NaiveDate::parse_from_str(s, "%y%m%d")
                         .with_context(|| format!("While trying to parse {s:?}"))?,
                 ),

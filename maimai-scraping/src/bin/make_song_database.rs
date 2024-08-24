@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Context};
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use clap::Parser;
 use enum_iterator::Sequence;
 use enum_map::EnumMap;
@@ -19,6 +19,7 @@ use lazy_format::lazy_format;
 use log::info;
 use maimai_scraping::maimai::{
     load_score_level::{self, InternalScoreLevel, MaimaiVersion, Song as InLvSong, SongRaw},
+    official_song_list,
     rating::{ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::{OrdinaryScore, OrdinaryScores, Song, SongAbbreviation},
@@ -34,6 +35,7 @@ struct Opts {
     in_lv_dir: PathBuf,
     in_lv_data_dir: PathBuf,
     database_dir: PathBuf,
+    official_song_list_paths: Vec<PathBuf>,
 }
 
 #[derive(Default)]
@@ -43,6 +45,7 @@ struct Resources {
     in_lv_data: BTreeMap<MaimaiVersion, InLvData>,
     removed_songs_wiki: RemovedSongsWiki,
     removed_songs_supplemental: Vec<RemovedSongSupplemental>,
+    official_song_lists: Vec<OfficialSongList>,
     additional_abbrevs: Vec<(SongAbbreviation, SongName)>,
 }
 impl Resources {
@@ -64,10 +67,38 @@ impl Resources {
             ret.in_lv_data.insert(version, data);
         }
 
+        // Read removed song list from wiki source
         ret.removed_songs_wiki =
             RemovedSongsWiki::read(opts.database_dir.join("removed_songs_wiki.txt"))?;
 
+        // Read supplemental removed song list
         ret.removed_songs_supplemental = read_json(opts.database_dir.join("removed_songs.json"))?;
+
+        // Read official song list json
+        for path in &opts.official_song_list_paths {
+            let captures = regex!(r"(?x)  ^ [^0-9]*  ( [0-9]{8} ) ( [0-9]{6} )? [^0-9]* $  ")
+                .captures(
+                    path.file_name()
+                        .with_context(|| format!("Invalid path: {path:?}"))?
+                        .to_str()
+                        .with_context(|| format!("Not a UTF-8 name: {path:?}"))?,
+                )
+                .with_context(|| format!("Cannot extract timestamp from: {path:?}"))?;
+            let date = NaiveDate::parse_from_str(captures.get(1).unwrap().as_str(), "%Y%m%d")
+                .with_context(|| format!("Invalid date: {path:?}"))?;
+            let time = captures
+                .get(2)
+                .map(|c| {
+                    NaiveTime::parse_from_str(c.as_str(), "%H%M%S")
+                        .with_context(|| format!("Invalid time: {path:?}"))
+                })
+                .transpose()?
+                .unwrap_or_else(|| NaiveTime::from_hms_opt(12, 0, 0).unwrap());
+            let timestamp = date.and_time(time);
+            let songs: Vec<official_song_list::SongRaw> = read_json(path)?;
+            ret.official_song_lists
+                .push(OfficialSongList { timestamp, songs })
+        }
 
         // Read additional_abbrevs
         let abbrevs_path = opts.database_dir.join("additional_abbrevs.json");
@@ -878,4 +909,10 @@ pub struct RemovedSongSupplemental {
     abbrev: Option<SongAbbreviation>,
     #[serde(default)]
     levels: Vec<(MaimaiVersion, SongRaw)>,
+}
+
+#[derive(Debug)]
+pub struct OfficialSongList {
+    timestamp: NaiveDateTime,
+    songs: Vec<official_song_list::SongRaw>,
 }
