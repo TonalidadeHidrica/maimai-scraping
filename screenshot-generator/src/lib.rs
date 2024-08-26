@@ -231,17 +231,17 @@ pub fn generate(
                 info!("Screenshot of song list in text format is already retrieved.");
             }
 
-            let png_name = format!("{latest_timestamp_fmt}_tool_{update_time}_tiles.png");
-            if !files_existing.contains(&png_name) {
-                info!("Getting the screenshot of song list as icon grid.");
-                tab.wait_for_element("img.title")?.click()?;
-                wait_until_loaded(&tab)?;
-                let screenshot = screenshot_rating_target(&tab)?;
-                fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
-                info!("Grid view has been captured.");
-            } else {
-                info!("Screenshot of song list in grid view is already retrieved.");
-            }
+            // let png_name = format!("{latest_timestamp_fmt}_tool_{update_time}_tiles.png");
+            // if !files_existing.contains(&png_name) {
+            //     info!("Getting the screenshot of song list as icon grid.");
+            //     tab.wait_for_element("img.title")?.click()?;
+            //     wait_until_loaded(&tab)?;
+            //     let screenshot = screenshot_rating_target(&tab)?;
+            //     fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
+            //     info!("Grid view has been captured.");
+            // } else {
+            //     info!("Screenshot of song list in grid view is already retrieved.");
+            // }
         }
 
         anyhow::Ok(())
