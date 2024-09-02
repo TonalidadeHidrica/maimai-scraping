@@ -28,7 +28,7 @@ pub struct Song {
 #[as_ref(forward)]
 pub struct SongAbbreviation(String);
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct OrdinaryScores {
     pub easy: Option<OrdinaryScore>,
     pub basic: OrdinaryScore,

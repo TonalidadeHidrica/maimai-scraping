@@ -188,15 +188,19 @@ impl Results {
                                 continue;
                             };
                             let scores =
-                                song.scores[generation].get_or_insert_with(|| OrdinaryScores {
-                                    easy: None,
-                                    basic: Default::default(),
-                                    advanced: Default::default(),
-                                    expert: Default::default(),
-                                    master: Default::default(),
-                                    re_master: None,
-                                    version: Some(data.version().version()),
-                                });
+                                song.scores[generation].get_or_insert_with(OrdinaryScores::default);
+                            if !(ordinary_data.standard().is_some()
+                                && ordinary_data.deluxe().is_some())
+                            {
+                                // If both standard and deluxe scores exist,
+                                // then the `release` field may not describe which of them the
+                                // release date refers to.
+                                // Otherwise, we can determine the release date right now.
+                                merge_options(
+                                    &mut scores.version,
+                                    Some(&data.version().version()),
+                                )?;
+                            }
                             merge_levels(
                                 &mut scores.basic.levels[version],
                                 InternalScoreLevel::Unknown(scores_data.basic()),
@@ -298,44 +302,51 @@ impl Results {
     fn read_in_lv_song(
         name_to_song: &mut HashMap<SongName, HashSet<SongIndex>>,
         abbrev_to_song: &mut HashMap<SongAbbreviation, SongIndex>,
-
         index: SongIndex,
         song: &mut Song,
         version: MaimaiVersion,
         data: &InLvSong,
     ) -> Result<(), anyhow::Error> {
-        // Update song name map
-        name_to_song
-            .entry(data.song_name().to_owned())
-            .or_default()
-            .insert(index);
+        (|| {
+            // Update song name map
+            name_to_song
+                .entry(data.song_name().to_owned())
+                .or_default()
+                .insert(index);
 
-        // Update abbreviation map, check if contradiction occurs
-        let abbrev: SongAbbreviation = data.song_name_abbrev().to_owned().into();
-        Self::register_abbrev(abbrev_to_song, &abbrev, index)?;
+            // Update abbreviation map, check if contradiction occurs
+            let abbrev: SongAbbreviation = data.song_name_abbrev().to_owned().into();
+            Self::register_abbrev(abbrev_to_song, &abbrev, index)?;
 
-        // Record `song_name_abbrev`
-        song.abbreviation[version] = Some(abbrev.clone());
-        let scores = song.scores[data.generation()].get_or_insert_with(|| OrdinaryScores {
-            easy: None,
-            basic: Default::default(),
-            advanced: Default::default(),
-            expert: Default::default(),
-            master: Default::default(),
-            re_master: None,
-            version: Some(data.version()),
-        });
+            // Record `song_name_abbrev`
+            song.abbreviation[version] = Some(abbrev.clone());
+            let scores = song.scores[data.generation()].get_or_insert_with(OrdinaryScores::default);
 
-        // Record `levels` (indexed by `generation` and `version`)
-        scores.basic.levels[version] = Some(data.levels().get(ScoreDifficulty::Basic).unwrap());
-        scores.advanced.levels[version] =
-            Some(data.levels().get(ScoreDifficulty::Advanced).unwrap());
-        scores.expert.levels[version] = Some(data.levels().get(ScoreDifficulty::Expert).unwrap());
-        scores.master.levels[version] = Some(data.levels().get(ScoreDifficulty::Master).unwrap());
-        if let Some(level) = data.levels().get(ScoreDifficulty::ReMaster) {
-            scores.re_master.get_or_insert_with(Default::default).levels[version] = Some(level);
-        }
-        Ok(())
+            // When `in_lv`'s `v` equals `0`, it means its ジングルベル Std
+            // (which is classified to Ver.Maimai);
+            // if it's `v` equals `1`, it means it's a song for either Maimai or MaimaiPlus.
+            // But mistakenly, these are parsed as Maimai and MaimaiPlus, respectively.
+            // In fact, we cannot distinguish from `v` data if it is 1, so we should leave the
+            // version blank in this case.
+            if !matches!(data.version(), MaimaiVersion::MaimaiPlus) {
+                merge_options(&mut scores.version, Some(&data.version()))?;
+            }
+
+            // Record `levels` (indexed by `generation` and `version`)
+            scores.basic.levels[version] = Some(data.levels().get(ScoreDifficulty::Basic).unwrap());
+            scores.advanced.levels[version] =
+                Some(data.levels().get(ScoreDifficulty::Advanced).unwrap());
+            scores.expert.levels[version] =
+                Some(data.levels().get(ScoreDifficulty::Expert).unwrap());
+            scores.master.levels[version] =
+                Some(data.levels().get(ScoreDifficulty::Master).unwrap());
+            if let Some(level) = data.levels().get(ScoreDifficulty::ReMaster) {
+                scores.re_master.get_or_insert_with(Default::default).levels[version] = Some(level);
+            }
+
+            anyhow::Ok(())
+        })()
+        .with_context(|| format!("While incorporating {data:?} into {song:?}"))
     }
 
     fn register_abbrev(
