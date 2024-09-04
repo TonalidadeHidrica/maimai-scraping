@@ -75,7 +75,7 @@ impl Resources {
         ret.removed_songs_supplemental = read_json(opts.database_dir.join("removed_songs.json"))?;
 
         // Read official song list json
-        for path in &opts.official_song_list_paths {
+        for path in opts.official_song_list_paths.iter().sorted() {
             let captures = regex!(r"(?x)  ^ [^0-9]*  ( [0-9]{8} ) ( [0-9]{6} )? [^0-9]* $  ")
                 .captures(
                     path.file_name()
@@ -96,8 +96,17 @@ impl Resources {
                 .unwrap_or_else(|| NaiveTime::from_hms_opt(12, 0, 0).unwrap());
             let timestamp = date.and_time(time);
             let songs: Vec<official_song_list::SongRaw> = read_json(path)?;
-            ret.official_song_lists
-                .push(OfficialSongList { timestamp, songs })
+            let list = OfficialSongList { timestamp, songs };
+            // "Debounce" the song list.  Sometimes, the song list are not updated even after the
+            // new version starts.  This is a trivial workaround using the heuristic that if the
+            // song list is not changed, it is not updated.
+            if !ret
+                .official_song_lists
+                .last()
+                .is_some_and(|last| last.songs == list.songs)
+            {
+                ret.official_song_lists.push(list)
+            }
         }
 
         // Read additional_abbrevs
@@ -1059,7 +1068,7 @@ pub struct RemovedSongSupplemental {
     levels: Vec<(MaimaiVersion, SongRaw)>,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct OfficialSongList {
     timestamp: NaiveDateTime,
     songs: Vec<official_song_list::SongRaw>,

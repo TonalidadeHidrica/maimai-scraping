@@ -17,7 +17,7 @@ use super::{
 };
 
 #[serde_as]
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SongRaw {
     pub title: String,
