@@ -233,6 +233,12 @@ impl Results {
                         }
                     }
                     ScoreDetails::Utage(utage_data) => {
+                        if AsRef::<str>::as_ref(data.title()) == "[宴]Garakuta Doll Play" {
+                            // `[宴]Garakuta Doll Play` has incosnistent description
+                            // and has changed its kanji afterward,
+                            // so we do not read data from the official song list here
+                            return Ok(());
+                        }
                         if !found_utage.insert((index, utage_data.identifier().to_owned())) {
                             bail!("Duplicate utage scores found: {:?}", data);
                         }
