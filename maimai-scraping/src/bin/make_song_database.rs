@@ -22,7 +22,7 @@ use maimai_scraping::maimai::{
     official_song_list::{self, ScoreDetails},
     rating::{ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
-    song_list::{OrdinaryScore, OrdinaryScores, Song, SongAbbreviation},
+    song_list::{OrdinaryScore, OrdinaryScores, RemoveState, Song, SongAbbreviation},
 };
 use maimai_scraping_utils::{
     fs_json_util::{read_json, write_json},
@@ -431,7 +431,8 @@ impl Results {
                 .expect("MaimaiVersion has at least one element")
                 .previous()
                 .with_context(|| format!("No corresponding version for remove date: {data:?}"))?;
-            song.name[last_version] = Some(song_name);
+            merge_options(&mut song.name[last_version], Some(&song_name))?;
+            merge_remove_state(&mut song.remove_state, remove_date)?;
 
             for levels in chain([&data.levels], &data.another) {
                 let generation = match levels.0[0] {
@@ -510,6 +511,9 @@ impl Results {
                     &data,
                 )?;
             }
+
+            // Register removed date
+            merge_remove_state(&mut song.remove_state, data.date)?;
         }
         Ok(())
     }
@@ -689,6 +693,24 @@ fn merge_levels(
     } else {
         Ok(())
     }
+}
+
+fn merge_remove_state(
+    remove_state: &mut RemoveState,
+    remove_date: NaiveDate,
+) -> anyhow::Result<()> {
+    match *remove_state {
+        RemoveState::Present => *remove_state = RemoveState::Removed(remove_date),
+        RemoveState::Removed(known_remove_date) => {
+            if remove_date != known_remove_date {
+                bail!("Conflicting remove date: stored {remove_date}, found {known_remove_date}");
+            }
+        }
+        RemoveState::Revived(_, _) => {
+            bail!("Revived songs should be patched later manually")
+        }
+    }
+    Ok(())
 }
 
 fn merge_options<T>(x: &mut Option<T>, y: Option<&T>) -> anyhow::Result<()>

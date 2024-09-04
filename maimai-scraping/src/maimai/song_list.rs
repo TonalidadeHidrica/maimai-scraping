@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use derive_more::{AsRef, Display, From, FromStr};
 use enum_map::EnumMap;
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,7 @@ pub struct Song {
     pub scores: EnumMap<ScoreGeneration, Option<OrdinaryScores>>,
     pub utage_scores: Vec<UtageScore>,
     pub icon: Option<SongIcon>,
+    pub remove_state: RemoveState,
 }
 
 #[derive(
@@ -54,4 +56,16 @@ impl OrdinaryScores {
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct OrdinaryScore {
     pub levels: EnumMap<MaimaiVersion, Option<InternalScoreLevel>>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub enum RemoveState {
+    Present,
+    Removed(NaiveDate),
+    Revived(NaiveDate, NaiveDate),
+}
+impl Default for RemoveState {
+    fn default() -> Self {
+        Self::Present
+    }
 }
