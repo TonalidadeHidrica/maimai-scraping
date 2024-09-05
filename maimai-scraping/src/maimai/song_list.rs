@@ -1,4 +1,6 @@
-use chrono::NaiveDate;
+use std::collections::BTreeMap;
+
+use chrono::{NaiveDate, NaiveDateTime};
 use derive_more::{AsRef, Display, From, FromStr};
 use enum_map::EnumMap;
 use serde::{Deserialize, Serialize};
@@ -22,6 +24,7 @@ pub struct Song {
     pub utage_scores: Vec<UtageScore>,
     pub icon: Option<SongIcon>,
     pub remove_state: RemoveState,
+    pub locked_history: BTreeMap<NaiveDateTime, bool>,
 }
 
 #[derive(

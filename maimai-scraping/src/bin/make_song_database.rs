@@ -177,7 +177,8 @@ impl Results {
                 merge_options(&mut song.artist[version], Some(data.artist()))?;
                 // Icon
                 merge_options(&mut song.icon, Some(data.image()))?;
-                // Unused: release, sort, new, locked
+                // Unused: release, sort, new
+                song.locked_history.insert(list.timestamp, data.locked());
 
                 if version < data.version().version() {
                     bail!("Conflicting version: song {data:?} found in version {version:?}");
