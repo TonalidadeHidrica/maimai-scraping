@@ -157,7 +157,7 @@ pub struct UtageScore {
     buddy: bool,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Deserialize)]
 pub struct UtageIdentifier<'a>(Cow<'a, UtageKindRaw>, ScoreLevel);
 impl<'a> UtageIdentifier<'a> {
     pub fn to_owned(&self) -> UtageIdentifier<'static> {

@@ -19,7 +19,7 @@ use lazy_format::lazy_format;
 use log::info;
 use maimai_scraping::maimai::{
     load_score_level::{self, InternalScoreLevel, MaimaiVersion, Song as InLvSong, SongRaw},
-    official_song_list::{self, ScoreDetails},
+    official_song_list::{self, ScoreDetails, UtageIdentifier},
     rating::{ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::{OrdinaryScore, OrdinaryScores, RemoveState, Song, SongAbbreviation},
@@ -38,6 +38,8 @@ struct Opts {
     official_song_list_paths: Vec<PathBuf>,
 }
 
+type UtageIdentifierMergeMap =
+    HashMap<(SongIcon, UtageIdentifier<'static>), UtageIdentifier<'static>>;
 #[derive(Default)]
 /// Collects the resources for the song list.
 struct Resources {
@@ -47,6 +49,7 @@ struct Resources {
     removed_songs_supplemental: Vec<RemovedSongSupplemental>,
     official_song_lists: Vec<OfficialSongList>,
     additional_abbrevs: Vec<(SongAbbreviation, SongName)>,
+    utage_identifier_merge: UtageIdentifierMergeMap,
 }
 impl Resources {
     fn load(opts: &Opts) -> anyhow::Result<Self> {
@@ -115,6 +118,14 @@ impl Resources {
             ret.additional_abbrevs = read_json(&abbrevs_path)?;
         }
 
+        ret.utage_identifier_merge =
+            read_json::<_, Vec<(SongIcon, UtageIdentifier, UtageIdentifier)>>(
+                opts.database_dir.join("utage_identifier_merge.json"),
+            )?
+            .into_iter()
+            .map(|(a, b, c)| ((a, b), c))
+            .collect();
+
         Ok(ret)
     }
 }
@@ -129,7 +140,11 @@ struct Results {
 }
 
 impl Results {
-    fn read_official_song_list(&mut self, list: &OfficialSongList) -> anyhow::Result<()> {
+    fn read_official_song_list(
+        &mut self,
+        list: &OfficialSongList,
+        utage_identifier_merge: &UtageIdentifierMergeMap,
+    ) -> anyhow::Result<()> {
         let mut found_utage = HashSet::new();
 
         for data in &list.songs {
@@ -248,10 +263,11 @@ impl Results {
                         }
                     }
                     ScoreDetails::Utage(utage_data) => {
-                        if AsRef::<str>::as_ref(data.title()) == "[宴]Garakuta Doll Play" {
-                            // `[宴]Garakuta Doll Play` has incosnistent description
-                            // and has changed its kanji afterward,
-                            // so we do not read data from the official song list here
+                        if utage_identifier_merge
+                            .contains_key(&(data.image().clone(), utage_data.identifier()))
+                        {
+                            // In the future, we need to merge the data, but for now we are just
+                            // skipping
                             return Ok(());
                         }
                         if !found_utage.insert((index, utage_data.identifier().to_owned())) {
@@ -787,7 +803,11 @@ impl Results {
         official_utages.sort_by_key(|x| (x.0.image(), x.1.identifier()));
 
         for (i, song) in collected_utages.iter().enumerate() {
-            println!("{i} {:?} {:?}", song.0.name.values().flatten().last(), song.0.icon);
+            println!(
+                "{i} {:?} {:?}",
+                song.0.name.values().flatten().last(),
+                song.0.icon
+            );
         }
         for (i, song) in official_utages.iter().enumerate() {
             println!("{i} {} {:?}", song.0.title(), song.0.image());
@@ -942,12 +962,14 @@ fn main() -> anyhow::Result<()> {
     let resources = Resources::load(&opts)?;
     let mut results = Results::default();
     for list in &resources.official_song_lists {
-        results.read_official_song_list(list).with_context(|| {
-            format!(
-                "While processing official song list at {:?}",
-                list.timestamp
-            )
-        })?;
+        results
+            .read_official_song_list(list, &resources.utage_identifier_merge)
+            .with_context(|| {
+                format!(
+                    "While processing official song list at {:?}",
+                    list.timestamp
+                )
+            })?;
     }
     for (&version, in_lv) in &resources.in_lv {
         results.read_in_lv(version, in_lv)?;
