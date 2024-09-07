@@ -17,7 +17,7 @@ use super::{
 };
 
 #[serde_as]
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SongRaw {
     pub title: String,
@@ -62,7 +62,7 @@ pub struct SongRaw {
     pub buddy: Option<String>,
 }
 
-#[derive(Debug, Getters, CopyGetters)]
+#[derive(PartialEq, Eq, Debug, Getters, CopyGetters)]
 pub struct Song {
     #[getset(get = "pub")]
     title: SongName,
@@ -103,21 +103,21 @@ pub struct ArtistName(String);
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, From)]
 pub struct SortIndex(u64);
 
-#[derive(Clone, Copy, Debug, CopyGetters)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct Version {
     version: MaimaiVersion,
     suffix: RangedU8<0, 99>,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum ScoreDetails {
     Ordinary(OrdinaryScore),
     Utage(UtageScore),
 }
 
 // Either standard or deluxe is Some
-#[derive(Clone, Copy, Debug, CopyGetters)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct OrdinaryScore {
     category: Category,
@@ -135,7 +135,7 @@ pub enum Category {
     TouhouProject,
 }
 
-#[derive(Clone, Copy, Debug, CopyGetters)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct Levels {
     basic: ScoreLevel,

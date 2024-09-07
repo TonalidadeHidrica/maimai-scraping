@@ -13,7 +13,7 @@ use enum_iterator::Sequence;
 use enum_map::EnumMap;
 use fs_err::read_to_string;
 use hashbrown::{hash_map::Entry as HEntry, HashMap, HashSet};
-use itertools::{chain, Itertools};
+use itertools::{chain, EitherOrBoth, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::info;
@@ -75,7 +75,7 @@ impl Resources {
         ret.removed_songs_supplemental = read_json(opts.database_dir.join("removed_songs.json"))?;
 
         // Read official song list json
-        for path in opts.official_song_list_paths.iter().sorted() {
+        for path in &opts.official_song_list_paths {
             let captures = regex!(r"(?x)  ^ [^0-9]*  ( [0-9]{8} ) ( [0-9]{6} )? [^0-9]* $  ")
                 .captures(
                     path.file_name()
@@ -96,18 +96,18 @@ impl Resources {
                 .unwrap_or_else(|| NaiveTime::from_hms_opt(12, 0, 0).unwrap());
             let timestamp = date.and_time(time);
             let songs: Vec<official_song_list::SongRaw> = read_json(path)?;
-            let list = OfficialSongList { timestamp, songs };
-            // "Debounce" the song list.  Sometimes, the song list are not updated even after the
-            // new version starts.  This is a trivial workaround using the heuristic that if the
-            // song list is not changed, it is not updated.
-            if !ret
-                .official_song_lists
-                .last()
-                .is_some_and(|last| last.songs == list.songs)
-            {
-                ret.official_song_lists.push(list)
-            }
+            let list = OfficialSongList {
+                timestamp,
+                songs: songs.into_iter().map(TryInto::try_into).try_collect()?,
+            };
+            ret.official_song_lists.push(list)
         }
+        // Sort the list by timestamp, and then...
+        ret.official_song_lists.sort_by_key(|x| x.timestamp);
+        // "debounce" the song list.  Sometimes, the song list are not updated even after the
+        // new version starts.  This is a trivial workaround using the heuristic that if the
+        // song list is not changed, it is not updated.
+        ret.official_song_lists.dedup_by(|x, y| x.songs == y.songs);
 
         // Read additional_abbrevs
         let abbrevs_path = opts.database_dir.join("additional_abbrevs.json");
@@ -133,7 +133,6 @@ impl Results {
         let mut found_utage = HashSet::new();
 
         for data in &list.songs {
-            let data: official_song_list::Song = data.clone().try_into()?;
             let (index, song) = match self.icon_to_song.entry(data.image().clone()) {
                 HEntry::Occupied(e) => {
                     let index = *e.get();
@@ -639,6 +638,180 @@ impl Results {
         }
         Ok(())
     }
+
+    fn verify_latest_official_songs(&self, list: &OfficialSongList) -> anyhow::Result<()> {
+        let version = MaimaiVersion::latest();
+        if list.timestamp < version.start_time() {
+            bail!("The latest official song list is not of the latest version");
+        }
+
+        let mut collected_songs = vec![];
+        let mut collected_utages = vec![];
+        for song in &self.songs.0 {
+            if !matches!(song.remove_state, RemoveState::Removed(_)) {
+                if song.scores.values().any(|x| x.is_some()) {
+                    collected_songs.push(song);
+                }
+                for score in &song.utage_scores {
+                    collected_utages.push((song, score));
+                }
+            }
+        }
+
+        let mut official_songs = vec![];
+        let mut official_utages = vec![];
+        for song in &list.songs {
+            match song.details() {
+                ScoreDetails::Ordinary(score) => official_songs.push((song, score)),
+                ScoreDetails::Utage(score) => official_utages.push((song, score)),
+            }
+        }
+
+        collected_songs.sort_by_key(|x| &x.icon);
+        official_songs.sort_by_key(|x| x.0.image());
+        for item in collected_songs.iter().zip_longest(&official_songs) {
+            match item {
+                EitherOrBoth::Both(collected, (song, score)) => {
+                    let level_ok = |x: ScoreLevel| {
+                        move |y: InternalScoreLevel| match y {
+                            InternalScoreLevel::Unknown(y) => x == y,
+                            InternalScoreLevel::Known(y) => x == y.to_lv(version),
+                        }
+                    };
+                    let ok = |generation: ScoreGeneration| {
+                        move |levels: official_song_list::Levels| {
+                            Some(match &collected.scores[generation] {
+                                None => "Missing score",
+                                Some(collected) => {
+                                    if !collected.basic.levels[version]
+                                        .is_some_and(level_ok(levels.basic()))
+                                    {
+                                        "basic"
+                                    } else if !collected.advanced.levels[version]
+                                        .is_some_and(level_ok(levels.advanced()))
+                                    {
+                                        "advanced"
+                                    } else if !collected.expert.levels[version]
+                                        .is_some_and(level_ok(levels.expert()))
+                                    {
+                                        "expert"
+                                    } else if !collected.master.levels[version]
+                                        .is_some_and(level_ok(levels.master()))
+                                    {
+                                        "master"
+                                    } else {
+                                        let res = match (&collected.re_master, levels.re_master()) {
+                                            (Some(x), Some(y)) => {
+                                                x.levels[version].is_some_and(level_ok(y))
+                                            }
+                                            (None, None) => true,
+                                            _ => false,
+                                        };
+                                        if res {
+                                            return None;
+                                        } else {
+                                            "remaster"
+                                        }
+                                    }
+                                }
+                            })
+                            // .as_ref()
+                            // .is_some_and(|collected| {})
+                        }
+                    };
+                    let item_wrong = [
+                        (
+                            collected.name[version].as_ref() == Some(song.title()),
+                            "song name",
+                        ),
+                        (
+                            collected.pronunciation.as_ref() == Some(song.title_kana()),
+                            "song kana",
+                        ),
+                        (
+                            collected.artist[version].as_ref() == Some(song.artist()),
+                            "artist",
+                        ),
+                        (collected.icon.as_ref() == Some(song.image()), "icon"),
+                        (
+                            collected
+                                .scores
+                                .values()
+                                .flatten()
+                                .filter_map(|v| v.version)
+                                .any(|version| version == song.version().version()),
+                            "version",
+                        ),
+                        (
+                            collected.locked_history.values().last().copied()
+                                == Some(song.locked()),
+                            "locked",
+                        ),
+                        (
+                            collected.category[version] == Some(score.category()),
+                            "category",
+                        ),
+                    ]
+                    .into_iter()
+                    .filter_map(|(x, y)| (!x).then_some(y))
+                    .collect_vec();
+                    let score_wrong = [
+                        (
+                            score.standard().and_then(ok(ScoreGeneration::Standard)),
+                            "standard score",
+                        ),
+                        (
+                            score.deluxe().and_then(ok(ScoreGeneration::Deluxe)),
+                            "deluxe score",
+                        ),
+                    ]
+                    .into_iter()
+                    .filter_map(|(l, g)| l.map(|l| (g, l)))
+                    .collect_vec();
+                    if !item_wrong.is_empty() || !score_wrong.is_empty() {
+                        bail!("These scores differ by {item_wrong:?} or {score_wrong:?} at version {version:?}\n\n{collected:#?}\n\n{song:#?}")
+                    }
+                }
+                EitherOrBoth::Left(x) => bail!("Only collected songs have {x:?}"),
+                EitherOrBoth::Right(x) => bail!("Only official songs have {x:?}"),
+            }
+        }
+
+        collected_utages.sort_by_key(|x| x.1.identifier());
+        official_utages.sort_by_key(|x| x.1.identifier());
+
+        for item in collected_utages.iter().zip_longest(&official_utages) {
+            match item {
+                EitherOrBoth::Both((collected, x), (song, y)) => {
+                    let wrong = [
+                        (
+                            collected.name[version].as_ref() == Some(song.title()),
+                            "song name",
+                        ),
+                        (
+                            collected.pronunciation.as_ref() == Some(song.title_kana()),
+                            "song kana",
+                        ),
+                        (
+                            collected.artist[version].as_ref() == Some(song.artist()),
+                            "artist",
+                        ),
+                        (x == y, "utage score"),
+                    ]
+                    .into_iter()
+                    .filter_map(|(x, y)| (!x).then_some(y))
+                    .collect_vec();
+                    if !wrong.is_empty() {
+                        bail!("These scores differ by {wrong:?} at version {version:?}\n  - {collected:#?}\n  - {song:#?}")
+                    }
+                }
+                EitherOrBoth::Left(x) => bail!("Only collected songs have {x:?}"),
+                EitherOrBoth::Right(x) => bail!("Only official songs have {x:?}"),
+            }
+        }
+
+        Ok(())
+    }
 }
 
 fn merge_levels(
@@ -769,6 +942,13 @@ fn main() -> anyhow::Result<()> {
     for (&version, in_lv_data) in &resources.in_lv_data {
         results.read_in_lv_data(version, in_lv_data)?;
     }
+
+    results.verify_latest_official_songs(
+        resources
+            .official_song_lists
+            .last()
+            .context("There should be at least one official song")?,
+    )?;
 
     write_json(
         opts.database_dir.join("maimai_song_database.json"),
@@ -1094,5 +1274,5 @@ pub struct RemovedSongSupplemental {
 #[derive(PartialEq, Eq, Debug)]
 pub struct OfficialSongList {
     timestamp: NaiveDateTime,
-    songs: Vec<official_song_list::SongRaw>,
+    songs: Vec<official_song_list::Song>,
 }
