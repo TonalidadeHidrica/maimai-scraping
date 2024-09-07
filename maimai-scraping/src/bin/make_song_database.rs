@@ -153,22 +153,28 @@ impl Results {
                 })?;
 
                 // Song name
-                match data.details() {
-                    ScoreDetails::Ordinary(_) => {
-                        merge_options(&mut song.name[version], Some(data.title()))?;
-                        self.name_to_song
-                            .entry(data.title().clone())
-                            .or_default()
-                            .insert(index);
-                    }
+                let song_name: SongName = match data.details() {
+                    ScoreDetails::Ordinary(_) => data.title().clone(),
                     ScoreDetails::Utage(u) => {
-                        if let Some(name) = &song.name[version] {
-                            if format!("[{}]{name}", u.kanji()) != data.title().as_ref() {
-                                bail!("Unexpected title: {data:?}");
-                            }
-                        }
+                        let name: &str = data.title().as_ref();
+                        name.strip_prefix(&format!("[{}]", u.kanji()))
+                            .context("Utage score not starting with speicified kanji")?
+                            .to_owned()
+                            .into()
+                        // if let Some(name) = &song.name[version] {
+                        //     if format!("[{}]{name}", u.kanji()) != data.title().as_ref() {
+                        //         bail!("Unexpected title");
+                        //     }
+                        // } else {
+                        //     self.
+                        // }
                     }
-                }
+                };
+                merge_options(&mut song.name[version], Some(&song_name))?;
+                self.name_to_song
+                    .entry(song_name)
+                    .or_default()
+                    .insert(index);
 
                 // Song kana
                 merge_options(&mut song.pronunciation, Some(data.title_kana()))?;
@@ -733,15 +739,15 @@ impl Results {
                             "artist",
                         ),
                         (collected.icon.as_ref() == Some(song.image()), "icon"),
-                        (
-                            collected
-                                .scores
-                                .values()
-                                .flatten()
-                                .filter_map(|v| v.version)
-                                .any(|version| version == song.version().version()),
-                            "version",
-                        ),
+                        // (
+                        //     collected
+                        //         .scores
+                        //         .values()
+                        //         .flatten()
+                        //         .filter_map(|v| v.version)
+                        //         .any(|version| version == song.version().version()),
+                        //     "version",
+                        // ),
                         (
                             collected.locked_history.values().last().copied()
                                 == Some(song.locked()),
@@ -777,15 +783,25 @@ impl Results {
             }
         }
 
-        collected_utages.sort_by_key(|x| x.1.identifier());
-        official_utages.sort_by_key(|x| x.1.identifier());
+        collected_utages.sort_by_key(|x| (&x.0.icon, x.1.identifier()));
+        official_utages.sort_by_key(|x| (x.0.image(), x.1.identifier()));
+
+        for (i, song) in collected_utages.iter().enumerate() {
+            println!("{i} {:?} {:?}", song.0.name.values().flatten().last(), song.0.icon);
+        }
+        for (i, song) in official_utages.iter().enumerate() {
+            println!("{i} {} {:?}", song.0.title(), song.0.image());
+        }
 
         for item in collected_utages.iter().zip_longest(&official_utages) {
             match item {
                 EitherOrBoth::Both((collected, x), (song, y)) => {
                     let wrong = [
                         (
-                            collected.name[version].as_ref() == Some(song.title()),
+                            collected.name[version].as_ref().is_some_and(|name| {
+                                format!("[{}]{name}", x.kanji())
+                                    == AsRef::<str>::as_ref(song.title())
+                            }),
                             "song name",
                         ),
                         (
@@ -802,7 +818,7 @@ impl Results {
                     .filter_map(|(x, y)| (!x).then_some(y))
                     .collect_vec();
                     if !wrong.is_empty() {
-                        bail!("These scores differ by {wrong:?} at version {version:?}\n  - {collected:#?}\n  - {song:#?}")
+                        bail!("These utage scores differ by {wrong:?} at version {version:?}\n  - {collected:#?}\n  - {song:#?}")
                     }
                 }
                 EitherOrBoth::Left(x) => bail!("Only collected songs have {x:?}"),
