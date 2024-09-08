@@ -11,6 +11,8 @@ use super::{
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
 };
 
+pub mod database;
+
 /// A song has zero or one standard score, zero or one deluxe score,
 /// and zero or more utage scores.
 #[derive(Default, Debug, Serialize, Deserialize)]
