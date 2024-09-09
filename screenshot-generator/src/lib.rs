@@ -429,29 +429,3 @@ fn get_last_modified(request: RequestPausedEvent) -> Option<DateTime<FixedOffset
     let timezone = FixedOffset::east_opt(9 * 60 * 60).unwrap();
     Some(time.and_utc().with_timezone(&timezone))
 }
-
-// (async function () {
-//     console.log("Copying");
-
-//     const elem = document.querySelector('body');
-
-//     // select
-//     const range = document.createRange();
-//     range.selectNode(elem);
-//     const selection = document.getSelection();
-//     selection.removeAllRanges();
-//     selection.addRange(range);
-
-//     // copy
-//     const result = document.execCommand('copy');
-//     console.log("Copied");
-
-//     console.log("Sleeping...");
-//     await new Promise(resolve => setTimeout(resolve, 1000));
-//     console.log("Slept");
-
-//     console.log(await navigator.permissions.query({ name: 'clipboard-read' }));
-//     const ret = await navigator.clipboard.readText();
-//     console.log("Result:", ret);
-//     return ret;
-// })();
