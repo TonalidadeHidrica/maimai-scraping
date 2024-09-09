@@ -4,4 +4,5 @@
 
 rating-target-viewer/src/rating_target_template.html
 screenshot-generator/src/bookmarklet.js
+screenshot-generator/src/test_data.js
 generate-config/src/template.toml
