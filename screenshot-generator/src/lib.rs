@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Context};
+use base64::{prelude::BASE64_STANDARD, Engine};
 use chrono::{DateTime, FixedOffset, NaiveDateTime};
 use headless_chrome::{
     browser::tab::{element::BoxModel, RequestPausedDecision},
@@ -231,17 +232,34 @@ pub fn generate(
                 info!("Screenshot of song list in text format is already retrieved.");
             }
 
-            // let png_name = format!("{latest_timestamp_fmt}_tool_{update_time}_tiles.png");
-            // if !files_existing.contains(&png_name) {
-            //     info!("Getting the screenshot of song list as icon grid.");
-            //     tab.wait_for_element("img.title")?.click()?;
-            //     wait_until_loaded(&tab)?;
-            //     let screenshot = screenshot_rating_target(&tab)?;
-            //     fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
-            //     info!("Grid view has been captured.");
-            // } else {
-            //     info!("Screenshot of song list in grid view is already retrieved.");
-            // }
+            let png_name = format!("{latest_timestamp_fmt}_tool_{update_time}_tiles.png");
+            if !files_existing.contains(&png_name) {
+                info!("Getting the screenshot of song list as icon grid.");
+                sleep(Duration::from_secs(10)); // Very safe sleep
+
+                let new_tab = WaitForNewTabHandle::new(&browser)?;
+                tab.wait_for_xpath(r#"//button[text()='豪華版']"#)?
+                    .click()?;
+                let new_tab = new_tab.wait(&browser)?;
+                let img = new_tab.wait_for_element("#best_pic_Best")?;
+                let src = img
+                    .get_attribute_value("src")?
+                    .context("`src` attribute not found")?;
+                let base64 = src
+                    .strip_prefix("data:image/png;base64,")
+                    .context("Unexpected `src`, could not strip suffix")?;
+                let path = img_save_dir.to_owned().join(png_name);
+                fs_err::write(&path, BASE64_STANDARD.decode(base64.as_bytes())?)?;
+                info!("Grid view has been captured to {path:?}.");
+
+                // tab.wait_for_element("img.title")?.click()?;
+                // wait_until_loaded(&tab)?;
+                // let screenshot = screenshot_rating_target(&tab)?;
+                // fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
+                // info!("Grid view has been captured.");
+            } else {
+                info!("Screenshot of song list in grid view is already retrieved.");
+            }
         }
 
         anyhow::Ok(())
@@ -253,6 +271,41 @@ pub fn generate(
 
     info!("Done.");
     Ok(())
+}
+
+struct WaitForNewTabHandle(BTreeSet<String>);
+impl WaitForNewTabHandle {
+    fn new(browser: &Browser) -> anyhow::Result<Self> {
+        let before_tabs = browser
+            .get_tabs()
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock mutex: {e}"))?
+            .iter()
+            .map(|tab| tab.get_target_id().to_owned())
+            .collect::<BTreeSet<_>>();
+        Ok(Self(dbg!(before_tabs)))
+    }
+
+    fn wait(self, browser: &Browser) -> anyhow::Result<Arc<Tab>> {
+        for i in (0..10).rev() {
+            sleep(Duration::from_secs(1));
+            match browser
+                .get_tabs()
+                .lock()
+                .map_err(|e| anyhow!("Failed to lock mutex: {e}"))?
+                .iter()
+                .inspect(|tab| println!("Tab: {:?}", tab.get_target_id()))
+                .find(|tab| !self.0.contains(tab.get_target_id()))
+                .cloned()
+                .context("No tab is opened")
+            {
+                Ok(tab) => return Ok(tab),
+                Err(e) if i == 0 => return Err(e),
+                _ => {}
+            }
+        }
+        unreachable!()
+    }
 }
 
 fn screenshot_rating_target(tab: &Arc<Tab>) -> anyhow::Result<Vec<u8>> {

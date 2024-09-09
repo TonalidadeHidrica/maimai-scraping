@@ -2920,6 +2920,7 @@ version = "0.1.0"
 dependencies = [
  "aime-net",
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "clap",
  "env_logger 0.11.3",
