@@ -24,6 +24,8 @@ struct Opts {
     config_toml: PathBuf,
     #[arg(long)]
     run_tool: bool,
+    #[arg(long)]
+    run_test_data: bool,
 }
 #[derive(Deserialize)]
 struct Config {
@@ -108,6 +110,7 @@ async fn run(opts: &Opts, config: &Config, user_config: &UserConfig) -> anyhow::
         Some(records),
         config.remote_debugging_port,
         opts.run_tool,
+        opts.run_test_data,
     )?;
     Ok(())
 }

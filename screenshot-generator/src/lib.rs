@@ -7,17 +7,19 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Context};
+use base64::{prelude::BASE64_STANDARD, Engine};
 use chrono::{DateTime, FixedOffset, NaiveDateTime};
 use headless_chrome::{
     browser::tab::{element::BoxModel, RequestPausedDecision},
     protocol::cdp::{
+        Browser::{PermissionDescriptor, PermissionSetting, SetPermission},
         Fetch::{events::RequestPausedEvent, RequestPattern, RequestStage},
         Page::{CaptureScreenshotFormatOption::Png, Viewport},
     },
     Browser, LaunchOptionsBuilder, Tab,
 };
 use itertools::Itertools;
-use log::info;
+use log::{info, warn};
 use maimai_scraping::{
     api::find_aime_idx,
     cookie_store::UserIdentifier,
@@ -41,6 +43,7 @@ pub fn generate(
     records: Option<Vec<(PlayTime, Idx)>>,
     port: Option<u16>,
     run_tool: bool,
+    run_test_data: bool,
 ) -> anyhow::Result<()> {
     let wait = || sleep(Duration::from_secs(1));
 
@@ -234,13 +237,92 @@ pub fn generate(
             let png_name = format!("{latest_timestamp_fmt}_tool_{update_time}_tiles.png");
             if !files_existing.contains(&png_name) {
                 info!("Getting the screenshot of song list as icon grid.");
-                tab.wait_for_element("img.title")?.click()?;
-                wait_until_loaded(&tab)?;
-                let screenshot = screenshot_rating_target(&tab)?;
-                fs_err::write(img_save_dir.to_owned().join(png_name), screenshot)?;
-                info!("Grid view has been captured.");
+                sleep(Duration::from_secs(3)); // Very safe sleep
+
+                let new_tab = WaitForNewTabHandle::new(&browser)?;
+                tab.wait_for_xpath(r#"//button[text()='豪華版']"#)?
+                    .click()?;
+                let new_tab = new_tab.wait(&browser)?;
+                let img = new_tab.wait_for_element("#best_pic_Best")?;
+                let src = img
+                    .get_attribute_value("src")?
+                    .context("`src` attribute not found")?;
+                let base64 = src
+                    .strip_prefix("data:image/png;base64,")
+                    .context("Unexpected `src`, could not strip suffix")?;
+                let path = img_save_dir.to_owned().join(png_name);
+                fs_err::write(&path, BASE64_STANDARD.decode(base64.as_bytes())?)?;
+                info!("Grid view has been captured to {path:?}.");
+
+                if let Err(e) = new_tab.close(true) {
+                    warn!("Failed to close tab: {e}")
+                }
             } else {
                 info!("Screenshot of song list in grid view is already retrieved.");
+            }
+        }
+
+        if run_test_data {
+            let txt_name = format!("{latest_timestamp_fmt}_tool_testdata.txt");
+            if !files_existing.contains(&txt_name) {
+                info!("Getting the test data");
+
+                tab.navigate_to(RATING_TARGET_URL)?;
+                sleep(Duration::from_secs(3));
+
+                let new_tab = WaitForNewTabHandle::new(&browser)?;
+                tab.evaluate(include_str!("test_data.js"), true)?;
+                let new_tab = new_tab.wait(&browser)?;
+
+                tab.call_method(SetPermission {
+                    permission: PermissionDescriptor {
+                        name: "clipboard-read".into(),
+                        sysex: None,
+                        user_visible_only: None,
+                        allow_without_sanitization: Some(true),
+                        pan_tilt_zoom: None,
+                    },
+                    setting: PermissionSetting::Granted,
+                    origin: None,
+                    browser_context_id: None,
+                })?;
+
+                let data = dbg!(
+                    new_tab
+                        .evaluate(
+                            r#"
+                                (() => {
+                                    const body = document.querySelector('body');
+                                    result = '';
+
+                                    body.childNodes.forEach(node => {
+                                      if (node.nodeType === Node.TEXT_NODE) {
+                                        result += node.textContent;
+                                      } else if (node.nodeName === 'BR') {
+                                        result += '\n';
+                                      }
+                                    });
+                                    console.log(result);
+
+                                    return result;
+                                })();
+                            "#,
+                            false,
+                        )?
+                        .value
+                )
+                .context("Test data does not return a value")?;
+                let data = data.as_str().context("Test data is not a string")?;
+
+                let path = img_save_dir.to_owned().join(txt_name);
+                fs_err::write(&path, data)?;
+                info!("Test data has been captured to {path:?}.");
+
+                if let Err(e) = new_tab.close(true) {
+                    warn!("Failed to close tab: {e}")
+                }
+            } else {
+                info!("Test data is already retrieved.");
             }
         }
 
@@ -253,6 +335,40 @@ pub fn generate(
 
     info!("Done.");
     Ok(())
+}
+
+struct WaitForNewTabHandle(BTreeSet<String>);
+impl WaitForNewTabHandle {
+    fn new(browser: &Browser) -> anyhow::Result<Self> {
+        let before_tabs = browser
+            .get_tabs()
+            .lock()
+            .map_err(|e| anyhow!("Failed to lock mutex: {e}"))?
+            .iter()
+            .map(|tab| tab.get_target_id().to_owned())
+            .collect::<BTreeSet<_>>();
+        Ok(Self(before_tabs))
+    }
+
+    fn wait(self, browser: &Browser) -> anyhow::Result<Arc<Tab>> {
+        for i in (0..10).rev() {
+            sleep(Duration::from_secs(1));
+            match browser
+                .get_tabs()
+                .lock()
+                .map_err(|e| anyhow!("Failed to lock mutex: {e}"))?
+                .iter()
+                .find(|tab| !self.0.contains(tab.get_target_id()))
+                .cloned()
+                .context("No tab is opened")
+            {
+                Ok(tab) => return Ok(tab),
+                Err(e) if i == 0 => return Err(e),
+                _ => {}
+            }
+        }
+        unreachable!()
+    }
 }
 
 fn screenshot_rating_target(tab: &Arc<Tab>) -> anyhow::Result<Vec<u8>> {
