@@ -670,7 +670,7 @@ impl Results {
         let mut collected_songs = vec![];
         let mut collected_utages = vec![];
         for song in &self.songs.0 {
-            if !matches!(song.remove_state, RemoveState::Removed(_)) {
+            if !song.removed() {
                 if song.scores.values().any(|x| x.is_some()) {
                     collected_songs.push(song);
                 }
@@ -802,16 +802,16 @@ impl Results {
         collected_utages.sort_by_key(|x| (&x.0.icon, x.1.identifier()));
         official_utages.sort_by_key(|x| (x.0.image(), x.1.identifier()));
 
-        for (i, song) in collected_utages.iter().enumerate() {
-            println!(
-                "{i} {:?} {:?}",
-                song.0.name.values().flatten().last(),
-                song.0.icon
-            );
-        }
-        for (i, song) in official_utages.iter().enumerate() {
-            println!("{i} {} {:?}", song.0.title(), song.0.image());
-        }
+        // for (i, song) in collected_utages.iter().enumerate() {
+        //     println!(
+        //         "{i} {:?} {:?}",
+        //         song.0.name.values().flatten().last(),
+        //         song.0.icon
+        //     );
+        // }
+        // for (i, song) in official_utages.iter().enumerate() {
+        //     println!("{i} {} {:?}", song.0.title(), song.0.image());
+        // }
 
         for item in collected_utages.iter().zip_longest(&official_utages) {
             match item {
@@ -846,6 +846,15 @@ impl Results {
             }
         }
 
+        Ok(())
+    }
+
+    fn verify_properties(&self) -> anyhow::Result<()> {
+        for song in &self.songs.0 {
+            if !song.removed() && song.icon.is_none() {
+                bail!("Icon is missing: {song:#?}")
+            }
+        }
         Ok(())
     }
 }
@@ -981,6 +990,7 @@ fn main() -> anyhow::Result<()> {
         results.read_in_lv_data(version, in_lv_data)?;
     }
 
+    results.verify_properties()?;
     results.verify_latest_official_songs(
         resources
             .official_song_lists

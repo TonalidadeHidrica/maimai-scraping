@@ -29,6 +29,12 @@ pub struct Song {
     pub locked_history: BTreeMap<NaiveDateTime, bool>,
 }
 
+impl Song {
+    pub fn removed(&self) -> bool {
+        matches!(self.remove_state, RemoveState::Removed(_))
+    }
+}
+
 #[derive(
     Clone, PartialEq, Eq, Hash, Debug, From, AsRef, FromStr, Display, Serialize, Deserialize,
 )]

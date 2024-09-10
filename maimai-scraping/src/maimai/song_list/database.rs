@@ -1,10 +1,17 @@
 use derive_by_key::DeriveByKey;
+use hashbrown::HashMap;
+use itertools::Itertools;
+use getset::Getters;
+
+use crate::maimai::schema::latest::SongIcon;
 
 use super::Song;
-// use std::cmp::Par
 
+#[derive(Getters)]
+#[getset(get = "pub")]
 pub struct SongDatabase<'a> {
     songs: Vec<SongRef<'a>>,
+    icon_map: HashMap<&'a SongIcon, SongRef<'a>>,
 }
 impl<'a> SongDatabase<'a> {
     pub fn new(songs: &'a [Song]) -> Self {
@@ -12,9 +19,16 @@ impl<'a> SongDatabase<'a> {
             .iter()
             .enumerate()
             .map(|(id, song)| SongRef { song, id })
+            .collect_vec();
+
+        // Make icon map.
+        // `verify_properties` guarantees that an icon exists for all unremoved songs.
+        let icon_map = songs
+            .iter()
+            .filter_map(|&x| Some((x.song.icon.as_ref()?, x)))
             .collect();
-        // let mut icon_map = songs.iter().map(|x| (&x.icon));
-        Self { songs }
+
+        Self { songs, icon_map }
     }
 }
 

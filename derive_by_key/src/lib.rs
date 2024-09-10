@@ -52,40 +52,11 @@ pub fn derive_by_key(input: TokenStream) -> TokenStream {
         })
         .expect("Invalid arguments for `#[derive_by_key]`");
 
-    // for meta in meta {
-    //     match meta {
-    //         NestedMeta::Meta(Meta::NameValue(nv)) if nv.path.is_ident("key") => {
-    //             if let Lit::Str(s) = nv.lit {
-    //                 key_fn = Some(s.value());
-    //             }
-    //         }
-    //         NestedMeta::Meta(Meta::Path(path)) => {
-    //             if path.is_ident("PartialEq")
-    //                 || path.is_ident("Eq")
-    //                 || path.is_ident("PartialOrd")
-    //                 || path.is_ident("Ord")
-    //                 || path.is_ident("Hash")
-    //             {
-    //                 traits.push(path.get_ident().unwrap().clone());
-    //             }
-    //         }
-    //         _ => panic!("Unexpected attribute arguments"),
-    //     }
-    // }
-
     let key_fn = key_fn.expect("Expected `key` argument");
 
-    let impls = traits.into_iter().map(|trt| {
-        // let trait_name = trt.clone();
-        // let method = match trait_name.to_string().as_str() {
-        //     "PartialEq" => quote! { partial_eq },
-        //     "PartialOrd" => quote! { partial_cmp },
-        //     "Eq" => quote! {},
-        //     "Ord" => quote! { cmp },
-        //     "Hash" => quote! { hash },
-        //     _ => unreachable!(),
-        // };
+    let ord_implemented = traits.iter().any(|x| matches!(x, Traits::Ord));
 
+    let impls = traits.into_iter().map(|trt| {
         let partial_something = |trait_name, method, return_type| {
             quote! {
                 impl #impl_generics ::std::cmp::#trait_name
@@ -108,11 +79,25 @@ pub fn derive_by_key(input: TokenStream) -> TokenStream {
                     }
                 }
             }
-            Traits::PartialOrd => partial_something(
-                quote! { PartialOrd },
-                quote! { partial_cmp },
-                quote! { ::std::option::Option<::std::cmp::Ordering> },
-            ),
+            Traits::PartialOrd => {
+                if ord_implemented {
+                    quote! {
+                        impl #impl_generics ::std::cmp::PartialOrd
+                        for #struct_name #type_generics #where_clause {
+                            fn partial_cmp(&self, other: &Self)
+                            -> ::std::option::Option<::std::cmp::Ordering> {
+                                Some(self.cmp(other))
+                            }
+                        }
+                    }
+                } else {
+                    partial_something(
+                        quote! { PartialOrd },
+                        quote! { partial_cmp },
+                        quote! { ::std::option::Option<::std::cmp::Ordering> },
+                    )
+                }
+            }
             Traits::Ord => {
                 quote! {
                     impl #impl_generics ::std::cmp::Ord
@@ -132,7 +117,7 @@ pub fn derive_by_key(input: TokenStream) -> TokenStream {
                         }
                     }
                 }
-            } // _ => unreachable!(),
+            }
         }
     });
 
