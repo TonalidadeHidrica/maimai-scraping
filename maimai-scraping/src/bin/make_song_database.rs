@@ -850,9 +850,29 @@ impl Results {
     }
 
     fn verify_properties(&self) -> anyhow::Result<()> {
+        // Every song that has not been rmeoved has an icon associated to it.
         for song in &self.songs.0 {
             if !song.removed() && song.icon.is_none() {
                 bail!("Icon is missing: {song:#?}")
+            }
+        }
+
+        // There is no two songs with the same icon.
+        {
+            let mut icons = self
+                .songs
+                .0
+                .iter()
+                .filter_map(|song| Some((song, song.icon.as_ref()?)))
+                .collect_vec();
+            icons.sort_by_key(|x| x.1);
+            if let Some((x, y)) = icons.iter().tuple_windows().find(|(x, y)| x.1 == y.1) {
+                bail!(
+                    "At least one pair of songs has the same icon {:?}: {:#?}, {:#?}",
+                    x.0,
+                    x.1,
+                    y.1
+                );
             }
         }
         Ok(())

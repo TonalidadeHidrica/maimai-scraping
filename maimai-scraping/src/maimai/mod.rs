@@ -1,3 +1,4 @@
+pub mod associated_user_data;
 pub mod data_collector;
 pub mod estimate_rating;
 pub mod estimator_config_multiuser;
