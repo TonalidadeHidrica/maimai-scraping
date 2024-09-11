@@ -36,6 +36,9 @@ struct Opts {
 
     #[clap(long)]
     only_estimate: bool,
+
+    #[clap(long)]
+    no_dx_master: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -120,8 +123,14 @@ fn main() -> anyhow::Result<()> {
                 }
                 print!("{} {got}/{all}  ", user.name());
             }
-            get_optimal_song(&datas, &store, &old_store, args.level_update_factor)
-                .context("While getting optimal song")
+            get_optimal_song(
+                &datas,
+                &store,
+                &old_store,
+                args.level_update_factor,
+                args.no_dx_master,
+            )
+            .context("While getting optimal song")
         })();
         let res = match optimal_songs {
             Err(e) => {
@@ -237,6 +246,7 @@ fn get_optimal_song<'s, 'o>(
     store: &ScoreConstantsStore<'s>,
     old_store: &'o ScoreConstantsStore<'s>,
     level_update_factor: f64,
+    no_dx_master: bool,
 ) -> Result<Option<OptimalSongEntry<'s, 'o>>, anyhow::Error> {
     let undetermined_song_in_list = datas
         .iter()
@@ -265,6 +275,14 @@ fn get_optimal_song<'s, 'o>(
         .collect::<BTreeSet<_>>();
     let mut candidates = vec![];
     for key in undetermined_song_in_list {
+        if no_dx_master
+            && key.generation == ScoreGeneration::Deluxe
+            && [ScoreDifficulty::Master, ScoreDifficulty::ReMaster]
+                .iter()
+                .any(|&d| d == key.difficulty)
+        {
+            continue;
+        }
         let Ok(Some((song, constants))) = store.get(key) else {
             continue;
         };
