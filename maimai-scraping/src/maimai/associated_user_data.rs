@@ -22,12 +22,16 @@ pub struct UserData<'d, 's> {
     rating_target: BTreeMap<PlayTime, RatingTargetList<'d, 's>>,
 }
 
-#[derive(Getters, CopyGetters)]
+#[derive(CopyGetters)]
 pub struct PlayRecord<'d, 's> {
-    #[getset(get = "pub")]
-    record: &'d schema::PlayRecord,
     #[getset(get_copy = "pub")]
-    score: ScoreForVersionRef<'s>,
+    record: &'d schema::PlayRecord,
+    score: anyhow::Result<ScoreForVersionRef<'s>>,
+}
+impl<'s> PlayRecord<'_, 's> {
+    pub fn score(&self) -> Result<ScoreForVersionRef<'s>, &anyhow::Error> {
+        self.score.as_ref().copied()
+    }
 }
 
 #[derive(Getters, CopyGetters)]
@@ -44,11 +48,16 @@ pub struct RatingTargetList<'d, 's> {
     candidates_old: Vec<RatingTargetEntry<'d, 's>>,
 }
 
-#[derive(Getters, CopyGetters)]
-#[getset(get_copy = "pub")]
+#[derive(CopyGetters)]
 pub struct RatingTargetEntry<'d, 's> {
+    #[getset(get_copy = "pub")]
     data: &'d rating_target::RatingTargetEntry,
-    score: OrdinaryScoreForVersionRef<'s>,
+    score: anyhow::Result<OrdinaryScoreForVersionRef<'s>>,
+}
+impl<'s> RatingTargetEntry<'_, 's> {
+    pub fn score(&self) -> Result<OrdinaryScoreForVersionRef<'s>, &anyhow::Error> {
+        self.score.as_ref().copied()
+    }
 }
 
 impl<'d, 's> UserData<'d, 's> {
@@ -84,40 +93,42 @@ impl<'d, 's> PlayRecord<'d, 's> {
         record: &'d schema::PlayRecord,
     ) -> anyhow::Result<Self> {
         let song = database.song_from_icon(record.song_metadata().cover_art())?;
-        let score = if let Some(utage) = record.utage_metadata() {
-            let kind: UtageKindRaw = utage.kind().to_owned().into();
-            let candidates = song
-                .utage_scores()
-                .filter(|score| score.score().kanji() == &kind)
-                .collect_vec();
-            match candidates[..] {
-                [_] => ScoreForVersionRef::Utage(candidates[0]),
-                _ => bail!("Utage score could not be determined uniquely: {candidates:?}"),
-            }
-        } else {
-            let version =
-                MaimaiVersion::of_time(record.played_at().time().into()).with_context(|| {
+        let score = (|| {
+            if let Some(utage) = record.utage_metadata() {
+                let kind: UtageKindRaw = utage.kind().to_owned().into();
+                let candidates = song
+                    .utage_scores()
+                    .filter(|score| score.score().kanji() == &kind)
+                    .collect_vec();
+                match candidates[..] {
+                    [_] => Ok(ScoreForVersionRef::Utage(candidates[0])),
+                    _ => bail!("Utage score could not be determined uniquely: {candidates:?}"),
+                }
+            } else {
+                let version = MaimaiVersion::of_time(record.played_at().time().into())
+                    .with_context(|| {
+                        format!(
+                            "Record played at {:?} found, but there is no corresponding version",
+                            record.played_at().time()
+                        )
+                    })?;
+                let generation = record.score_metadata().generation();
+                let scores = song.scores(generation).with_context(|| {
+                    format!("{song:?} does not have a score for {generation:?}")
+                })?;
+                let difficulty = record.score_metadata().difficulty();
+                let score = scores.score(difficulty).with_context(|| {
+                    format!("{song:?} does not have a score for {generation:?} {difficulty:?}")
+                })?;
+                let score = score.for_version(version).with_context(|| {
                     format!(
-                        "Record played at {:?} found, but there is no corresponding version",
-                        record.played_at().time()
+                        "Record played at {:?} has a score that should never exist at this point",
+                        record.played_at()
                     )
                 })?;
-            let generation = record.score_metadata().generation();
-            let scores = song
-                .scores(generation)
-                .with_context(|| format!("{song:?} does not have a score for {generation:?}"))?;
-            let difficulty = record.score_metadata().difficulty();
-            let score = scores.score(difficulty).with_context(|| {
-                format!("{song:?} does not have a score for {generation:?} {difficulty:?}")
-            })?;
-            let score = score.for_version(version).with_context(|| {
-                format!(
-                    "Record played at {:?} has a score that should never exist at this point",
-                    record.played_at()
-                )
-            })?;
-            ScoreForVersionRef::Ordinary(score)
-        };
+                Ok(ScoreForVersionRef::Ordinary(score))
+            }
+        })();
         Ok(Self { record, score })
     }
 }
@@ -154,25 +165,28 @@ impl<'d, 's> RatingTargetEntry<'d, 's> {
         version: MaimaiVersion,
         data: &'d rating_target::RatingTargetEntry,
     ) -> anyhow::Result<Self> {
-        let song = match database.song_from_name(data.song_name()).collect_vec()[..] {
-            [song] => song,
-            ref songs => bail!(
-                "Song cannot be uniquely determiend from song name {:?}: {:?}",
-                data.song_name(),
-                songs
-            ),
-        };
-        let generation = data.score_metadata().generation();
-        let scores = song
-            .scores(generation)
-            .with_context(|| format!("{song:?} does not have a score for {generation:?}"))?;
-        let difficulty = data.score_metadata().difficulty();
-        let score = scores.score(difficulty).with_context(|| {
-            format!("{song:?} does not have a score for {generation:?} {difficulty:?}")
-        })?;
-        let score = score.for_version(version).with_context(|| {
-            format!("Found rating target entry with a score that should never exist at this point: {data:?}")
-        })?;
+        let score = (|| {
+            let song = match database.song_from_name(data.song_name()).collect_vec()[..] {
+                [song] => song,
+                ref songs => bail!(
+                    "Song cannot be uniquely determiend from song name {:?}: {:?}",
+                    data.song_name(),
+                    songs
+                ),
+            };
+            let generation = data.score_metadata().generation();
+            let scores = song
+                .scores(generation)
+                .with_context(|| format!("{song:?} does not have a score for {generation:?}"))?;
+            let difficulty = data.score_metadata().difficulty();
+            let score = scores.score(difficulty).with_context(|| {
+                format!("{song:?} does not have a score for {generation:?} {difficulty:?}")
+            })?;
+            let score = score.for_version(version).with_context(|| {
+                format!("Found rating target entry with a score that should never exist at this point: {data:?}")
+            })?;
+            Ok(score)
+        })();
         Ok(Self { data, score })
     }
 }
