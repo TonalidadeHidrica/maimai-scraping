@@ -165,7 +165,7 @@ impl InternalScoreLevelEntry {
         })
     }
 }
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, derive_more::Display, Serialize, Deserialize)]
 pub enum InternalScoreLevel {
     Unknown(ScoreLevel),
     Known(ScoreConstant),

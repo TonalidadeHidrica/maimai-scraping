@@ -106,12 +106,7 @@ impl<'d, 's> PlayRecord<'d, 's> {
                 }
             } else {
                 let version = MaimaiVersion::of_time(record.played_at().time().into())
-                    .with_context(|| {
-                        format!(
-                            "Record played at {:?} found, but there is no corresponding version",
-                            record.played_at().time()
-                        )
-                    })?;
+                    .with_context(|| format!("Record has no corresponding version: {record:?}",))?;
                 let generation = record.score_metadata().generation();
                 let scores = song.scores(generation).with_context(|| {
                     format!("{song:?} does not have a score for {generation:?}")
@@ -121,10 +116,7 @@ impl<'d, 's> PlayRecord<'d, 's> {
                     format!("{song:?} does not have a score for {generation:?} {difficulty:?}")
                 })?;
                 let score = score.for_version(version).with_context(|| {
-                    format!(
-                        "Record played at {:?} has a score that should never exist at this point",
-                        record.played_at()
-                    )
+                    format!("Record has a score that should never exist at this point: {record:?}",)
                 })?;
                 Ok(ScoreForVersionRef::Ordinary(score))
             }
