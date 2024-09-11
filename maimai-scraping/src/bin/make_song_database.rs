@@ -38,6 +38,9 @@ struct Opts {
     in_lv_data_dir: PathBuf,
     database_dir: PathBuf,
     official_song_list_paths: Vec<PathBuf>,
+
+    #[arg(long)]
+    skip_latest_in_lv: bool,
 }
 
 type UtageIdentifierMergeMap =
@@ -59,6 +62,9 @@ impl Resources {
 
         // Read in_lv
         for version in successors(Some(MaimaiVersion::Festival), MaimaiVersion::next) {
+            if version == MaimaiVersion::latest() && opts.skip_latest_in_lv {
+                continue;
+            }
             let path = format!("{}.json", i8::from(version));
             let levels = load_score_level::load(opts.in_lv_dir.join(path))?;
             ret.in_lv.insert(version, levels);
@@ -66,6 +72,9 @@ impl Resources {
 
         // Read in_lv_data
         for version in successors(Some(MaimaiVersion::SplashPlus), MaimaiVersion::next) {
+            if version == MaimaiVersion::latest() && opts.skip_latest_in_lv {
+                continue;
+            }
             info!("Processing {version:?}");
             let path = format!("{}.json", i8::from(version));
             let data: InLvData = read_json(opts.in_lv_data_dir.join(path))?;
