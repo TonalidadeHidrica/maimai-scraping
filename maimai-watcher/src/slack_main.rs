@@ -5,6 +5,7 @@ use std::{
     },
     iter::once,
     path::PathBuf,
+    sync::{atomic::AtomicBool, Arc},
     time::Duration,
 };
 
@@ -31,7 +32,7 @@ struct Opts {
 }
 
 #[derive(Clone, Deserialize)]
-struct Config {
+pub struct Config {
     port: u16,
     webhook_endpoint: String,
     interval: Duration,
@@ -39,13 +40,14 @@ struct Config {
     levels_intl_path: PathBuf,
     removed_songs_path: PathBuf,
     slack_post_webhook: Option<Url>,
-    users: HashMap<UserId, UserConfig>,
+    // TODO make it getter
+    pub users: HashMap<UserId, UserConfig>,
     timeout_hours: f64,
     #[serde(default)]
     default_users: HashMap<String, UserId>,
 }
 #[derive(Clone, Deserialize)]
-struct UserConfig {
+pub struct UserConfig {
     slack_user_ids: Vec<String>,
     credentials_path: PathBuf,
     cookie_store_path: PathBuf,
@@ -131,7 +133,7 @@ async fn webhook(state: web::Data<State>, info: web::Form<SlashCommand>) -> impl
     "done"
 }
 
-pub mod slash_command {
+mod slash_command {
     use super::UserId;
     use clap::{Args, Parser, Subcommand};
 
@@ -210,8 +212,14 @@ async fn webhook_impl(
                 }
                 Vacant(entry) => {
                     let timeout = TimeoutConfig::hours(state.config.timeout_hours);
-                    let config =
-                        watch_config(user_id.clone(), &state.config, user_config, timeout, false);
+                    let config = watch_config(
+                        user_id.clone(),
+                        &state.config,
+                        user_config,
+                        timeout,
+                        false,
+                        None,
+                    );
                     entry.insert(watch::watch(config).await?);
                     post!(user_id, "Started!");
                 }
@@ -225,6 +233,7 @@ async fn webhook_impl(
                 user_config,
                 TimeoutConfig::single(),
                 true,
+                None,
             );
             watch::watch(config).await?;
         }
@@ -300,12 +309,13 @@ fn get_user_id<'a>(
     Ok((user_id, user_config))
 }
 
-fn watch_config(
+pub fn watch_config(
     user_id: UserId,
     state_config: &Config,
     user_config: &UserConfig,
     timeout_config: TimeoutConfig,
     report_no_updates: bool,
+    finish_flag: Option<Arc<AtomicBool>>,
 ) -> watch::Config {
     let levels_path = if user_config.international {
         &state_config.levels_intl_path
@@ -329,6 +339,8 @@ fn watch_config(
         international: user_config.international,
         force_paid_config: user_config.force_paid_config.clone(),
         aime_switch_config: user_config.aime_switch_config.clone(),
+
+        finish_flag,
     }
 }
 

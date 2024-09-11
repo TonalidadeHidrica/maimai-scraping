@@ -30,6 +30,8 @@ async fn main() -> anyhow::Result<()> {
             .force_paid
             .then_some(ForcePaidConfig { after_use: None }),
         aime_switch_config: None,
+
+        finish_flag: None,
     })
     .await?;
 
