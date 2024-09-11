@@ -1,14 +1,14 @@
-use anyhow::Context;
+use anyhow::{bail, Context};
 use derive_by_key::DeriveByKey;
 use getset::{CopyGetters, Getters};
 use hashbrown::HashMap;
 use itertools::Itertools;
 
 use crate::maimai::{
-    load_score_level::MaimaiVersion,
+    load_score_level::{InternalScoreLevel, MaimaiVersion},
     official_song_list::UtageScore,
-    rating::ScoreLevel,
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon},
+    song_list::RemoveState,
 };
 
 use super::{OrdinaryScore, OrdinaryScores, Song};
@@ -20,7 +20,9 @@ pub struct SongDatabase<'s> {
     icon_map: HashMap<&'s SongIcon, SongRef<'s>>,
 }
 impl<'s> SongDatabase<'s> {
-    pub fn new(songs: &'s [Song]) -> Self {
+    pub fn new(songs: &'s [Song]) -> anyhow::Result<Self> {
+        verify_songs(songs)?;
+
         let songs = songs
             .iter()
             .enumerate()
@@ -34,7 +36,7 @@ impl<'s> SongDatabase<'s> {
             .filter_map(|&x| Some((x.song.icon.as_ref()?, x)))
             .collect();
 
-        Self { songs, icon_map }
+        Ok(Self { songs, icon_map })
     }
 
     pub fn song_from_icon(&self, icon: &SongIcon) -> anyhow::Result<SongRef<'s>> {
@@ -64,6 +66,13 @@ impl<'s> SongRef<'s> {
             generation,
             scores,
         })
+    }
+
+    pub fn utage_scores(self) -> impl Iterator<Item = UtageScoreRef<'s>> {
+        self.song
+            .utage_scores
+            .iter()
+            .map(move |score| UtageScoreRef { song: self, score })
     }
 }
 
@@ -108,13 +117,34 @@ pub struct OrdinaryScoreRef<'s> {
     difficulty: ScoreDifficulty,
     score: &'s OrdinaryScore,
 }
-impl <'s> OrdinaryScoreRef {
+impl<'s> OrdinaryScoreRef<'s> {
     pub fn for_version(self, version: MaimaiVersion) -> Option<OrdinaryScoreForVersionRef<'s>> {
-        if let Some(start_version) = self.scores.version {
+        if let Some(start_version) = self.scores.scores.version {
             if version < start_version {
                 return None;
             }
+            match self.scores.song.song.remove_state {
+                RemoveState::Present => {}
+                RemoveState::Removed(x) => {
+                    let remove_version = MaimaiVersion::of_date(x).unwrap();
+                    if remove_version <= version {
+                        return None;
+                    }
+                }
+                RemoveState::Revived(x, y) => {
+                    let remove_version = MaimaiVersion::of_date(x).unwrap();
+                    let recover_version = MaimaiVersion::of_date(y).unwrap();
+                    if (remove_version..recover_version).contains(&version) {
+                        return None;
+                    }
+                }
+            }
         }
+        Some(OrdinaryScoreForVersionRef {
+            score: self,
+            version,
+            level: self.score.levels[version],
+        })
     }
 }
 
@@ -124,7 +154,7 @@ impl <'s> OrdinaryScoreRef {
 pub struct OrdinaryScoreForVersionRef<'s> {
     score: OrdinaryScoreRef<'s>,
     version: MaimaiVersion,
-    level: Option<ScoreLevel>,
+    level: Option<InternalScoreLevel>,
 }
 
 /// A reference to an utage score.
@@ -133,4 +163,49 @@ pub struct OrdinaryScoreForVersionRef<'s> {
 pub struct UtageScoreRef<'s> {
     song: SongRef<'s>,
     score: &'s UtageScore,
+}
+
+pub fn verify_songs(songs: &[Song]) -> anyhow::Result<()> {
+    // Every song that has not been rmeoved has an icon associated to it.
+    for song in songs {
+        if !song.removed() && song.icon.is_none() {
+            bail!("Icon is missing: {song:#?}")
+        }
+    }
+
+    // There is no two songs with the same icon.
+    {
+        let mut icons = songs
+            .iter()
+            .filter_map(|song| Some((song, song.icon.as_ref()?)))
+            .collect_vec();
+        icons.sort_by_key(|x| x.1);
+        if let Some((x, y)) = icons.iter().tuple_windows().find(|(x, y)| x.1 == y.1) {
+            bail!(
+                "At least one pair of songs has the same icon {:?}: {:#?}, {:#?}",
+                x.0,
+                x.1,
+                y.1
+            );
+        }
+    }
+
+    // Every remove date and recover date has an associated version.
+    for song in songs {
+        match song.remove_state {
+            RemoveState::Present => {}
+            RemoveState::Removed(x) => {
+                MaimaiVersion::of_date(x)
+                        .with_context(|| format!("The remove date of the following song does not have an associated version: {song:?}"))?;
+            }
+            RemoveState::Revived(x, y) => {
+                MaimaiVersion::of_date(x)
+                        .with_context(|| format!("The remove date of the following song does not have an associated version: {song:?}"))?;
+                MaimaiVersion::of_date(y)
+                        .with_context(|| format!("The recover date of the following song does not have an associated version: {song:?}"))?;
+            }
+        }
+    }
+
+    Ok(())
 }

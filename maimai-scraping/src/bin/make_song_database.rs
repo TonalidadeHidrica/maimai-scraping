@@ -22,7 +22,9 @@ use maimai_scraping::maimai::{
     official_song_list::{self, ScoreDetails, UtageIdentifier},
     rating::{ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
-    song_list::{OrdinaryScore, OrdinaryScores, RemoveState, Song, SongAbbreviation},
+    song_list::{
+        database::SongDatabase, OrdinaryScore, OrdinaryScores, RemoveState, Song, SongAbbreviation,
+    },
 };
 use maimai_scraping_utils::{
     fs_json_util::{read_json, write_json},
@@ -848,35 +850,6 @@ impl Results {
 
         Ok(())
     }
-
-    fn verify_properties(&self) -> anyhow::Result<()> {
-        // Every song that has not been rmeoved has an icon associated to it.
-        for song in &self.songs.0 {
-            if !song.removed() && song.icon.is_none() {
-                bail!("Icon is missing: {song:#?}")
-            }
-        }
-
-        // There is no two songs with the same icon.
-        {
-            let mut icons = self
-                .songs
-                .0
-                .iter()
-                .filter_map(|song| Some((song, song.icon.as_ref()?)))
-                .collect_vec();
-            icons.sort_by_key(|x| x.1);
-            if let Some((x, y)) = icons.iter().tuple_windows().find(|(x, y)| x.1 == y.1) {
-                bail!(
-                    "At least one pair of songs has the same icon {:?}: {:#?}, {:#?}",
-                    x.0,
-                    x.1,
-                    y.1
-                );
-            }
-        }
-        Ok(())
-    }
 }
 
 fn merge_levels(
@@ -1010,13 +983,16 @@ fn main() -> anyhow::Result<()> {
         results.read_in_lv_data(version, in_lv_data)?;
     }
 
-    results.verify_properties()?;
     results.verify_latest_official_songs(
         resources
             .official_song_lists
             .last()
             .context("There should be at least one official song")?,
     )?;
+
+    // Verify if database can be constructed correctly.
+    // Also run `verify_songs` in the same module.
+    let _database = SongDatabase::new(&results.songs.0)?;
 
     write_json(
         opts.database_dir.join("maimai_song_database.json"),

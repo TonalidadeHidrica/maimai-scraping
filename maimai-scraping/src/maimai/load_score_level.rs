@@ -354,6 +354,11 @@ impl MaimaiVersion {
         enum_iterator::all()
             .find(|v: &MaimaiVersion| (v.start_time()..v.end_time()).contains(&time))
     }
+    pub fn of_date(x: NaiveDate) -> Option<MaimaiVersion> {
+        enum_iterator::all().find(|v: &MaimaiVersion| {
+            v.start_date() <= x && v.next().map_or(true, |v| x < v.start_date())
+        })
+    }
     pub fn latest() -> Self {
         Self::BuddiesPlus
     }

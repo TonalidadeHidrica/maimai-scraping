@@ -627,6 +627,23 @@ pub enum UtageKind {
     Deserialize,
 )]
 pub struct UtageKindRaw(String);
+impl From<UtageKind> for UtageKindRaw {
+    fn from(value: UtageKind) -> Self {
+        match value {
+            UtageKind::AllBreak => "光",
+            UtageKind::Collaborative => "協",
+            UtageKind::Insane => "光",
+            UtageKind::ManyHands => "蛸",
+            UtageKind::Memorize => "覚",
+            UtageKind::Miscellaneous => "宴",
+            UtageKind::Shelved => "蔵",
+            UtageKind::Slides => "星",
+            UtageKind::Raw(value) => return value,
+        }
+        .to_owned()
+        .into()
+    }
+}
 
 #[cfg(test)]
 mod tests {

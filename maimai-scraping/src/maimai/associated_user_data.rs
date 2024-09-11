@@ -1,13 +1,18 @@
 use std::collections::BTreeMap;
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use getset::{CopyGetters, Getters};
+use itertools::Itertools;
+
+use crate::maimai::schema::latest::UtageKindRaw;
 
 use super::{
     load_score_level::MaimaiVersion,
     parser::rating_target,
     schema::latest::{self as schema, PlayTime},
-    song_list::database::{OrdinaryScoreForVersionRef, ScoreForVersionRef, SongDatabase},
+    song_list::database::{
+        OrdinaryScoreForVersionRef, ScoreForVersionRef, SongDatabase, UtageScoreRef,
+    },
     MaimaiUserData,
 };
 
@@ -70,10 +75,24 @@ impl<'d, 's> PlayRecord<'d, 's> {
         record: &'d schema::PlayRecord,
     ) -> anyhow::Result<Self> {
         let song = database.song_from_icon(record.song_metadata().cover_art())?;
-        if let Some(utage) = record.utage_metadata() {
-            todo!()
+        let score = if let Some(utage) = record.utage_metadata() {
+            let kind: UtageKindRaw = utage.kind().to_owned().into();
+            let candidates = song
+                .utage_scores()
+                .filter(|score| score.score().kanji() == &kind)
+                .collect_vec();
+            match candidates[..] {
+                [_] => ScoreForVersionRef::Utage(candidates[0]),
+                _ => bail!("Utage score could not be determined uniquely: {candidates:?}"),
+            }
         } else {
-            let version = MaimaiVersion::of_time(record.played_at().time().into());
+            let version =
+                MaimaiVersion::of_time(record.played_at().time().into()).with_context(|| {
+                    format!(
+                        "Record played at {:?} found, but there is no corresponding version",
+                        record.played_at().time()
+                    )
+                })?;
             let generation = record.score_metadata().generation();
             let scores = song
                 .scores(generation)
@@ -82,11 +101,14 @@ impl<'d, 's> PlayRecord<'d, 's> {
             let score = scores.score(difficulty).with_context(|| {
                 format!("{song:?} does not have a score for {generation:?} {difficulty:?}")
             })?;
-            let score = score.for_version(version)?;
-            Ok(Self {
-                record,
-                score: scores,
-            })
-        }
+            let score = score.for_version(version).with_context(|| {
+                format!(
+                    "Record played at {:?} has a score that should never exist at this point",
+                    record.played_at()
+                )
+            })?;
+            ScoreForVersionRef::Ordinary(score)
+        };
+        Ok(Self { record, score })
     }
 }
