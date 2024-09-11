@@ -39,6 +39,7 @@ fn main() -> anyhow::Result<()> {
         None,
         data.records.values(),
         &data.rating_targets,
+        &data.idx_to_icon_map,
     )?;
 
     // Assert that the parsed data and generated data coincide

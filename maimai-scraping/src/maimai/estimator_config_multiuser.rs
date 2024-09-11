@@ -50,6 +50,7 @@ pub fn update_all(
                 Some(config.name()),
                 data.records.values(),
                 &data.rating_targets,
+                &data.idx_to_icon_map,
             )?;
         }
         changed

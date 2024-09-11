@@ -273,6 +273,7 @@ impl<'c, 's> Runner<'c, 's> {
                     None,
                     self.data.records.values(),
                     &self.data.rating_targets,
+                    &self.data.idx_to_icon_map,
                 )
                 .context("While estimating levels precisely"),
         )
@@ -286,6 +287,7 @@ impl<'c, 's> Runner<'c, 's> {
                     false,
                     None,
                     &self.data.rating_targets,
+                    &self.data.idx_to_icon_map,
                 )
                 .context("While estimating levels roughly"),
         )

@@ -206,27 +206,34 @@ fn read_i16(message: &'static str) -> i16 {
 }
 
 fn get_optimal_song<'s, 'o>(
-    datas: &[(&estimator_config_multiuser::User, MaimaiUserData)],
+    datas: &'s [(&estimator_config_multiuser::User, MaimaiUserData)],
     store: &ScoreConstantsStore<'s>,
     old_store: &'o ScoreConstantsStore<'s>,
     level_update_factor: f64,
 ) -> Result<Option<OptimalSongEntry<'s, 'o>>, anyhow::Error> {
     let undetermined_song_in_list = datas
         .iter()
-        .flat_map(|(_, data)| &data.rating_targets)
-        .filter_map(|(k, v)| (MaimaiVersion::latest().start_time() <= k.get()).then_some(v))
-        .flat_map(|r| {
+        .flat_map(|(_, data)| {
+            data.rating_targets.iter().filter_map(move |(k, v)| {
+                (MaimaiVersion::latest().start_time() <= k.get()).then_some((v, data))
+            })
+        })
+        .flat_map(|(r, data)| {
             [
                 r.target_new(),
                 r.target_old(),
                 r.candidates_new(),
                 r.candidates_old(),
             ]
+            .into_iter()
+            .flatten()
+            .map(move |e| (e, data))
         })
-        .flatten()
-        .filter_map(|entry| match store.key_from_target_entry(entry) {
-            KeyFromTargetEntry::Unique(key) => Some(key),
-            _ => None,
+        .filter_map(|(entry, data)| {
+            match store.key_from_target_entry(entry, &data.idx_to_icon_map) {
+                KeyFromTargetEntry::Unique(key) => Some(key),
+                _ => None,
+            }
         })
         .collect::<BTreeSet<_>>();
     let mut candidates = vec![];
