@@ -16,8 +16,8 @@ pub fn parse(html: &Html) -> anyhow::Result<MusicDetails> {
         .select(selector!("img.w_180"))
         .next()
         .context("Cover img not found in music detail page")?
-        .attr("href")
-        .context("Cover image has no href in music details page")?
+        .attr("src")
+        .context("Cover image has no src in music details page")?
         .parse()?;
     Ok(MusicDetails { icon })
 }

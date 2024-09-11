@@ -12,7 +12,7 @@ use crate::{
 use anyhow::{bail, Context};
 use chrono::Timelike;
 use hashbrown::HashMap;
-use log::{info, warn};
+use log::{info, trace, warn};
 use scraper::Html;
 use url::Url;
 
@@ -23,12 +23,12 @@ use super::{
 
 pub const RATING_TARGET_URL: &str = "https://maimaidx.jp/maimai-mobile/home/ratingTargetMusic/";
 
-pub async fn update_targets(
+pub async fn update_targets<'r>(
     client: &mut SegaClient<'_, Maimai>,
-    rating_targets: &mut RatingTargetFile,
+    rating_targets: &'r mut RatingTargetFile,
     last_played: PlayTime,
     force: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<&'r RatingTargetList>> {
     let last_played = last_played
         .get()
         .with_second(0)
@@ -54,7 +54,7 @@ pub async fn update_targets(
         }
         Ordering::Equal => {
             info!("Already up to date.");
-            return Ok(());
+            return Ok(None);
         }
         Ordering::Greater => {
             bail!("What?!  Inconsistent newest records between play records and rating targets!");
@@ -66,7 +66,7 @@ pub async fn update_targets(
         .await?;
     let res = parser::rating_target::parse(&Html::parse_document(&res.0.text().await?))?;
     rating_targets.insert(key_to_store, res);
-    Ok(())
+    Ok(rating_targets.get(&key_to_store)) // Which is always `Some`
 }
 
 pub async fn update_idx(
@@ -86,11 +86,14 @@ pub async fn update_idx(
     .filter(|v| AsRef::<str>::as_ref(v.song_name()) == "Link")
     {
         let idx = entry.idx();
-        let res = client
-            .fetch_authenticated(Url::parse(&format!(
-                "https://maimaidx.jp/maimai-mobile/record/musicDetail/?idx={idx}"
-            ))?)
-            .await?;
+        trace!("Processing {idx:?}");
+        let idx_str = idx.to_string();
+        let idx_str = urlencoding::encode(&idx_str);
+        let url = Url::parse(&format!(
+            "https://maimaidx.jp/maimai-mobile/record/musicDetail/?idx={idx_str}"
+        ))?;
+        trace!("Accessing {url}");
+        let res = client.fetch_authenticated(url).await?;
         let res = parser::music_detail::parse(&Html::parse_document(&res.0.text().await?))?;
         let icon = res.icon();
         info!("{idx:?} was associated to {icon:?}");
