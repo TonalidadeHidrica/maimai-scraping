@@ -93,6 +93,33 @@ fn main() -> anyhow::Result<()> {
                 "{} songs has been determined so far",
                 store.num_determined_songs() - count_initial
             );
+            for (user, data) in &datas {
+                let Some(last) = data.rating_targets.values().last() else {
+                    continue;
+                };
+                let (mut got, mut all) = (0, 0);
+                for entry in [
+                    last.target_new(),
+                    last.target_old(),
+                    last.candidates_new(),
+                    last.candidates_old(),
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    all += 1;
+                    if let KeyFromTargetEntry::Unique(key) =
+                        store.key_from_target_entry(entry, &data.idx_to_icon_map)
+                    {
+                        if let Ok(Some((_, consts))) = store.get(key) {
+                            if consts.len() == 1 {
+                                got += 1;
+                            }
+                        }
+                    }
+                }
+                print!("{} {got}/{all}  ", user.name());
+            }
             get_optimal_song(&datas, &store, &old_store, args.level_update_factor)
                 .context("While getting optimal song")
         })();
