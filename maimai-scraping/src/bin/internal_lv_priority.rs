@@ -1,6 +1,7 @@
 use std::{collections::BTreeSet, path::PathBuf};
 
 use anyhow::Context;
+use chrono::Local;
 use clap::Parser;
 use fs_err::read_to_string;
 use inquire::CustomType;
@@ -12,18 +13,24 @@ use maimai_scraping::{
         estimator_config_multiuser::{self, update_all},
         load_score_level::{self, MaimaiVersion, RemovedSong},
         rating::ScoreConstant,
-        schema::latest::{AchievementValue, PlayTime, ScoreDifficulty, ScoreGeneration, SongName},
+        schema::latest::{
+            AchievementValue, PlayTime, ScoreDifficulty, ScoreGeneration, SongIcon, SongName,
+        },
         MaimaiUserData,
     },
 };
-use maimai_scraping_utils::fs_json_util::read_json;
+use maimai_scraping_utils::fs_json_util::{read_json, write_json};
 use ordered_float::OrderedFloat;
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
 struct Opts {
     old_levels_json: PathBuf,
     levels_json: PathBuf,
     config: PathBuf,
+
+    #[clap(long)]
+    backup_dir: Option<PathBuf>,
 
     #[clap(long)]
     removed_songs: Option<PathBuf>,
@@ -36,6 +43,9 @@ struct Opts {
 
     #[clap(long)]
     only_estimate: bool,
+
+    #[clap(long)]
+    restore_output: Option<PathBuf>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -61,15 +71,22 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    if let Some(path) = &args.restore_output {
+        let data: BackupOwned = read_json(path)?;
+        println!("{}", data.initial_rating);
+        for entry in data.history {
+            println!(
+                "# {} {:?} {:?}",
+                entry.name, entry.key.generation, entry.key.difficulty
+            );
+            println!("{}", entry.achievement);
+            println!("{}", entry.rating);
+        }
+        return Ok(());
+    }
+
     let initial_rating = read_i16("Initial rating");
     let mut history: Vec<HistoryEntry> = vec![];
-    struct HistoryEntry<'s> {
-        key: ScoreKey<'s>,
-        name: &'s SongName,
-        achievement: AchievementValue,
-        rating: i16,
-        time: PlayTime,
-    }
     'outer_loop: loop {
         let mut store = store.clone();
         let optimal_songs = (|| {
@@ -192,8 +209,55 @@ fn main() -> anyhow::Result<()> {
                 });
             }
         }
+        if let Some(backup_dir) = &args.backup_dir {
+            let path =
+                backup_dir.join(format!("{}.json", Local::now().format("%Y-%m-%d_%H-%M-%S")));
+            if let Err(e) = write_json(
+                path,
+                &Backup {
+                    initial_rating,
+                    history: &history,
+                },
+            ) {
+                println!("{e:#}");
+            }
+        }
     }
     Ok(())
+}
+
+#[derive(Serialize)]
+struct Backup<'s, 't> {
+    initial_rating: i16,
+    history: &'t [HistoryEntry<'s>],
+}
+#[derive(Deserialize)]
+struct BackupOwned {
+    initial_rating: i16,
+    history: Vec<HistoryEntryOwned>,
+}
+#[derive(Serialize)]
+struct HistoryEntry<'s> {
+    key: ScoreKey<'s>,
+    name: &'s SongName,
+    achievement: AchievementValue,
+    rating: i16,
+    time: PlayTime,
+}
+#[derive(Deserialize)]
+struct HistoryEntryOwned {
+    key: ScoreKeyOwned,
+    name: SongName,
+    achievement: AchievementValue,
+    rating: i16,
+    #[allow(unused)]
+    time: PlayTime,
+}
+#[derive(Deserialize)]
+pub struct ScoreKeyOwned {
+    pub icon: SongIcon,
+    pub generation: ScoreGeneration,
+    pub difficulty: ScoreDifficulty,
 }
 
 fn read_i16(message: &'static str) -> i16 {
