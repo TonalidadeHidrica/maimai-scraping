@@ -86,6 +86,7 @@ fn main() -> anyhow::Result<()> {
     let data = MaimaiUserData {
         records: Default::default(),
         rating_targets: btreemap![date => targets],
+        idx_to_icon_map: Default::default(),
     };
     write_json(args.output_json, &data)?;
 

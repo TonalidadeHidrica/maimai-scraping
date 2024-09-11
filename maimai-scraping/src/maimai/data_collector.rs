@@ -11,9 +11,15 @@ use crate::{
 };
 use anyhow::{bail, Context};
 use chrono::Timelike;
+use hashbrown::HashMap;
 use log::{info, warn};
 use scraper::Html;
 use url::Url;
+
+use super::{
+    parser::{rating_target::RatingTargetList, song_score::ScoreIdx},
+    schema::latest::SongIcon,
+};
 
 pub const RATING_TARGET_URL: &str = "https://maimaidx.jp/maimai-mobile/home/ratingTargetMusic/";
 
@@ -60,5 +66,35 @@ pub async fn update_targets(
         .await?;
     let res = parser::rating_target::parse(&Html::parse_document(&res.0.text().await?))?;
     rating_targets.insert(key_to_store, res);
+    Ok(())
+}
+
+pub async fn update_idx(
+    client: &mut SegaClient<'_, Maimai>,
+    rating_target: &RatingTargetList,
+    map: &mut HashMap<ScoreIdx, SongIcon>,
+) -> anyhow::Result<()> {
+    // TODO: For now, we assume that only "Link" is problematic
+    for entry in [
+        rating_target.target_new(),
+        rating_target.target_old(),
+        rating_target.candidates_new(),
+        rating_target.candidates_old(),
+    ]
+    .into_iter()
+    .flatten()
+    .filter(|v| AsRef::<str>::as_ref(v.song_name()) == "Link")
+    {
+        let idx = entry.idx();
+        let res = client
+            .fetch_authenticated(Url::parse(&format!(
+                "https://maimaidx.jp/maimai-mobile/record/musicDetail/?idx={idx}"
+            ))?)
+            .await?;
+        let res = parser::music_detail::parse(&Html::parse_document(&res.0.text().await?))?;
+        let icon = res.icon();
+        info!("{idx:?} was associated to {icon:?}");
+        map.insert(idx.clone(), res.icon().clone());
+    }
     Ok(())
 }
