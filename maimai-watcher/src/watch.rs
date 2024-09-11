@@ -2,6 +2,7 @@ use std::{
     fmt::{Debug, Display},
     iter::successors,
     path::PathBuf,
+    sync::{atomic::AtomicBool, Arc},
     time::{Duration, Instant},
 };
 
@@ -63,6 +64,8 @@ pub struct Config {
     pub international: bool,
     pub force_paid_config: Option<ForcePaidConfig>,
     pub aime_switch_config: Option<AimeSwitchConfig>,
+
+    pub finish_flag: Option<Arc<AtomicBool>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -160,6 +163,9 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
                     }
                 }
             }
+            if config.timeout_config.max_count == 1 {
+                break;
+            }
             let chunk = Duration::from_millis(250);
             for remaining in successors(Some(config.interval), |x| x.checked_sub(chunk)) {
                 sleep(remaining.min(chunk)).await;
@@ -216,6 +222,10 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
                     }
                 }
             }
+        }
+
+        if let Some(finish_flag) = config.finish_flag {
+            finish_flag.store(true, std::sync::atomic::Ordering::Release);
         }
     });
     Ok(WatchHandler(tx))
