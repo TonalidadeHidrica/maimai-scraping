@@ -249,14 +249,34 @@ pub struct UtageScoreRef<'s> {
 }
 
 pub fn verify_songs(songs: &[Song]) -> anyhow::Result<()> {
+    // Every song has an associated song name.
+    for song in songs {
+        if song.name.values().flatten().next().is_none() {
+            bail!("Song does not have a song name: {song:#?}");
+        }
+    }
+
     // Every song that has not been rmeoved has ...
     for song in songs {
         if song.removed() {
             continue;
         }
         // an icon associated to it
-        if !song.removed() && song.icon.is_none() {
+        if song.icon.is_none() {
             bail!("Icon is missing: {song:#?}")
+        }
+
+        // Moreover, every score in such a song has ...
+        for (generation, scores) in &song.scores {
+            let Some(scores) = scores else { continue };
+            // a version
+            if scores.version.is_none() {
+                bail!("Version is missing on generation {generation:?}: {song:#?}");
+                // println!(
+                //     "Version unknown: {:?} {generation:?}",
+                //     song.latest_song_name()
+                // );
+            }
         }
     }
 
@@ -291,13 +311,6 @@ pub fn verify_songs(songs: &[Song]) -> anyhow::Result<()> {
                 MaimaiVersion::of_date(y)
                         .with_context(|| format!("The recover date of the following song does not have an associated version: {song:?}"))?;
             }
-        }
-    }
-
-    // Every song has an associated song name.
-    for song in songs {
-        if song.name.values().flatten().next().is_none() {
-            bail!("Song does not have a song name: {song:#?}");
         }
     }
 

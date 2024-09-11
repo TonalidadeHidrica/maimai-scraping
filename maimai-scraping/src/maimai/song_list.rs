@@ -33,6 +33,10 @@ impl Song {
     pub fn removed(&self) -> bool {
         matches!(self.remove_state, RemoveState::Removed(_))
     }
+
+    pub fn latest_song_name(&self) -> Option<&SongName> {
+        self.name.values().flatten().last()
+    }
 }
 
 #[derive(

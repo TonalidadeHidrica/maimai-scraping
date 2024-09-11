@@ -55,6 +55,7 @@ struct Resources {
     official_song_lists: Vec<OfficialSongList>,
     additional_abbrevs: Vec<(SongAbbreviation, SongName)>,
     utage_identifier_merge: UtageIdentifierMergeMap,
+    version_supplemental: Vec<VersionSupplemental>,
 }
 impl Resources {
     fn load(opts: &Opts) -> anyhow::Result<Self> {
@@ -136,6 +137,8 @@ impl Resources {
             .into_iter()
             .map(|(a, b, c)| ((a, b), c))
             .collect();
+
+        ret.version_supplemental = read_json(opts.database_dir.join("version_supplemental.json"))?;
 
         Ok(ret)
     }
@@ -672,6 +675,37 @@ impl Results {
         Ok(())
     }
 
+    fn read_version_supplental(
+        &mut self,
+        version_supplemental: &[VersionSupplemental],
+    ) -> anyhow::Result<()> {
+        for data in version_supplemental {
+            let song = self.songs.get_mut(
+                self.icon_to_song
+                    .get(&data.icon)
+                    .copied()
+                    .with_context(|| format!("No song matches {:?}", data.icon))?,
+            );
+            let score = match &mut song.scores[data.generation] {
+                Some(score) => score,
+                None => bail!(
+                    "Song does not have generation {:?}: {:#?}",
+                    data.generation,
+                    song
+                ),
+            };
+            if score.version.is_some() {
+                bail!(
+                    "Version is already stored for generation {:?}: {:#?}",
+                    data.generation,
+                    song
+                );
+            }
+            score.version = Some(data.version);
+        }
+        Ok(())
+    }
+
     fn verify_latest_official_songs(&self, list: &OfficialSongList) -> anyhow::Result<()> {
         let version = MaimaiVersion::latest();
         if list.timestamp < version.start_time() {
@@ -991,6 +1025,7 @@ fn main() -> anyhow::Result<()> {
     for (&version, in_lv_data) in &resources.in_lv_data {
         results.read_in_lv_data(version, in_lv_data)?;
     }
+    results.read_version_supplental(&resources.version_supplemental)?;
 
     results.verify_latest_official_songs(
         resources
@@ -1328,4 +1363,11 @@ pub struct RemovedSongSupplemental {
 pub struct OfficialSongList {
     timestamp: NaiveDateTime,
     songs: Vec<official_song_list::Song>,
+}
+
+#[derive(Deserialize)]
+pub struct VersionSupplemental {
+    icon: SongIcon,
+    generation: ScoreGeneration,
+    version: MaimaiVersion,
 }
