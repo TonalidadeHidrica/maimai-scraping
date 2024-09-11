@@ -7,7 +7,7 @@ use itertools::Itertools;
 use crate::maimai::{
     load_score_level::{InternalScoreLevel, MaimaiVersion},
     official_song_list::UtageScore,
-    schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon},
+    schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::RemoveState,
 };
 
@@ -18,6 +18,7 @@ use super::{OrdinaryScore, OrdinaryScores, Song};
 pub struct SongDatabase<'s> {
     songs: Vec<SongRef<'s>>,
     icon_map: HashMap<&'s SongIcon, SongRef<'s>>,
+    name_map: HashMap<&'s SongName, Vec<SongRef<'s>>>,
 }
 impl<'s> SongDatabase<'s> {
     pub fn new(songs: &'s [Song]) -> anyhow::Result<Self> {
@@ -30,20 +31,39 @@ impl<'s> SongDatabase<'s> {
             .collect_vec();
 
         // Make icon map.
-        // `verify_properties` guarantees that an icon exists for all unremoved songs.
+        // `verify_songs` guarantees that an icon exists for all unremoved songs.
         let icon_map = songs
             .iter()
             .filter_map(|&x| Some((x.song.icon.as_ref()?, x)))
             .collect();
 
-        Ok(Self { songs, icon_map })
+        // Make song name map.
+        let mut name_map = HashMap::<_, Vec<_>>::new();
+        for &song in &songs {
+            // `verify_songs` guarantees that a song name exists for all songs.
+            let name = song.song.name.values().flatten().last().unwrap();
+            name_map.entry(name).or_default().push(song);
+        }
+
+        Ok(Self {
+            songs,
+            icon_map,
+            name_map,
+        })
     }
 
     pub fn song_from_icon(&self, icon: &SongIcon) -> anyhow::Result<SongRef<'s>> {
         self.icon_map
-            .get(&icon)
+            .get(icon)
             .copied()
             .with_context(|| format!("No song matches {icon:?}"))
+    }
+
+    pub fn song_from_name<'me>(
+        &'me self,
+        song_name: &SongName,
+    ) -> impl Iterator<Item = SongRef<'s>> + 'me {
+        self.name_map.get(song_name).into_iter().flatten().copied()
     }
 }
 
@@ -204,6 +224,13 @@ pub fn verify_songs(songs: &[Song]) -> anyhow::Result<()> {
                 MaimaiVersion::of_date(y)
                         .with_context(|| format!("The recover date of the following song does not have an associated version: {song:?}"))?;
             }
+        }
+    }
+
+    // Every song has an associated song name.
+    for song in songs {
+        if song.name.values().flatten().next().is_none() {
+            bail!("Song does not have a song name: {song:#?}");
         }
     }
 
