@@ -1,18 +1,32 @@
-use std::{collections::BTreeSet, fmt::Display};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Display,
+};
 
 use anyhow::{bail, Context};
+use chrono::NaiveTime;
 use derive_more::Display;
 use hashbrown::HashMap;
+use itertools::Itertools;
 use joinery::JoinableIterator;
+use log::warn;
 use smallvec::{smallvec, SmallVec};
 
+use crate::{
+    algorithm::possibilties_from_sum_and_ordering,
+    maimai::associated_user_data::RatingTargetEntryAssociated,
+};
+
 use super::{
-    associated_user_data::OrdinaryPlayRecordAssociated,
+    associated_user_data::{OrdinaryPlayRecordAssociated, RatingTargetList},
     estimator_config_multiuser::UserName,
     load_score_level::{InternalScoreLevel, MaimaiVersion},
     rating::{rank_coef, single_song_rating, ScoreConstant},
     schema::latest::{AchievementValue, PlayTime},
-    song_list::database::{OrdinaryScoreForVersionRef, OrdinaryScoreRef, SongDatabase},
+    song_list::{
+        database::{OrdinaryScoreForVersionRef, OrdinaryScoreRef, SongDatabase},
+        RemoveState,
+    },
 };
 
 type CandidateList = SmallVec<[ScoreConstant; 6]>;
@@ -68,6 +82,8 @@ pub enum Reason {
         fmt = "because the record played at {_0:?} achieving {_1} determines the single-song rating to be {_2}"
     )]
     Delta(PlayTime, AchievementValue, i16),
+    #[display(fmt = "by the rating target list on {_0}")]
+    List(PlayTime),
 }
 
 impl<'s, 'n> Estimator<'s, 'n> {
@@ -98,13 +114,16 @@ impl<'s, 'n> Estimator<'s, 'n> {
             .map
             .get_mut(&score)
             .with_context(|| format!("The following score was not in the map: {score:?}"))?;
+        let old_len = candidates.candidates.len();
         candidates.candidates.retain(|&mut v| predicate(v));
-        candidates.reasons.push(self.events.push(Event {
-            score,
-            candidates: candidates.candidates.clone(),
-            reason,
-            user,
-        }));
+        if candidates.candidates.len() < old_len {
+            candidates.reasons.push(self.events.push(Event {
+                score,
+                candidates: candidates.candidates.clone(),
+                reason,
+                user,
+            }));
+        }
         if candidates.candidates.is_empty() {
             bail!(
                 "No more candidates for {score:?}: {}",
@@ -244,6 +263,164 @@ impl<'s, 'n> Estimator<'s, 'n> {
             Reason::Delta(time, a, rating),
             user,
         )
+    }
+
+    pub fn guess_from_rating_target_order<'d>(
+        &mut self,
+        user: Option<&'n UserName>,
+        rating_targets: &BTreeMap<PlayTime, RatingTargetList<'d, 's>>,
+        ignore_time: bool,
+    ) -> anyhow::Result<()> {
+        let start_time: PlayTime = self.version.start_time().into();
+        let end_time: PlayTime = self.version.end_time().into();
+
+        // Once a song is removed not because of major version update,
+        // The rating sum is no longer reliable.
+        // Every score key in our `map` is available at least once in this song,
+        // so if it has remove date within the version range, it means a removal occurred.
+        let removal_time = self
+            .map
+            .keys()
+            .filter_map(|score| match score.scores().song().song().remove_state {
+                RemoveState::Removed(date)
+                    if (start_time.get().date()..end_time.get().date()).contains(&date) =>
+                {
+                    Some(date.and_time(NaiveTime::from_hms_opt(5, 0, 0).unwrap()))
+                }
+                _ => None,
+            })
+            .min();
+        // let removal_time = self
+        //     .removed_songs
+        //     .iter()
+        //     .map(|x| {
+        //         x.1.date()
+        //             .and_time(NaiveTime::from_hms_opt(5, 0, 0).unwrap())
+        //     })
+        //     .filter(|&x| start_time.get() < x && x < end_time.get())
+        //     .min();
+
+        // println!("{removal_time:?}");
+        for (&play_time, list) in rating_targets
+            .iter()
+            .filter(|p| ignore_time || (start_time..end_time).contains(p.0))
+        {
+            let rating_sum_is_reliable =
+                removal_time.map_or(true, |removal_time| play_time.get() < removal_time);
+            // println!("{rating_sum_is_reliable}");
+            let mut sub_list = vec![];
+            #[derive(Clone, Copy)]
+            struct Entry<'a, 'k> {
+                new: bool,
+                contributes_to_sum: bool,
+                rating_target_entry: RatingTargetEntryAssociated<'a, 'k>,
+                key: OrdinaryScoreRef<'k>,
+                levels: &'a [ScoreConstant],
+            }
+            for (new, contributes_to_sum, entries) in [
+                (true, true, list.target_new()),
+                (true, false, list.candidates_new()),
+                (false, true, list.target_old()),
+                (false, false, list.candidates_old()),
+            ] {
+                for rating_target_entry in entries {
+                    let rating_target_entry = match rating_target_entry.as_associated() {
+                        Ok(entry) => entry,
+                        Err(e) => {
+                            warn!("Not unique: {:?}: {e:#}", rating_target_entry.data());
+                            continue;
+                        }
+                    };
+                    let score = rating_target_entry.score().score();
+                    let levels = self.map.get(&score).with_context(|| {
+                        format!(
+                            "While procesing {:?}: no key matches {score:?}",
+                            rating_target_entry.data(),
+                        )
+                    })?;
+                    sub_list.push(Entry {
+                        new,
+                        contributes_to_sum,
+                        rating_target_entry,
+                        key: score,
+                        levels: &levels.candidates,
+                    });
+
+                    // let Some((key, levels)) = self.levels_from_target_entry(rating_target_entry)?
+                    // else {
+                    //     return Ok(());
+                    // };
+                    // sub_list.push(Entry {
+                    //     new,
+                    //     contributes_to_sum,
+                    //     rating_target_entry,
+                    //     key,
+                    //     levels,
+                    // });
+                }
+            }
+            #[derive(Clone, Copy)]
+            struct DpElement<'a, 'k> {
+                level: ScoreConstant,
+                single_song_rating: usize,
+                entry: Entry<'a, 'k>,
+            }
+            impl DpElement<'_, '_> {
+                fn tuple(self) -> (bool, usize, AchievementValue) {
+                    (
+                        self.entry.new,
+                        self.single_song_rating,
+                        self.entry.rating_target_entry.data().achievement(),
+                    )
+                }
+            }
+            impl std::fmt::Debug for DpElement<'_, '_> {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    let (new, score, a) = self.tuple();
+                    write!(f, "({new}, {score}, {a})")
+                }
+            }
+            let res = possibilties_from_sum_and_ordering::solve(
+                sub_list.len(),
+                |i| {
+                    let entry = sub_list[i];
+                    entry.levels.iter().map(move |&level| {
+                        let a = entry.rating_target_entry.data().achievement();
+                        let single_song_rating =
+                            single_song_rating(level, a, rank_coef(a)).get() as usize;
+                        let score = entry.contributes_to_sum as usize
+                            * single_song_rating
+                            * rating_sum_is_reliable as usize;
+                        let element = DpElement {
+                            level,
+                            entry,
+                            single_song_rating,
+                        };
+                        (score, element)
+                    })
+                },
+                |(_, x), (_, y)| x.tuple().cmp(&y.tuple()).reverse(),
+                list.list().rating().get() as usize * rating_sum_is_reliable as usize,
+            );
+            let keys = sub_list.iter().map(|e| e.key).collect_vec();
+            let res = res
+                .iter()
+                .map(|res| res.iter().map(|x| x.1.level).collect::<BTreeSet<_>>())
+                .collect_vec();
+            // println!("==== {} ====", play_time);
+            // for (&elem, res) in sub_list.iter().zip(&res) {
+            //     println!("{} {:?}", elem.rating_target_entry.song_name(), res);
+            // }
+            for (&key, res) in keys.iter().zip(res) {
+                // let reason = lazy_format!(
+                //     "by the rating target list on {play_time}{}",
+                //     display_played_by(name),
+                // );
+                // self.set(key, res.into_iter(), reason)?;
+                self.set(key, |lv| res.contains(&lv), Reason::List(play_time), user)?;
+            }
+        }
+        Ok(())
     }
 }
 

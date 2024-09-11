@@ -80,10 +80,29 @@ pub struct RatingTargetEntry<'d, 's> {
     data: &'d rating_target::RatingTargetEntry,
     score: anyhow::Result<OrdinaryScoreForVersionRef<'s>>,
 }
-impl<'s> RatingTargetEntry<'_, 's> {
+impl<'d, 's> RatingTargetEntry<'d, 's> {
     pub fn score(&self) -> Result<OrdinaryScoreForVersionRef<'s>, &anyhow::Error> {
         self.score.as_ref().copied()
     }
+
+    pub fn as_associated<'slf>(
+        &'slf self,
+    ) -> Result<RatingTargetEntryAssociated<'d, 's>, &'slf anyhow::Error> {
+        match &self.score {
+            &Ok(score) => Ok(RatingTargetEntryAssociated {
+                data: self.data,
+                score,
+            }),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+#[derive(Clone, Copy, CopyGetters)]
+#[getset(get_copy = "pub")]
+pub struct RatingTargetEntryAssociated<'d, 's> {
+    data: &'d rating_target::RatingTargetEntry,
+    score: OrdinaryScoreForVersionRef<'s>,
 }
 
 impl<'d, 's> UserData<'d, 's> {
