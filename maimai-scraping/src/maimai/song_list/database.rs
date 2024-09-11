@@ -24,11 +24,15 @@ impl<'s> SongDatabase<'s> {
     pub fn new(songs: &'s [Song]) -> anyhow::Result<Self> {
         verify_songs(songs)?;
 
-        let songs = songs
-            .iter()
-            .enumerate()
-            .map(|(id, song)| SongRef { song, id })
-            .collect_vec();
+        let songs = {
+            let mut ret = vec![];
+            let mut id = 0;
+            for song in songs {
+                ret.push(SongRef { song, id });
+                id += 10 + song.utage_scores.len();
+            }
+            ret
+        };
 
         // Make icon map.
         // `verify_songs` guarantees that an icon exists for all unremoved songs.
@@ -65,6 +69,17 @@ impl<'s> SongDatabase<'s> {
     ) -> impl Iterator<Item = SongRef<'s>> + 'me {
         self.name_map.get(song_name).into_iter().flatten().copied()
     }
+
+    pub fn all_scores_for_version<'me>(
+        &'me self,
+        version: MaimaiVersion,
+    ) -> impl Iterator<Item = OrdinaryScoreForVersionRef<'s>> + 'me {
+        self.songs
+            .iter()
+            .flat_map(|song| song.scoreses())
+            .flat_map(|scores| scores.all_scores())
+            .filter_map(move |score| score.for_version(version))
+    }
 }
 
 #[derive(Clone, Copy, Debug, CopyGetters, DeriveByKey)]
@@ -79,12 +94,23 @@ impl<'s> SongRef<'s> {
         self.id
     }
 
+    pub fn scoreses(self) -> impl Iterator<Item = OrdinaryScoresRef<'s>> {
+        [ScoreGeneration::Standard, ScoreGeneration::Deluxe]
+            .into_iter()
+            .filter_map(move |g| self.scores(g))
+    }
+
     pub fn scores(self, generation: ScoreGeneration) -> Option<OrdinaryScoresRef<'s>> {
         let scores = self.song.scores[generation].as_ref()?;
         Some(OrdinaryScoresRef {
             song: self,
             generation,
             scores,
+            id: self.id
+                + match generation {
+                    ScoreGeneration::Standard => 0,
+                    ScoreGeneration::Deluxe => 5,
+                },
         })
     }
 
@@ -110,6 +136,7 @@ pub struct OrdinaryScoresRef<'s> {
     song: SongRef<'s>,
     generation: ScoreGeneration,
     scores: &'s OrdinaryScores,
+    id: usize,
 }
 impl<'s> OrdinaryScoresRef<'s> {
     pub fn score(self, difficulty: ScoreDifficulty) -> Option<OrdinaryScoreRef<'s>> {
@@ -125,19 +152,41 @@ impl<'s> OrdinaryScoresRef<'s> {
             scores: self,
             difficulty,
             score,
+            id: self.id
+                + match difficulty {
+                    ScoreDifficulty::Basic => 0,
+                    ScoreDifficulty::Advanced => 1,
+                    ScoreDifficulty::Expert => 2,
+                    ScoreDifficulty::Master => 3,
+                    ScoreDifficulty::ReMaster => 4,
+                    ScoreDifficulty::Utage => unreachable!(),
+                },
         })
+    }
+
+    pub fn all_scores(self) -> impl Iterator<Item = OrdinaryScoreRef<'s>> {
+        use ScoreDifficulty::*;
+        [Basic, Advanced, Expert, Master, ReMaster]
+            .into_iter()
+            .filter_map(move |d| self.score(d))
     }
 }
 
 /// A reference to an ordinary for a specific version.
-#[derive(Clone, Copy, Debug, CopyGetters)]
+#[derive(Clone, Copy, Debug, CopyGetters, DeriveByKey)]
+#[derive_by_key(key = "key", PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[getset(get_copy = "pub")]
 pub struct OrdinaryScoreRef<'s> {
     scores: OrdinaryScoresRef<'s>,
     difficulty: ScoreDifficulty,
     score: &'s OrdinaryScore,
+    id: usize,
 }
 impl<'s> OrdinaryScoreRef<'s> {
+    fn key(self) -> usize {
+        self.id
+    }
+
     pub fn for_version(self, version: MaimaiVersion) -> Option<OrdinaryScoreForVersionRef<'s>> {
         if let Some(start_version) = self.scores.scores.version {
             if version < start_version {
