@@ -249,8 +249,12 @@ pub struct UtageScoreRef<'s> {
 }
 
 pub fn verify_songs(songs: &[Song]) -> anyhow::Result<()> {
-    // Every song that has not been rmeoved has an icon associated to it.
+    // Every song that has not been rmeoved has ...
     for song in songs {
+        if song.removed() {
+            continue;
+        }
+        // an icon associated to it
         if !song.removed() && song.icon.is_none() {
             bail!("Icon is missing: {song:#?}")
         }

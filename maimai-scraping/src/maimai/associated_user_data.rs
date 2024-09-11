@@ -34,6 +34,32 @@ impl<'s> PlayRecord<'_, 's> {
     }
 }
 
+#[derive(CopyGetters)]
+pub struct OrdinaryPlayRecord<'d, 's> {
+    #[getset(get_copy = "pub")]
+    record: &'d schema::PlayRecord,
+    score: anyhow::Result<OrdinaryScoreForVersionRef<'s>>,
+}
+impl<'d, 's> OrdinaryPlayRecord<'d, 's> {
+    pub fn score(&self) -> Result<OrdinaryScoreForVersionRef<'s>, &anyhow::Error> {
+        self.score.as_ref().copied()
+    }
+
+    pub fn into_associated(self) -> anyhow::Result<OrdinaryPlayRecordAssociated<'d, 's>> {
+        self.score.map(move |score| OrdinaryPlayRecordAssociated {
+            record: self.record,
+            score,
+        })
+    }
+}
+
+#[derive(Clone, Copy, CopyGetters)]
+#[getset(get_copy = "pub")]
+pub struct OrdinaryPlayRecordAssociated<'d, 's> {
+    record: &'d schema::PlayRecord,
+    score: OrdinaryScoreForVersionRef<'s>,
+}
+
 #[derive(Getters, CopyGetters)]
 pub struct RatingTargetList<'d, 's> {
     #[getset(get_copy = "pub")]
