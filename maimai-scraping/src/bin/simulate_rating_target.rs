@@ -86,15 +86,35 @@ fn main() -> anyhow::Result<()> {
 
     let boundary = 15.min(new_songs.len());
     println!("  New songs");
-    visualize_rating_targets(&store, new_songs[..boundary].iter().map(|x| &x.1), 0)?;
+    visualize_rating_targets(
+        &store,
+        new_songs[..boundary].iter().map(|x| &x.1),
+        &data.idx_to_icon_map,
+        0,
+    )?;
     println!("  =========");
-    visualize_rating_targets(&store, new_songs[boundary..].iter().map(|x| &x.1), boundary)?;
+    visualize_rating_targets(
+        &store,
+        new_songs[boundary..].iter().map(|x| &x.1),
+        &data.idx_to_icon_map,
+        boundary,
+    )?;
 
     let boundary = 35.min(old_songs.len());
     println!("  Old songs");
-    visualize_rating_targets(&store, old_songs[..boundary].iter().map(|x| &x.1), 0)?;
+    visualize_rating_targets(
+        &store,
+        old_songs[..boundary].iter().map(|x| &x.1),
+        &data.idx_to_icon_map,
+        0,
+    )?;
     println!("  =========");
-    visualize_rating_targets(&store, old_songs[boundary..].iter().map(|x| &x.1), boundary)?;
+    visualize_rating_targets(
+        &store,
+        old_songs[boundary..].iter().map(|x| &x.1),
+        &data.idx_to_icon_map,
+        boundary,
+    )?;
 
     Ok(())
 }

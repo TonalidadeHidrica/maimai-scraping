@@ -43,6 +43,7 @@ pub async fn recent(
         None,
         data.records.values(),
         &data.rating_targets,
+        &data.idx_to_icon_map,
     ) {
         error!("{e:#}");
     }

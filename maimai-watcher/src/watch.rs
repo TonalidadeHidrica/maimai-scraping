@@ -2,6 +2,7 @@ use std::{
     fmt::{Debug, Display},
     iter::successors,
     path::PathBuf,
+    sync::{atomic::AtomicBool, Arc},
     time::{Duration, Instant},
 };
 
@@ -10,6 +11,7 @@ use aime_net::{
     schema::{AccessCode, CardName},
 };
 use anyhow::Context;
+use hashbrown::HashMap;
 use log::{error, info, warn};
 use maimai_scraping::{
     api::{SegaClient, SegaClientAndRecordList, SegaClientInitializer},
@@ -19,8 +21,11 @@ use maimai_scraping::{
         data_collector::update_targets,
         estimate_rating::{EstimatorConfig, ScoreConstantsStore},
         load_score_level::{self, MaimaiVersion, RemovedSong, Song},
-        parser::rating_target::RatingTargetFile,
-        schema::latest::{PlayRecord, PlayTime},
+        parser::{
+            rating_target::{RatingTargetFile, RatingTargetList},
+            song_score::ScoreIdx,
+        },
+        schema::latest::{PlayRecord, PlayTime, SongIcon},
         Maimai, MaimaiIntl, MaimaiUserData,
     },
     sega_trait::{self, Idx, PlayRecordTrait, PlayedAt, SegaTrait},
@@ -63,6 +68,8 @@ pub struct Config {
     pub international: bool,
     pub force_paid_config: Option<ForcePaidConfig>,
     pub aime_switch_config: Option<AimeSwitchConfig>,
+
+    pub finish_flag: Option<Arc<AtomicBool>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -160,6 +167,9 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
                     }
                 }
             }
+            if config.timeout_config.max_count == 1 {
+                break;
+            }
             let chunk = Duration::from_millis(250);
             for remaining in successors(Some(config.interval), |x| x.checked_sub(chunk)) {
                 sleep(remaining.min(chunk)).await;
@@ -217,6 +227,10 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
                 }
             }
         }
+
+        if let Some(finish_flag) = config.finish_flag {
+            finish_flag.store(true, std::sync::atomic::Ordering::Release);
+        }
     });
     Ok(WatchHandler(tx))
 }
@@ -259,6 +273,7 @@ impl<'c, 's> Runner<'c, 's> {
                     None,
                     self.data.records.values(),
                     &self.data.rating_targets,
+                    &self.data.idx_to_icon_map,
                 )
                 .context("While estimating levels precisely"),
         )
@@ -272,6 +287,7 @@ impl<'c, 's> Runner<'c, 's> {
                     false,
                     None,
                     &self.data.rating_targets,
+                    &self.data.idx_to_icon_map,
                 )
                 .context("While estimating levels roughly"),
         )
@@ -319,6 +335,11 @@ impl<'c, 's> Runner<'c, 's> {
             force_paid,
         };
         let (mut client, index) = T::new_client(init).await?;
+        // // 2024-09-12 temporarily add this line for batch run in rush
+        // for rating_targets in self.data.rating_targets.values() {
+        //     T::update_idx(&mut client, rating_targets, &mut self.data.idx_to_icon_map).await?;
+        // }
+        write_json(&config.maimai_uesr_data_path, &self.data)?; // Save twice just in case
         let last_played = index.first().context("There is no play yet.")?.0;
         let inserted_records = update_records(&mut client, &mut self.data.records, index).await?;
         if inserted_records.is_empty() {
@@ -348,6 +369,19 @@ impl<'c, 's> Runner<'c, 's> {
             )
             .await;
         }
+
+        // Update idx to icon map also
+        if let Ok(Some(rating_targets)) = update_targets_res {
+            T::update_idx(&mut client, rating_targets, &mut self.data.idx_to_icon_map).await?;
+            webhook_send(
+                client.reqwest(),
+                &config.slack_post_webhook,
+                &config.user_id,
+                "Disambiguation list updated",
+            )
+            .await;
+        }
+
         write_json(&config.maimai_uesr_data_path, &self.data)?; // Save twice just in case
 
         let bef_len = self.levels_actual.events().len();
@@ -400,11 +434,17 @@ where
         init: SegaClientInitializer<'p, '_, Self>,
     ) -> anyhow::Result<SegaClientAndRecordList<'p, Self>>;
 
-    async fn update_targets(
+    async fn update_targets<'r>(
         client: &mut SegaClient<'_, Self>,
-        rating_targets: &mut RatingTargetFile,
+        rating_targets: &'r mut RatingTargetFile,
         last_played: PlayTime,
         force: bool,
+    ) -> anyhow::Result<Option<&'r RatingTargetList>>;
+
+    async fn update_idx(
+        client: &mut SegaClient<'_, Self>,
+        rating_target: &RatingTargetList,
+        map: &mut HashMap<ScoreIdx, SongIcon>,
     ) -> anyhow::Result<()>;
 }
 
@@ -419,13 +459,21 @@ impl MaimaiPossiblyIntl for Maimai {
         SegaClient::<Maimai>::new(init).await
     }
 
-    async fn update_targets(
+    async fn update_targets<'r>(
         client: &mut SegaClient<'_, Self>,
-        rating_targets: &mut RatingTargetFile,
+        rating_targets: &'r mut RatingTargetFile,
         last_played: PlayTime,
         force: bool,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<&'r RatingTargetList>> {
         update_targets(client, rating_targets, last_played, force).await
+    }
+
+    async fn update_idx(
+        client: &mut SegaClient<'_, Maimai>,
+        rating_target: &RatingTargetList,
+        map: &mut HashMap<ScoreIdx, SongIcon>,
+    ) -> anyhow::Result<()> {
+        maimai_scraping::maimai::data_collector::update_idx(client, rating_target, map).await
     }
 }
 
@@ -440,13 +488,21 @@ impl MaimaiPossiblyIntl for MaimaiIntl {
         SegaClient::new_maimai_intl(init).await
     }
 
-    async fn update_targets(
+    async fn update_targets<'r>(
         _client: &mut SegaClient<'_, Self>,
-        _rating_targets: &mut RatingTargetFile,
+        _rating_targets: &'r mut RatingTargetFile,
         _last_played: PlayTime,
         _force: bool,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<&'r RatingTargetList>> {
         info!("Maimai international has rating target available!");
+        Ok(None)
+    }
+
+    async fn update_idx(
+        _client: &mut SegaClient<'_, Self>,
+        _rating_target: &RatingTargetList,
+        _map: &mut HashMap<ScoreIdx, SongIcon>,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 }

@@ -11,7 +11,10 @@ pub mod rating;
 pub mod schema;
 pub mod song_list;
 
+use hashbrown::HashMap;
 use maimai_scraping_utils::selector;
+use parser::song_score::ScoreIdx;
+use schema::latest::SongIcon;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -140,6 +143,8 @@ pub struct MaimaiUserData {
     pub records: RecordMap<Maimai>,
     #[serde(default)]
     pub rating_targets: RatingTargetFile,
+    #[serde(default)]
+    pub idx_to_icon_map: HashMap<ScoreIdx, SongIcon>,
 }
 impl SegaUserData<Maimai> for MaimaiUserData {
     fn records_mut(&mut self) -> &mut RecordMap<Maimai> {

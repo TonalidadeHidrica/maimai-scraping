@@ -35,6 +35,7 @@ use strum::IntoEnumIterator;
 use super::{
     estimator_config_multiuser::UserName,
     load_score_level::{self, make_hash_multimap},
+    parser::song_score::ScoreIdx,
     schema::latest::{AchievementRank, ScoreMetadata},
 };
 
@@ -226,28 +227,32 @@ impl<'s> ScoreConstantsStore<'s> {
     pub fn key_from_target_entry<'e>(
         &self,
         entry: &'e RatingTargetEntry,
+        idx_to_icon_map: &'s HashMap<ScoreIdx, SongIcon>,
     ) -> KeyFromTargetEntry<'e, 's> {
         use KeyFromTargetEntry::*;
-        match self.song_name_to_icon.get(entry.song_name()) {
-            None => NotFound(entry.song_name()),
-            Some(icons) if icons.len() == 1 => {
-                let m = entry.score_metadata();
-                Unique(ScoreKey {
-                    icon: icons.iter().next().unwrap(),
-                    generation: m.generation(),
-                    difficulty: m.difficulty(),
-                })
-            }
-            _ => Multiple,
-        }
+        let icon = match idx_to_icon_map.get(entry.idx()) {
+            Some(icon) => icon,
+            None => match self.song_name_to_icon.get(entry.song_name()) {
+                None => return NotFound(entry.song_name()),
+                Some(icons) if icons.len() == 1 => icons.iter().next().unwrap(),
+                _ => return Multiple,
+            },
+        };
+        let m = entry.score_metadata();
+        Unique(ScoreKey {
+            icon,
+            generation: m.generation(),
+            difficulty: m.difficulty(),
+        })
     }
 
-    pub fn levels_from_target_entry<'slf>(
+    fn levels_from_target_entry<'slf>(
         &'slf self,
         entry: &RatingTargetEntry,
+        idx_to_icon_map: &'s HashMap<ScoreIdx, SongIcon>,
     ) -> anyhow::Result<Option<(ScoreKey<'s>, &'slf [ScoreConstant])>> {
         use KeyFromTargetEntry::*;
-        match self.key_from_target_entry(entry) {
+        match self.key_from_target_entry(entry, idx_to_icon_map) {
             NotFound(name) => bail!("Unknown song: {name:?}"),
             Unique(key) => {
                 let levels = self.get(key)?.context("Song must not be removed")?.1;
@@ -329,6 +334,7 @@ impl<'s> ScoreConstantsStore<'s> {
         name: Option<&UserName>,
         records: impl IntoIterator<Item = &'r PlayRecord> + Clone,
         rating_targets: &RatingTargetFile,
+        idx_to_icon_map: &'r HashMap<ScoreIdx, SongIcon>,
     ) -> anyhow::Result<bool> {
         let version = config.version.unwrap_or(MaimaiVersion::latest());
         if let PrintResult::Verbose = self.show_details {
@@ -346,13 +352,20 @@ impl<'s> ScoreConstantsStore<'s> {
                 println!("Iteration {i}");
             }
             let before_len = self.events().len();
-            self.guess_from_rating_target_order(version, config.ignore_time, name, rating_targets)?;
+            self.guess_from_rating_target_order(
+                version,
+                config.ignore_time,
+                name,
+                rating_targets,
+                idx_to_icon_map,
+            )?;
             self.records_not_in_targets(
                 version,
                 config.ignore_time,
                 name,
                 records.clone(),
                 rating_targets,
+                idx_to_icon_map,
             )?;
             if before_len == self.events().len() {
                 break;
@@ -475,6 +488,7 @@ impl<'s> ScoreConstantsStore<'s> {
         ignore_time: bool,
         name: Option<&UserName>,
         rating_targets: &RatingTargetFile,
+        idx_to_icon_map: &HashMap<ScoreIdx, SongIcon>,
     ) -> anyhow::Result<()> {
         let start_time: PlayTime = version.start_time().into();
         let end_time: PlayTime = version.end_time().into();
@@ -513,7 +527,8 @@ impl<'s> ScoreConstantsStore<'s> {
                 (false, false, list.candidates_old()),
             ] {
                 for rating_target_entry in entries {
-                    let Some((key, levels)) = self.levels_from_target_entry(rating_target_entry)?
+                    let Some((key, levels)) =
+                        self.levels_from_target_entry(rating_target_entry, idx_to_icon_map)?
                     else {
                         return Ok(());
                     };
@@ -596,6 +611,7 @@ impl<'s> ScoreConstantsStore<'s> {
         name: Option<&UserName>,
         records: impl IntoIterator<Item = &'r PlayRecord>,
         rating_targets: &RatingTargetFile,
+        idx_to_icon_map: &HashMap<ScoreIdx, SongIcon>,
     ) -> anyhow::Result<()> {
         let start_time: PlayTime = version.start_time().into();
         let end_time: PlayTime = version.end_time().into();
@@ -632,7 +648,7 @@ impl<'s> ScoreConstantsStore<'s> {
                 .chain(chain(list.candidates_new(), list.candidates_old()))
             {
                 use KeyFromTargetEntry::*;
-                let key = match self.key_from_target_entry(entry) {
+                let key = match self.key_from_target_entry(entry, idx_to_icon_map) {
                     NotFound(name) => bail!("Unknown song: {name:?}"),
                     Unique(key) => key,
                     Multiple => {
@@ -698,7 +714,7 @@ impl<'s> ScoreConstantsStore<'s> {
                 let compute = |entry: &RatingTargetEntry| {
                     // println!("min = {min:?}");
                     let a = entry.achievement();
-                    let KeyFromTargetEntry::Unique(key) = self.key_from_target_entry(entry) else {
+                    let KeyFromTargetEntry::Unique(key) = self.key_from_target_entry(entry, idx_to_icon_map) else {
                         bail!("Removed or not found")
                     };
                     let lvs = &self.get(key)?.context("Must not be removed (2)")?.1;
@@ -835,10 +851,11 @@ fn compute_hash<K: Hash + ?Sized, S: BuildHasher>(hash_builder: &S, key: &K) -> 
 pub fn visualize_rating_targets<'a>(
     constants: &ScoreConstantsStore,
     entries: impl IntoIterator<Item = &'a RatingTargetEntry>,
+    idx_to_icon_map: &HashMap<ScoreIdx, SongIcon>,
     start_index: usize,
 ) -> anyhow::Result<()> {
     for (entry, i) in entries.into_iter().zip(start_index..) {
-        let Some((_, levels)) = constants.levels_from_target_entry(entry)? else {
+        let Some((_, levels)) = constants.levels_from_target_entry(entry, idx_to_icon_map)? else {
             bail!("Song unexpectedly removed!")
         };
         let levels = BTreeSet::from_iter(levels.iter().copied());

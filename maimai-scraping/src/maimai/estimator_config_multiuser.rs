@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use derive_more::From;
+use derive_more::{Display, From};
 use getset::{CopyGetters, Getters};
 use maimai_scraping_utils::fs_json_util::read_json;
 use serde::Deserialize;
@@ -26,7 +26,7 @@ pub struct User {
     estimator_config: EstimatorConfig,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, From, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, From, Deserialize, Display)]
 pub struct UserName(String);
 
 impl Root {
@@ -50,6 +50,7 @@ pub fn update_all(
                 Some(config.name()),
                 data.records.values(),
                 &data.rating_targets,
+                &data.idx_to_icon_map,
             )?;
         }
         changed

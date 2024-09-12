@@ -26,6 +26,7 @@ fn main() -> anyhow::Result<()> {
         None,
         data.records.values(),
         &data.rating_targets,
+        &data.idx_to_icon_map,
     )?;
 
     for (time, file) in &data.rating_targets {
@@ -38,13 +39,23 @@ fn main() -> anyhow::Result<()> {
         }
         println!("{time}");
         println!("  New songs");
-        visualize_rating_targets(&constants, file.target_new(), 0)?;
+        visualize_rating_targets(&constants, file.target_new(), &data.idx_to_icon_map, 0)?;
         println!("  =========");
-        visualize_rating_targets(&constants, file.candidates_new(), file.target_new().len())?;
+        visualize_rating_targets(
+            &constants,
+            file.candidates_new(),
+            &data.idx_to_icon_map,
+            file.target_new().len(),
+        )?;
         println!("  Old songs");
-        visualize_rating_targets(&constants, file.target_old(), 0)?;
+        visualize_rating_targets(&constants, file.target_old(), &data.idx_to_icon_map, 0)?;
         println!("  =========");
-        visualize_rating_targets(&constants, file.candidates_old(), file.target_old().len())?;
+        visualize_rating_targets(
+            &constants,
+            file.candidates_old(),
+            &data.idx_to_icon_map,
+            file.target_old().len(),
+        )?;
         println!();
     }
 

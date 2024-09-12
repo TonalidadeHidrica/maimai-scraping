@@ -46,6 +46,9 @@ struct Opts {
 
     #[clap(long)]
     restore_output: Option<PathBuf>,
+
+    #[clap(long)]
+    no_dx_master: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -110,8 +113,41 @@ fn main() -> anyhow::Result<()> {
                 "{} songs has been determined so far",
                 store.num_determined_songs() - count_initial
             );
-            get_optimal_song(&datas, &store, &old_store, args.level_update_factor)
-                .context("While getting optimal song")
+            for (user, data) in &datas {
+                let Some(last) = data.rating_targets.values().last() else {
+                    continue;
+                };
+                let (mut got, mut all) = (0, 0);
+                for entry in [
+                    last.target_new(),
+                    last.target_old(),
+                    last.candidates_new(),
+                    last.candidates_old(),
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    all += 1;
+                    if let KeyFromTargetEntry::Unique(key) =
+                        store.key_from_target_entry(entry, &data.idx_to_icon_map)
+                    {
+                        if let Ok(Some((_, consts))) = store.get(key) {
+                            if consts.len() == 1 {
+                                got += 1;
+                            }
+                        }
+                    }
+                }
+                print!("{} {got}/{all}  ", user.name());
+            }
+            get_optimal_song(
+                &datas,
+                &store,
+                &old_store,
+                args.level_update_factor,
+                args.no_dx_master,
+            )
+            .context("While getting optimal song")
         })();
         let res = match optimal_songs {
             Err(e) => {
@@ -270,31 +306,47 @@ fn read_i16(message: &'static str) -> i16 {
 }
 
 fn get_optimal_song<'s, 'o>(
-    datas: &[(&estimator_config_multiuser::User, MaimaiUserData)],
+    datas: &'s [(&estimator_config_multiuser::User, MaimaiUserData)],
     store: &ScoreConstantsStore<'s>,
     old_store: &'o ScoreConstantsStore<'s>,
     level_update_factor: f64,
+    no_dx_master: bool,
 ) -> Result<Option<OptimalSongEntry<'s, 'o>>, anyhow::Error> {
     let undetermined_song_in_list = datas
         .iter()
-        .flat_map(|(_, data)| &data.rating_targets)
-        .filter_map(|(k, v)| (MaimaiVersion::latest().start_time() <= k.get()).then_some(v))
-        .flat_map(|r| {
+        .flat_map(|(_, data)| {
+            data.rating_targets.iter().filter_map(move |(k, v)| {
+                (MaimaiVersion::latest().start_time() <= k.get()).then_some((v, data))
+            })
+        })
+        .flat_map(|(r, data)| {
             [
                 r.target_new(),
                 r.target_old(),
                 r.candidates_new(),
                 r.candidates_old(),
             ]
+            .into_iter()
+            .flatten()
+            .map(move |e| (e, data))
         })
-        .flatten()
-        .filter_map(|entry| match store.key_from_target_entry(entry) {
-            KeyFromTargetEntry::Unique(key) => Some(key),
-            _ => None,
+        .filter_map(|(entry, data)| {
+            match store.key_from_target_entry(entry, &data.idx_to_icon_map) {
+                KeyFromTargetEntry::Unique(key) => Some(key),
+                _ => None,
+            }
         })
         .collect::<BTreeSet<_>>();
     let mut candidates = vec![];
     for key in undetermined_song_in_list {
+        if no_dx_master
+            && key.generation == ScoreGeneration::Deluxe
+            && [ScoreDifficulty::Master, ScoreDifficulty::ReMaster]
+                .iter()
+                .any(|&d| d == key.difficulty)
+        {
+            continue;
+        }
         let Ok(Some((song, constants))) = store.get(key) else {
             continue;
         };
