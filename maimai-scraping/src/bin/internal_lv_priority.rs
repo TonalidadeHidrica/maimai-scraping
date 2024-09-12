@@ -121,31 +121,17 @@ fn main() -> anyhow::Result<()> {
                 store.num_determined_songs() - count_initial
             );
             for (user, data) in &datas {
-                let Some(last) = data.rating_targets.values().last() else {
-                    continue;
-                };
                 let (mut got, mut all) = (0, 0);
-                for entry in [
-                    last.target_new(),
-                    last.target_old(),
-                    last.candidates_new(),
-                    last.candidates_old(),
-                ]
-                .into_iter()
-                .flatten()
-                {
-                    if entry.achievement().get() < 80_0000 {
+                for key in covered_scores(data, &store) {
+                    if args.no_dx_master && is_dx_master(key) {
                         continue;
                     }
+                    let Ok(Some((_song, constants))) = store.get(key) else {
+                        continue;
+                    };
                     all += 1;
-                    if let KeyFromTargetEntry::Unique(key) =
-                        store.key_from_target_entry(entry, &data.idx_to_icon_map)
-                    {
-                        if let Ok(Some((_, consts))) = store.get(key) {
-                            if consts.len() == 1 {
-                                got += 1;
-                            }
-                        }
+                    if constants.len() == 1 {
+                        got += 1;
                     }
                 }
                 print!("{} {got}/{all}  ", user.name());
@@ -358,6 +344,14 @@ fn read_usize(message: &str) -> usize {
     }
 }
 
+fn is_dx_master(key: ScoreKey<'_>) -> bool {
+    key.generation == ScoreGeneration::Deluxe
+        && [ScoreDifficulty::Master, ScoreDifficulty::ReMaster]
+            .iter()
+            .any(|&d| d == key.difficulty)
+}
+
+
 fn get_optimal_song<'s, 'o>(
     datas: &'s [(&estimator_config_multiuser::User, MaimaiUserData)],
     store: &ScoreConstantsStore<'s>,
@@ -365,42 +359,12 @@ fn get_optimal_song<'s, 'o>(
     level_update_factor: f64,
     no_dx_master: bool,
 ) -> Result<Vec<OptimalSongEntry<'s, 'o>>, anyhow::Error> {
-    let undetermined_song_in_list = datas
+    let covered_scores = datas
         .iter()
-        .flat_map(|(_, data)| {
-            data.rating_targets.iter().filter_map(move |(k, v)| {
-                (MaimaiVersion::latest().start_time() <= k.get()).then_some((v, data))
-            })
-        })
-        .flat_map(|(r, data)| {
-            [
-                r.target_new(),
-                r.target_old(),
-                r.candidates_new(),
-                r.candidates_old(),
-            ]
-            .into_iter()
-            .flatten()
-            .map(move |e| (e, data))
-        })
-        .filter_map(|(entry, data)| {
-            if entry.achievement().get() < 80_0000 {
-                return None;
-            }
-            match store.key_from_target_entry(entry, &data.idx_to_icon_map) {
-                KeyFromTargetEntry::Unique(key) => Some(key),
-                _ => None,
-            }
-        })
-        .collect::<BTreeSet<_>>();
+        .flat_map(|(_, data)| covered_scores(data, store));
     let mut candidates = vec![];
-    for key in undetermined_song_in_list {
-        if no_dx_master
-            && key.generation == ScoreGeneration::Deluxe
-            && [ScoreDifficulty::Master, ScoreDifficulty::ReMaster]
-                .iter()
-                .any(|&d| d == key.difficulty)
-        {
+    for key in covered_scores {
+        if no_dx_master && is_dx_master(key) {
             continue;
         }
         let Ok(Some((song, constants))) = store.get(key) else {
@@ -470,6 +434,38 @@ fn get_optimal_song<'s, 'o>(
     }
     candidates.sort_by_key(|x| OrderedFloat(-x.expected_count));
     Ok(candidates)
+}
+
+fn covered_scores<'s>(
+    data: &'s MaimaiUserData,
+    store: &ScoreConstantsStore<'s>,
+) -> BTreeSet<ScoreKey<'s>> {
+    data.rating_targets
+        .iter()
+        .filter_map(move |(k, v)| {
+            (MaimaiVersion::latest().start_time() <= k.get()).then_some((v, data))
+        })
+        .flat_map(|(r, data)| {
+            [
+                r.target_new(),
+                r.target_old(),
+                r.candidates_new(),
+                r.candidates_old(),
+            ]
+            .into_iter()
+            .flatten()
+            .map(move |e| (e, data))
+        })
+        .filter_map(|(entry, data)| {
+            if entry.achievement().get() < 80_0000 {
+                return None;
+            }
+            match store.key_from_target_entry(entry, &data.idx_to_icon_map) {
+                KeyFromTargetEntry::Unique(key) => Some(key),
+                _ => None,
+            }
+        })
+        .collect()
 }
 
 #[derive(Clone)]
