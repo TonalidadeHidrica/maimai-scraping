@@ -4,4 +4,5 @@ pub mod friend_code;
 pub mod music_detail;
 pub mod play_record;
 pub mod rating_target;
+pub mod score_record_list;
 pub mod song_score;
