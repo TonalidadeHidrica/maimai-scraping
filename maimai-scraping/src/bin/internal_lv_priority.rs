@@ -134,6 +134,9 @@ fn main() -> anyhow::Result<()> {
                 .into_iter()
                 .flatten()
                 {
+                    if entry.achievement().get() < 80_0000 {
+                        continue;
+                    }
                     all += 1;
                     if let KeyFromTargetEntry::Unique(key) =
                         store.key_from_target_entry(entry, &data.idx_to_icon_map)
@@ -381,6 +384,9 @@ fn get_optimal_song<'s, 'o>(
             .map(move |e| (e, data))
         })
         .filter_map(|(entry, data)| {
+            if entry.achievement().get() < 80_0000 {
+                return None;
+            }
             match store.key_from_target_entry(entry, &data.idx_to_icon_map) {
                 KeyFromTargetEntry::Unique(key) => Some(key),
                 _ => None,
