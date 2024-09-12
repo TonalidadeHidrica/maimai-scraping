@@ -68,15 +68,17 @@ fn main() -> anyhow::Result<()> {
             } else {
                 v
             };
-            let lv = scores
+            let mut lv = scores
                 .all_scores()
                 // Unwrapping here because all the songs enumerated here should exist at this point
                 // as we are filtering by `exist_for_version` in prior
                 .filter_map(|score| score.for_version(version).unwrap().level())
                 .map(|v| score_level_to_unknown_float(v.into_level(version)))
                 .collect_vec();
-            if !(lv.len() == 4 || lv.len() == 5) {
-                bail!("Unexpected length");
+            match lv.len() {
+                4 => lv.push(0.),
+                5 => {}
+                _ => bail!("Unexpected length"),
             }
             res.push(song_raw(dx, lv, v)?);
         }
