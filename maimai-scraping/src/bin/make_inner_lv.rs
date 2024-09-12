@@ -40,7 +40,13 @@ fn main() -> anyhow::Result<()> {
                 v,
                 lv,
                 n: song_name.to_owned(),
-                nn: None,
+                nn: song
+                    .song()
+                    .abbreviation
+                    .values()
+                    .flatten()
+                    .last()
+                    .map(|x| x.to_string()),
                 ico: song
                     .song()
                     .icon
