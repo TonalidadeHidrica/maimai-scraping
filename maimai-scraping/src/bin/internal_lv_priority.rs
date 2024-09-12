@@ -90,6 +90,7 @@ fn main() -> anyhow::Result<()> {
 
     let initial_rating = read_i16("Initial rating");
     let mut history: Vec<HistoryEntry> = vec![];
+    let mut candidate_len: usize = 1;
     'outer_loop: loop {
         let mut store = store.clone();
         let optimal_songs = (|| {
@@ -140,41 +141,48 @@ fn main() -> anyhow::Result<()> {
                 }
                 print!("{} {got}/{all}  ", user.name());
             }
-            get_optimal_song(
+            println!();
+            let ret = get_optimal_song(
                 &datas,
                 &store,
                 &old_store,
                 args.level_update_factor,
                 args.no_dx_master,
             )
-            .context("While getting optimal song")
+            .context("While getting optimal song");
+            ret
         })();
         let res = match optimal_songs {
             Err(e) => {
                 println!("Error: {e:#}");
-                None
+                vec![]
             }
-            Ok(None) => {
+            Ok(v) if v.is_empty() => {
                 println!("No more candidates!");
                 break;
             }
-            Ok(Some(res)) => {
-                println!(
-                    "{} {:?} {:?}",
-                    res.song.song_name(),
-                    res.key.generation,
-                    res.key.difficulty,
-                );
-                println!(
-                    "{:.3} more songs is expected to be determined",
-                    res.expected_count
-                );
-                println!(
-                    "Old constants: {}",
-                    res.old_constants.iter().join_with(", ")
-                );
-                println!("New constants: {}", res.constants.iter().join_with(", "));
-                Some(res)
+            Ok(v) => {
+                for (i, res) in v.iter().enumerate().take(candidate_len) {
+                    println!(
+                        "{i:3}: {} {:?} {:?}",
+                        res.song.song_name(),
+                        res.key.generation,
+                        res.key.difficulty,
+                    );
+                    println!(
+                        "     {:.3} more songs is expected to be determined",
+                        res.expected_count
+                    );
+                    println!(
+                        "     Old constants: {}",
+                        res.old_constants.iter().join_with(", ")
+                    );
+                    println!(
+                        "     New constants: {}",
+                        res.constants.iter().join_with(", ")
+                    );
+                }
+                v
             }
         };
 
@@ -182,6 +190,7 @@ fn main() -> anyhow::Result<()> {
             List,
             Undo,
             Add,
+            Len,
         }
         let command = loop {
             let res = CustomType::<String>::new("Command")
@@ -191,6 +200,7 @@ fn main() -> anyhow::Result<()> {
                 Ok("undo") => break Command::Undo,
                 Ok("add") => break Command::Add,
                 Ok("list") => break Command::List,
+                Ok("len") => break Command::Len,
                 Err(inquire::InquireError::OperationInterrupted) => {
                     println!("Bye");
                     break 'outer_loop;
@@ -222,9 +232,17 @@ fn main() -> anyhow::Result<()> {
                 }
             }
             Command::Add => {
-                let Some(res) = res else {
+                if res.is_empty() {
                     println!("Resolve error before advancing!");
                     continue;
+                };
+                let res = loop {
+                    let len = res.len().min(candidate_len);
+                    let index = read_usize(&format!("Candidate length (length: {})", len));
+                    if index < len {
+                        break &res[index];
+                    }
+                    println!("Index out of range");
                 };
                 let achievement = loop {
                     let achievement = CustomType::<u32>::new("Achievement")
@@ -243,6 +261,15 @@ fn main() -> anyhow::Result<()> {
                     rating,
                     time: jst_now().into(),
                 });
+            }
+            Command::Len => {
+                candidate_len = loop {
+                    let res = read_usize(&format!("Candidate length (current: {candidate_len})"));
+                    if res > 0 {
+                        break res;
+                    }
+                    println!("Value must be positive");
+                }
             }
         }
         if let Some(backup_dir) = &args.backup_dir {
@@ -304,6 +331,14 @@ fn read_i16(message: &'static str) -> i16 {
         }
     }
 }
+fn read_usize(message: &str) -> usize {
+    loop {
+        match CustomType::<usize>::new(message).prompt() {
+            Ok(v) => break v,
+            Err(v) => println!("Invalid rating value: {v}"),
+        }
+    }
+}
 
 fn get_optimal_song<'s, 'o>(
     datas: &'s [(&estimator_config_multiuser::User, MaimaiUserData)],
@@ -311,7 +346,7 @@ fn get_optimal_song<'s, 'o>(
     old_store: &'o ScoreConstantsStore<'s>,
     level_update_factor: f64,
     no_dx_master: bool,
-) -> Result<Option<OptimalSongEntry<'s, 'o>>, anyhow::Error> {
+) -> Result<Vec<OptimalSongEntry<'s, 'o>>, anyhow::Error> {
     let undetermined_song_in_list = datas
         .iter()
         .flat_map(|(_, data)| {
@@ -375,6 +410,7 @@ fn get_optimal_song<'s, 'o>(
             };
 
             let mut store = store.clone();
+            store.show_details = PrintResult::Quiet;
             let count_before = store.num_determined_songs();
             // Error shuold not occur at this stage
             store.set(key, [constant], "assumption").with_context(|| {
@@ -412,8 +448,7 @@ fn get_optimal_song<'s, 'o>(
         }
     }
     candidates.sort_by_key(|x| OrderedFloat(-x.expected_count));
-    let res = candidates.into_iter().next();
-    Ok(res)
+    Ok(candidates)
 }
 
 #[derive(Clone)]
