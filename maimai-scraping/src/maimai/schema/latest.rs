@@ -199,19 +199,22 @@ pub struct SongName(String);
 pub struct SongIcon(Url);
 
 impl SongIcon {
-    fn comparator(&self) -> (bool, &str) {
+    pub fn standard_part(&self) -> Option<&str> {
         let url = self.0.as_str();
-        match regex!(
+        let ret = regex!(
             r"https://(maimaidx.jp|maimaidx-eng.com)/maimai-mobile/img/Music/([0-9a-f]{16}).png"
         )
         .captures(url)
-        {
-            Some(url) => (true, url.get(2).unwrap().as_str()),
-            None => {
-                warn!("Song icon url is not in expcected format: {url:?}");
-                (false, url)
-            }
+        .map(|url| url.get(2).unwrap().as_str());
+        if ret.is_none() {
+            warn!("Song icon url is not in expcected format: {url:?}");
         }
+        ret
+    }
+
+    fn comparator(&self) -> (bool, &str) {
+        let res = self.standard_part();
+        (res.is_some(), res.unwrap_or(self.0.as_str()))
     }
 }
 impl PartialEq for SongIcon {

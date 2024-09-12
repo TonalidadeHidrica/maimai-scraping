@@ -120,6 +120,11 @@ impl<'s> SongRef<'s> {
             .iter()
             .map(move |score| UtageScoreRef { song: self, score })
     }
+
+    pub fn latest_song_name(&self) -> &SongName {
+        // Guaranteed to be present by `verify_songs`
+        self.song.latest_song_name().unwrap()
+    }
 }
 
 /// A reference to a score for a specific version.
@@ -192,35 +197,14 @@ impl<'s> OrdinaryScoreRef<'s> {
             if version < start_version {
                 return None;
             }
-            match self.scores.song.song.remove_state {
-                RemoveState::Present => {}
-                RemoveState::Removed(x) => {
-                    let remove_version = MaimaiVersion::of_date(x).unwrap();
-                    let removed_at_the_beginning = x == remove_version.start_date();
-                    let removed = if removed_at_the_beginning {
-                        remove_version <= version
-                    } else {
-                        remove_version < version
-                    };
-                    if removed {
-                        return None;
-                    }
-                }
-                RemoveState::Revived(x, y) => {
-                    let remove_version = MaimaiVersion::of_date(x).unwrap();
-                    let recover_version = MaimaiVersion::of_date(y).unwrap();
-
-                    let removed_at_the_beginning = x == remove_version.start_date();
-                    let after_removed = if removed_at_the_beginning {
-                        remove_version <= version
-                    } else {
-                        remove_version < version
-                    };
-
-                    if after_removed && version < recover_version {
-                        return None;
-                    }
-                }
+            if !self
+                .scores
+                .song
+                .song
+                .remove_state
+                .exist_for_version(version)
+            {
+                return None;
             }
         }
         Some(OrdinaryScoreForVersionRef {
@@ -251,7 +235,7 @@ pub struct UtageScoreRef<'s> {
 pub fn verify_songs(songs: &[Song]) -> anyhow::Result<()> {
     // Every song has an associated song name.
     for song in songs {
-        if song.name.values().flatten().next().is_none() {
+        if song.latest_song_name().is_none() {
             bail!("Song does not have a song name: {song:#?}");
         }
     }

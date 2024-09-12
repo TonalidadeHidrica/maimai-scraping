@@ -84,3 +84,38 @@ impl Default for RemoveState {
         Self::Present
     }
 }
+impl RemoveState {
+    pub fn exist_for_version(self, version: MaimaiVersion) -> bool {
+        match self {
+            RemoveState::Present => {}
+            RemoveState::Removed(x) => {
+                let remove_version = MaimaiVersion::of_date(x).unwrap();
+                let removed_at_the_beginning = x == remove_version.start_date();
+                let removed = if removed_at_the_beginning {
+                    remove_version <= version
+                } else {
+                    remove_version < version
+                };
+                if removed {
+                    return false;
+                }
+            }
+            RemoveState::Revived(x, y) => {
+                let remove_version = MaimaiVersion::of_date(x).unwrap();
+                let recover_version = MaimaiVersion::of_date(y).unwrap();
+
+                let removed_at_the_beginning = x == remove_version.start_date();
+                let after_removed = if removed_at_the_beginning {
+                    remove_version <= version
+                } else {
+                    remove_version < version
+                };
+
+                if after_removed && version < recover_version {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+}

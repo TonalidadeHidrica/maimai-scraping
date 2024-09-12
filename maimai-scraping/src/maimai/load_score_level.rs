@@ -205,6 +205,13 @@ impl InternalScoreLevel {
     pub fn is_known(self) -> bool {
         self.known().is_some()
     }
+
+    pub fn into_level(self, version: MaimaiVersion) -> ScoreLevel {
+        match self {
+            InternalScoreLevel::Unknown(v) => v,
+            InternalScoreLevel::Known(v) => v.to_lv(version),
+        }
+    }
 }
 
 #[non_exhaustive]
