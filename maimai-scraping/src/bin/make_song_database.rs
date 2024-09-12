@@ -24,6 +24,9 @@ struct Opts {
     in_lv_data_dir: PathBuf,
     save_json: PathBuf,
     additional_nickname: Option<PathBuf>,
+
+    #[arg(long)]
+    skip_current_in_lv_data: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -60,6 +63,10 @@ fn main() -> anyhow::Result<()> {
     let mut res = HashMap::<ScoreKey, BTreeMap<MaimaiVersion, InternalScoreLevel>>::new();
 
     for version in successors(Some(MaimaiVersion::SplashPlus), MaimaiVersion::next) {
+        if opts.skip_current_in_lv_data && version == MaimaiVersion::latest() {
+            info!("Skipping in_lv_data for {version:?}");
+            continue;
+        }
         info!("Processing {version:?}");
         let path = format!("{}.json", i8::from(version));
         let mut data: InLvData = read_json(opts.in_lv_data_dir.join(path))?;
