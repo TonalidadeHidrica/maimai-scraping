@@ -351,7 +351,6 @@ fn is_dx_master(key: ScoreKey<'_>) -> bool {
             .any(|&d| d == key.difficulty)
 }
 
-
 fn get_optimal_song<'s, 'o>(
     datas: &'s [(&estimator_config_multiuser::User, MaimaiUserData)],
     store: &ScoreConstantsStore<'s>,
@@ -418,19 +417,13 @@ fn get_optimal_song<'s, 'o>(
             // );
         }
         let expected_count = weighted_count_sum / factor_sum;
-        if let (ScoreGeneration::Deluxe, ScoreDifficulty::Master | ScoreDifficulty::ReMaster) =
-            (key.generation, key.difficulty)
-        {
-            // Skip
-        } else {
-            candidates.push(OptimalSongEntry {
-                expected_count,
-                key,
-                song,
-                old_constants,
-                constants: constants.to_owned(),
-            });
-        }
+        candidates.push(OptimalSongEntry {
+            expected_count,
+            key,
+            song,
+            old_constants,
+            constants: constants.to_owned(),
+        });
     }
     candidates.sort_by_key(|x| OrderedFloat(-x.expected_count));
     Ok(candidates)
