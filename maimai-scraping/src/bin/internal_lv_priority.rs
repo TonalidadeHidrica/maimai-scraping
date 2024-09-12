@@ -123,14 +123,16 @@ fn main() -> anyhow::Result<()> {
                 }
                 print!("{} {got}/{all}  ", user.name());
             }
-            get_optimal_song(
+            println!();
+            let ret = get_optimal_song(
                 &datas,
                 &store,
                 &old_store,
                 args.level_update_factor,
                 args.no_dx_master,
             )
-            .context("While getting optimal song")
+            .context("While getting optimal song");
+            ret
         })();
         let res = match optimal_songs {
             Err(e) => {
@@ -311,6 +313,7 @@ fn get_optimal_song<'s, 'o>(
             };
 
             let mut store = store.clone();
+            store.show_details = PrintResult::Quiet;
             let count_before = store.num_determined_songs();
             // Error shuold not occur at this stage
             store.set(key, [constant], "assumption").with_context(|| {
