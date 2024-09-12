@@ -5,6 +5,7 @@ use chrono::Local;
 use clap::Parser;
 use fs_err::read_to_string;
 use inquire::CustomType;
+use itertools::Itertools;
 use joinery::JoinableIterator;
 use maimai_scraping::{
     chrono_util::jst_now,
@@ -16,6 +17,7 @@ use maimai_scraping::{
         schema::latest::{
             AchievementValue, PlayTime, ScoreDifficulty, ScoreGeneration, SongIcon, SongName,
         },
+        song_list::{database::SongDatabase, Song},
         MaimaiUserData,
     },
 };
@@ -28,6 +30,7 @@ struct Opts {
     old_levels_json: PathBuf,
     levels_json: PathBuf,
     config: PathBuf,
+    database: PathBuf,
 
     #[clap(long)]
     backup_dir: Option<PathBuf>,
@@ -66,6 +69,9 @@ fn main() -> anyhow::Result<()> {
         .map_or_else(|| Ok(Vec::new()), read_json)?;
     let mut store = ScoreConstantsStore::new(&levels, &removed_songs)?;
     store.show_details = args.estimator_detail;
+
+    let songs: Vec<Song> = read_json(args.database)?;
+    let database = SongDatabase::new(&songs)?;
 
     update_all(&datas, &mut store)?;
     let count_initial = store.num_determined_songs();
@@ -163,22 +169,31 @@ fn main() -> anyhow::Result<()> {
             }
             Ok(v) => {
                 for (i, res) in v.iter().enumerate().take(candidate_len) {
+                    let locked = match database.song_from_name(res.song.song_name()).collect_vec()[..]
+                    {
+                        [song] => match song.song().locked_history.values().last() {
+                            Some(true) => '!',
+                            Some(false) => ' ',
+                            None => '?',
+                        },
+                        _ => '?',
+                    };
                     println!(
-                        "{i:3}: {} {:?} {:?}",
+                        "{i:3}: {locked} {} {:?} {:?}",
                         res.song.song_name(),
                         res.key.generation,
                         res.key.difficulty,
                     );
                     println!(
-                        "     {:.3} more songs is expected to be determined",
+                        "       {:.3} more songs is expected to be determined",
                         res.expected_count
                     );
                     println!(
-                        "     Old constants: {}",
+                        "       Old constants: {}",
                         res.old_constants.iter().join_with(", ")
                     );
                     println!(
-                        "     New constants: {}",
+                        "       New constants: {}",
                         res.constants.iter().join_with(", ")
                     );
                 }
