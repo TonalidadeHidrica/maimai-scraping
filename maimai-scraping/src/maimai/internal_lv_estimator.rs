@@ -1,3 +1,8 @@
+//! Throughout this module:
+//! - Lifetime parameter `'s` refers to that of the song database.
+//! - Type parameter `L` is the label for the source, i.e. play record / rating target list.
+//!   `L` is used for debugging and must implement cheap `Copy`.
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Display,
@@ -19,7 +24,6 @@ use crate::{
 
 use super::{
     associated_user_data::{OrdinaryPlayRecordAssociated, RatingTargetList},
-    estimator_config_multiuser::UserName,
     load_score_level::{InternalScoreLevel, MaimaiVersion},
     rating::{rank_coef, single_song_rating, ScoreConstant},
     schema::latest::{AchievementValue, PlayTime},
@@ -31,10 +35,11 @@ use super::{
 
 type CandidateList = SmallVec<[ScoreConstant; 6]>;
 
-pub struct Estimator<'s, 'n> {
+/// See the [module doc](`self`) for the definition of type parameters `'s` and `L`.
+pub struct Estimator<'s, L> {
     version: MaimaiVersion,
     map: HashMap<OrdinaryScoreRef<'s>, Candidates<'s>>,
-    events: IndexedVec<Event<'s, 'n>>,
+    events: IndexedVec<Event<'s, L>>,
 }
 
 #[derive(Debug)]
@@ -53,14 +58,18 @@ impl<T> IndexedVec<T> {
     }
 }
 
-pub struct Event<'s, 'n> {
+/// See the [module doc](`self`) for the definition of type parameters `'s` and `L`.
+pub struct Event<'s, L> {
     #[allow(unused)]
     score: OrdinaryScoreRef<'s>,
     candidates: CandidateList,
     reason: Reason,
-    user: Option<&'n UserName>,
+    user: Option<L>,
 }
-impl Display for Event<'_, '_> {
+impl<L> Display for Event<'_, L>
+where
+    L: Display,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -68,8 +77,8 @@ impl Display for Event<'_, '_> {
             self.candidates.iter().join_with(", "),
             self.reason
         )?;
-        if let Some(user) = self.user {
-            write!(f, " (played by {user:?})")?;
+        if let Some(user) = &self.user {
+            write!(f, " (played by {user})")?;
         }
         Ok(())
     }
@@ -86,7 +95,7 @@ pub enum Reason {
     List(PlayTime),
 }
 
-impl<'s, 'n> Estimator<'s, 'n> {
+impl<'s, L> Estimator<'s, L> {
     pub fn new(database: &SongDatabase<'s>, version: MaimaiVersion) -> Self {
         // TODO check if version is supported
 
@@ -108,8 +117,11 @@ impl<'s, 'n> Estimator<'s, 'n> {
         score: OrdinaryScoreRef<'s>,
         predicate: impl Fn(ScoreConstant) -> bool,
         reason: Reason,
-        user: Option<&'n UserName>,
-    ) -> anyhow::Result<()> {
+        user: Option<L>,
+    ) -> anyhow::Result<()>
+    where
+        L: Display,
+    {
         let candidates = self
             .map
             .get_mut(&score)
@@ -143,10 +155,13 @@ pub enum NewOrOld {
     New,
     Old,
 }
-impl<'s, 'n> Estimator<'s, 'n> {
+impl<'s, L> Estimator<'s, L>
+where
+    L: Copy + Display,
+{
     pub fn determine_by_delta<'d>(
         &mut self,
-        user: Option<&'n UserName>,
+        user: Option<L>,
         records: impl IntoIterator<Item = OrdinaryPlayRecordAssociated<'d, 's>>,
         new_or_old: NewOrOld,
         ignore_time: bool,
@@ -253,7 +268,7 @@ impl<'s, 'n> Estimator<'s, 'n> {
         &mut self,
         score: OrdinaryScoreRef<'s>,
         a: AchievementValue,
-        user: Option<&'n UserName>,
+        user: Option<L>,
         rating: i16,
         time: PlayTime,
     ) -> anyhow::Result<()> {
@@ -267,7 +282,7 @@ impl<'s, 'n> Estimator<'s, 'n> {
 
     pub fn guess_from_rating_target_order<'d>(
         &mut self,
-        user: Option<&'n UserName>,
+        user: Option<L>,
         rating_targets: &BTreeMap<PlayTime, RatingTargetList<'d, 's>>,
         ignore_time: bool,
     ) -> anyhow::Result<()> {
@@ -427,7 +442,7 @@ impl<'s, 'n> Estimator<'s, 'n> {
     //
     // pub fn records_not_in_targets<'d>(
     //     &mut self,
-    //     user: Option<&'n UserName>,
+    //     user: Option<L>,
     //     records: impl IntoIterator<Item = OrdinaryPlayRecordAssociated<'d, 's>>,
     //     rating_targets: &BTreeMap<PlayTime, RatingTargetList<'d, 's>>,
     //     ignore_time: bool,
@@ -567,8 +582,8 @@ impl<'s, 'n> Estimator<'s, 'n> {
 }
 
 impl<'s> Candidates<'s> {
-    fn new(
-        events: &mut IndexedVec<Event<'s, '_>>,
+    fn new<L>(
+        events: &mut IndexedVec<Event<'s, L>>,
         version: MaimaiVersion,
         score: OrdinaryScoreForVersionRef<'s>,
     ) -> Candidates<'s> {
