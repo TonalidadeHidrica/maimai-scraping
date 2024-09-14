@@ -422,6 +422,148 @@ impl<'s, 'n> Estimator<'s, 'n> {
         }
         Ok(())
     }
+
+    // We could do this,
+    //
+    // pub fn records_not_in_targets<'d>(
+    //     &mut self,
+    //     user: Option<&'n UserName>,
+    //     records: impl IntoIterator<Item = OrdinaryPlayRecordAssociated<'d, 's>>,
+    //     rating_targets: &BTreeMap<PlayTime, RatingTargetList<'d, 's>>,
+    //     ignore_time: bool,
+    // ) -> anyhow::Result<()> {
+    //     let start_time: PlayTime = self.version.start_time().into();
+    //     let end_time: PlayTime = self.version.end_time().into();
+
+    //     'next_group: for (_, group) in &records
+    //         .into_iter()
+    //         .filter(|record| {
+    //             ignore_time || (start_time..end_time).contains(&record.record().played_at().time())
+    //         })
+    //         .filter_map(|record| {
+    //             Some((
+    //                 record,
+    //                 rating_targets
+    //                     .range(record.record().played_at().time()..)
+    //                     .next()?,
+    //             ))
+    //         })
+    //         .group_by(|record| record.1 .0)
+    //     {
+    //         let records = group.collect_vec();
+    //         let (target_time, list) = records[0].1;
+
+    //         // Stores score keys included in the current target list
+    //         let mut contained = HashSet::new();
+    //         for entry in chain(list.target_new(), list.target_old())
+    //             .chain(chain(list.candidates_new(), list.candidates_old()))
+    //         {
+    //             use KeyFromTargetEntry::*;
+    //             let key = match self.key_from_target_entry(entry, idx_to_icon_map) {
+    //                 NotFound(name) => bail!("Unknown song: {name:?}"),
+    //                 Unique(key) => key,
+    //                 Multiple => {
+    //                     println!(
+    //                         "TODO: score cannot be uniquely determined from the song name {:?}",
+    //                         entry.song_name()
+    //                     );
+    //                     continue 'next_group;
+    //                 }
+    //             };
+    //             contained.insert(key);
+    //         }
+
+    //         // Stores the record with the best achievement value
+    //         // among the currently inspected records
+    //         // for each score key not included in the current target list
+    //         let mut best = HashMap::new();
+    //         for &(record, _) in &records {
+    //             let score_key = ScoreKey::from(record);
+    //             if contained.contains(&score_key) {
+    //                 continue;
+    //             }
+    //             let a = |record: &PlayRecord| record.achievement_result().value();
+    //             use hashbrown::hash_map::Entry::*;
+    //             match best.entry(score_key) {
+    //                 Vacant(entry) => {
+    //                     entry.insert(record);
+    //                 }
+    //                 Occupied(mut entry) => {
+    //                     if a(entry.get()) < a(record) {
+    //                         *entry.get_mut() = record;
+    //                     }
+    //                 }
+    //             }
+    //         }
+
+    //         for (score_key, record) in best {
+    //             // Ignore removed songs
+    //             let Some((song, _)) = self.get(score_key)? else {
+    //                 continue;
+    //             };
+
+    //             let border_entry = if song.version() == version {
+    //                 list.target_new()
+    //                     .last()
+    //                     .context("New songs must be contained (1)")?
+    //             } else {
+    //                 list.target_old()
+    //                     .last()
+    //                     .context("New songs must be contained (1)")?
+    //             };
+    //             let min_entry = if song.version() == version {
+    //                 (list.candidates_new().last())
+    //                     .or_else(|| list.target_new().last())
+    //                     .context("New songs must be contained")?
+    //             } else {
+    //                 (list.candidates_old().last())
+    //                     .or_else(|| list.target_old().last())
+    //                     .context("Old songs must be contained")?
+    //             };
+
+    //             // Finds the maximum possible rating value for the given entry
+    //             let compute = |entry: &RatingTargetEntry| {
+    //                 // println!("min = {min:?}");
+    //                 let a = entry.achievement();
+    //                 let KeyFromTargetEntry::Unique(key) =
+    //                     self.key_from_target_entry(entry, idx_to_icon_map)
+    //                 else {
+    //                     bail!("Removed or not found")
+    //                 };
+    //                 let lvs = &self.get(key)?.context("Must not be removed (2)")?.1;
+    //                 // println!("min_constans = {min_constants:?}");
+    //                 let score = lvs
+    //                     .iter()
+    //                     .map(|&level| single_song_rating(level, a, rank_coef(a)))
+    //                     .max()
+    //                     .context("Empty level candidates")?;
+    //                 anyhow::Ok((score, a))
+    //             };
+    //             let border_pair = compute(border_entry)?;
+    //             let min_pair = compute(min_entry)?;
+
+    //             let this_a = record.achievement_result().value();
+    //             let this_sssplus = record.achievement_result().rank() == AchievementRank::SSSPlus;
+    //             let candidates = ScoreConstant::candidates().filter(|&level| {
+    //                 let this = single_song_rating(level, this_a, rank_coef(this_a));
+    //                 let this_pair = (this, this_a);
+    //                 // println!("{:?} {level} {:?}", (min_entry, min_a), (this, this_a));
+    //                 min_pair >= this_pair || this_sssplus && border_pair >= this_pair
+    //             });
+    //             let message = lazy_format!(
+    //                 "because record played at {} achieving {}{} is not in list at {}, so it's below {:?}",
+    //                 record.played_at().time(),
+    //                 this_a,
+    //                 display_played_by(name),
+    //                 target_time,
+    //                 if this_sssplus { border_pair } else { min_pair },
+    //             );
+    //             self.set(score_key, candidates, message)?;
+    //         }
+    //     }
+
+    //     Ok(())
+    // }
 }
 
 impl<'s> Candidates<'s> {
