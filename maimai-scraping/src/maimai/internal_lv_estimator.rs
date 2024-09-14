@@ -176,7 +176,7 @@ where
             NewOrOld::Old => 35,
         };
 
-        // TODO: Does `new_or_old == Old` (analyzing old songs) really works fine?
+        // TODO: Does it really work fine when `new_or_old == Old` (analyzing old songs)?
         // We should update `r2s` and `s2r` based on the records *before* the version starts,
         // but there is no such process!
 
