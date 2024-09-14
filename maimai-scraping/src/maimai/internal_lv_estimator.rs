@@ -423,7 +423,7 @@ impl<'s, 'n> Estimator<'s, 'n> {
         Ok(())
     }
 
-    // We could do this,
+    // We could do this, but not to for now, as it is less significant now.
     //
     // pub fn records_not_in_targets<'d>(
     //     &mut self,
