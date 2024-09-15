@@ -54,11 +54,11 @@ pub mod in_lv_kind {
 
     use sealed::sealed;
 
-    use super::InternalScoreLevel;
+    use super::{CandidateBitmask, InternalScoreLevel};
 
     #[sealed]
     pub trait Kind: Copy + Ord + Hash + Debug {
-        type Value;
+        type Value: Copy + Eq + Debug + TryFrom<f64, Error = anyhow::Error>;
     }
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
     pub struct Levels(Infallible);
@@ -70,9 +70,10 @@ pub mod in_lv_kind {
     pub struct Bitmask(Infallible);
     #[sealed]
     impl Kind for Bitmask {
-        type Value = InternalScoreLevel;
+        type Value = CandidateBitmask;
     }
 }
+pub use in_lv_kind::Kind as InLvKind;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SongRaw<K = in_lv_kind::Levels> {
@@ -88,13 +89,13 @@ pub struct SongRaw<K = in_lv_kind::Levels> {
 
 #[allow(unused)]
 #[derive(Debug, PartialEq, Eq, Getters, CopyGetters)]
-pub struct Song {
+pub struct Song<K: InLvKind = in_lv_kind::Levels> {
     #[getset(get_copy = "pub")]
     generation: ScoreGeneration,
     #[getset(get_copy = "pub")]
     version: MaimaiVersion,
     #[getset(get_copy = "pub")]
-    levels: ScoreLevels,
+    levels: ScoreLevels<K>,
     #[getset(get = "pub")]
     song_name: SongName,
     #[getset(get = "pub")]
@@ -102,10 +103,10 @@ pub struct Song {
     #[getset(get = "pub")]
     icon: SongIcon,
 }
-impl<K: in_lv_kind::Kind> TryFrom<SongRaw<K>> for Song {
+impl<K: InLvKind> TryFrom<SongRaw<K>> for Song<K> {
     type Error = anyhow::Error;
     fn try_from(song: SongRaw<K>) -> anyhow::Result<Self> {
-        let entry = |index: usize| InternalScoreLevelEntry::new::<K>(song.lv[index], index);
+        let entry = |index: usize| InternalScoreLevelEntry::<K>::new(song.lv[index], index);
         let zero = song.lv[4].abs() < 1e-8;
         let re_master = match song.lv.len() {
             6 => {
@@ -145,12 +146,12 @@ impl<K: in_lv_kind::Kind> TryFrom<SongRaw<K>> for Song {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters)]
-pub struct ScoreLevels {
-    basic: InternalScoreLevelEntry,
-    advanced: InternalScoreLevelEntry,
-    expert: InternalScoreLevelEntry,
-    master: InternalScoreLevelEntry,
-    re_master: Option<InternalScoreLevelEntry>,
+pub struct ScoreLevels<K: InLvKind = in_lv_kind::Levels> {
+    basic: InternalScoreLevelEntry<K>,
+    advanced: InternalScoreLevelEntry<K>,
+    expert: InternalScoreLevelEntry<K>,
+    master: InternalScoreLevelEntry<K>,
+    re_master: Option<InternalScoreLevelEntry<K>>,
 }
 impl ScoreLevels {
     pub fn get(&self, difficulty: ScoreDifficulty) -> Option<InternalScoreLevel> {
@@ -164,8 +165,10 @@ impl ScoreLevels {
             Utage => None?, // TODO support utage?
         })
     }
+}
 
-    pub fn iter(&self) -> impl Iterator<Item = (ScoreDifficulty, InternalScoreLevelEntry)> {
+impl<K: InLvKind> ScoreLevels<K> {
+    pub fn iter(&self) -> impl Iterator<Item = (ScoreDifficulty, InternalScoreLevelEntry<K>)> {
         use ScoreDifficulty::*;
         [
             (Basic, self.basic),
@@ -180,15 +183,14 @@ impl ScoreLevels {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters)]
 #[getset(get_copy = "pub")]
-pub struct InternalScoreLevelEntry {
-    value: InternalScoreLevel,
+pub struct InternalScoreLevelEntry<K: InLvKind = in_lv_kind::Levels> {
+    value: <K as InLvKind>::Value,
     index: usize,
 }
-impl InternalScoreLevelEntry {
-    fn new<K: in_lv_kind::Kind>(value: f64, index: usize) -> anyhow::Result<Self> {
+impl<K: InLvKind> InternalScoreLevelEntry<K> {
+    fn new(value: f64, index: usize) -> anyhow::Result<Self> {
         Ok(Self {
-            // value: value.try_into()?,
-            value: todo!(),
+            value: value.try_into()?,
             index,
         })
     }
@@ -423,4 +425,21 @@ where
     Option::<SongRaw>::deserialize(deserializer)?
         .map(|song| Song::try_from(song).map_err(serde::de::Error::custom))
         .transpose()
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct CandidateBitmask(u16);
+impl TryFrom<f64> for CandidateBitmask {
+    type Error = anyhow::Error;
+
+    fn try_from(value: f64) -> anyhow::Result<Self> {
+        let mask = value as u16;
+        if mask as f64 != value {
+            bail!("Unexpceted value (possibly fractional): {value}");
+        }
+        if mask > (1 << 10) {
+            bail!("Too large mask: {value}");
+        }
+        Ok(Self(mask))
+    }
 }

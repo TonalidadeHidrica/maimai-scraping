@@ -117,6 +117,7 @@ mod de {
 
     pub(super) fn internal_lv<'de, D: Deserializer<'de>>(d: D) -> Result<ScoreConstant, D::Error> {
         let v = de_f64(d)?;
+        // TODO misuse!
         match InternalScoreLevel::try_from(v) {
             Ok(InternalScoreLevel::Known(v)) => Ok(v),
             _ => Err(D::Error::custom(format!("Invalid internal lv: {v:?}"))),
