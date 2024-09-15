@@ -8,7 +8,7 @@ use anyhow::{bail, Context};
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::maimai::{
-    load_score_level::{self, MaimaiVersion, SongRaw},
+    load_score_level::{self, in_lv_kind, MaimaiVersion, SongRaw},
     official_song_list,
     rating::ScoreLevel,
     schema::latest::{SongIcon, SongName},
@@ -44,7 +44,7 @@ fn main() -> anyhow::Result<()> {
             .with_context(|| format!("Url does not end with .png: {:?}", song.image_url))?
             .to_owned();
 
-        let song_raw = |dx, lv| SongRaw::<load_score_level::Levels> {
+        let song_raw = |dx, lv| SongRaw::<in_lv_kind::Levels> {
             dx,
             v: version,
             lv,

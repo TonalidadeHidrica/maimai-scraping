@@ -1,4 +1,4 @@
-use std::{convert::Infallible, fmt::Debug, hash::Hash, marker::PhantomData, path::PathBuf};
+use std::{fmt::Debug, marker::PhantomData, path::PathBuf};
 
 use anyhow::{anyhow, bail};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
@@ -7,7 +7,6 @@ use enum_map::Enum;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
 use maimai_scraping_utils::fs_json_util::read_json;
-use sealed::sealed;
 use serde::{Deserialize, Deserializer, Serialize};
 use strum::EnumString;
 use url::Url;
@@ -50,19 +49,33 @@ where
     map
 }
 
-#[sealed]
-pub trait InLvKind: Copy + Ord + Hash + Debug {}
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct Levels(Infallible);
-#[sealed]
-impl InLvKind for Levels {}
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub struct Bitmask(Infallible);
-#[sealed]
-impl InLvKind for Bitmask {}
+pub mod in_lv_kind {
+    use std::{convert::Infallible, fmt::Debug, hash::Hash};
+
+    use sealed::sealed;
+
+    use super::InternalScoreLevel;
+
+    #[sealed]
+    pub trait Kind: Copy + Ord + Hash + Debug {
+        type Value;
+    }
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+    pub struct Levels(Infallible);
+    #[sealed]
+    impl Kind for Levels {
+        type Value = InternalScoreLevel;
+    }
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+    pub struct Bitmask(Infallible);
+    #[sealed]
+    impl Kind for Bitmask {
+        type Value = InternalScoreLevel;
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SongRaw<K = Levels> {
+pub struct SongRaw<K = in_lv_kind::Levels> {
     pub dx: u8,
     pub v: i8,
     pub lv: Vec<f64>,
@@ -89,7 +102,7 @@ pub struct Song {
     #[getset(get = "pub")]
     icon: SongIcon,
 }
-impl<K: InLvKind> TryFrom<SongRaw<K>> for Song {
+impl<K: in_lv_kind::Kind> TryFrom<SongRaw<K>> for Song {
     type Error = anyhow::Error;
     fn try_from(song: SongRaw<K>) -> anyhow::Result<Self> {
         let entry = |index: usize| InternalScoreLevelEntry::new::<K>(song.lv[index], index);
@@ -172,7 +185,7 @@ pub struct InternalScoreLevelEntry {
     index: usize,
 }
 impl InternalScoreLevelEntry {
-    fn new<K: InLvKind>(value: f64, index: usize) -> anyhow::Result<Self> {
+    fn new<K: in_lv_kind::Kind>(value: f64, index: usize) -> anyhow::Result<Self> {
         Ok(Self {
             // value: value.try_into()?,
             value: todo!(),

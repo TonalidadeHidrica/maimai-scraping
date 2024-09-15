@@ -4,7 +4,7 @@ use anyhow::{bail, Context};
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::maimai::{
-    load_score_level::{self, MaimaiVersion, SongRaw},
+    load_score_level::{in_lv_kind, MaimaiVersion, SongRaw},
     rating::ScoreLevel,
     schema::latest::ScoreGeneration,
     song_list::{database::SongDatabase, Song},
@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
         // let version = if song_name == "ジングルベル" &&
         //     i8::from(convert_version(&song.version)?) * negate_version;
         let song_raw = |dx, lv, v| {
-            anyhow::Ok(SongRaw::<load_score_level::Levels> {
+            anyhow::Ok(SongRaw::<in_lv_kind::Levels> {
                 dx,
                 v,
                 lv,

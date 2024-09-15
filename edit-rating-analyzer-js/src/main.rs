@@ -5,7 +5,7 @@ use clap::Parser;
 use itertools::{EitherOrBoth, Itertools};
 use maimai_scraping::maimai::{
     estimate_rating::{EstimatorConfig, ScoreConstantsStore, ScoreKey},
-    load_score_level::{self, RemovedSong, Song, SongRaw},
+    load_score_level::{self, in_lv_kind, RemovedSong, Song, SongRaw},
     MaimaiUserData,
 };
 use maimai_scraping_utils::fs_json_util::read_json;
@@ -177,7 +177,7 @@ fn parse_song(obj: &ObjectExpr) -> anyhow::Result<SongInJs> {
     }
     match (dx, v, lv, n, ico) {
         (Some(dx), Some(v), Some((lv, lv_tokens)), Some(n), Some(ico)) => Ok(SongInJs {
-            song: SongRaw::<load_score_level::Levels> {
+            song: SongRaw::<in_lv_kind::Levels> {
                 dx,
                 v,
                 lv,
