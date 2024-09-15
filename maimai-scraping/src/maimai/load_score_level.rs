@@ -481,7 +481,7 @@ impl TryFrom<f64> for CandidateBitmask {
 }
 impl CandidateBitmask {
     pub fn has(self, x: u8) -> bool {
-        ((1 << x) & self.0) > 0
+        (x as u32) < u8::BITS && ((1 << x) & self.0) > 0
     }
     pub fn bits(self) -> impl Iterator<Item = u8> {
         iterate(self.0, |x| x >> 1)
@@ -497,12 +497,13 @@ mod tests {
 
     use super::CandidateBitmask;
 
+    #[test]
     fn test_candidate_bitmask() {
         let x = CandidateBitmask(0b0100_1011);
         assert!(x.has(0));
         assert!(!x.has(2));
-        assert!(x.has(7));
-        assert!(!x.has(8));
+        assert!(x.has(6));
+        assert!(!x.has(7));
         assert!(!x.has(15));
         assert!(!x.has(16));
         assert!(!x.has(255));
