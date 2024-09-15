@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{marker::PhantomData, path::PathBuf};
 
 use anyhow::{bail, Context};
 use clap::Parser;
@@ -177,13 +177,14 @@ fn parse_song(obj: &ObjectExpr) -> anyhow::Result<SongInJs> {
     }
     match (dx, v, lv, n, ico) {
         (Some(dx), Some(v), Some((lv, lv_tokens)), Some(n), Some(ico)) => Ok(SongInJs {
-            song: SongRaw {
+            song: SongRaw::<load_score_level::Levels> {
                 dx,
                 v,
                 lv,
                 n,
                 nn,
                 ico,
+                _phantom: PhantomData,
             }
             .try_into()?,
             lv_tokens,

@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeSet, HashMap},
+    marker::PhantomData,
     path::PathBuf,
 };
 
@@ -43,13 +44,14 @@ fn main() -> anyhow::Result<()> {
             .with_context(|| format!("Url does not end with .png: {:?}", song.image_url))?
             .to_owned();
 
-        let song_raw = |dx, lv| SongRaw {
+        let song_raw = |dx, lv| SongRaw::<load_score_level::Levels> {
             dx,
             v: version,
             lv,
             n: song.title.clone(),
             nn: None,
             ico: icon.clone(),
+            _phantom: PhantomData,
         };
 
         let lvs_std = levels_to_lv([

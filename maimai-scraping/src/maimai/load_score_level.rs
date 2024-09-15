@@ -1,4 +1,4 @@
-use std::{fmt::Debug, path::PathBuf};
+use std::{convert::Infallible, fmt::Debug, hash::Hash, marker::PhantomData, path::PathBuf};
 
 use anyhow::{anyhow, bail};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
@@ -7,6 +7,7 @@ use enum_map::Enum;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
 use maimai_scraping_utils::fs_json_util::read_json;
+use sealed::sealed;
 use serde::{Deserialize, Deserializer, Serialize};
 use strum::EnumString;
 use url::Url;
@@ -49,14 +50,27 @@ where
     map
 }
 
+#[sealed]
+pub trait InLvKind: Copy + Ord + Hash + Debug {}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct Levels(Infallible);
+#[sealed]
+impl InLvKind for Levels {}
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct Bitmask(Infallible);
+#[sealed]
+impl InLvKind for Bitmask {}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SongRaw {
+pub struct SongRaw<K = Levels> {
     pub dx: u8,
     pub v: i8,
     pub lv: Vec<f64>,
     pub n: String,
     pub nn: Option<String>,
     pub ico: String,
+    #[serde(skip)]
+    pub _phantom: PhantomData<fn() -> K>,
 }
 
 #[allow(unused)]
@@ -75,10 +89,10 @@ pub struct Song {
     #[getset(get = "pub")]
     icon: SongIcon,
 }
-impl TryFrom<SongRaw> for Song {
+impl<K: InLvKind> TryFrom<SongRaw<K>> for Song {
     type Error = anyhow::Error;
-    fn try_from(song: SongRaw) -> anyhow::Result<Self> {
-        let entry = |index: usize| InternalScoreLevelEntry::new(song.lv[index], index);
+    fn try_from(song: SongRaw<K>) -> anyhow::Result<Self> {
+        let entry = |index: usize| InternalScoreLevelEntry::new::<K>(song.lv[index], index);
         let zero = song.lv[4].abs() < 1e-8;
         let re_master = match song.lv.len() {
             6 => {
@@ -158,9 +172,10 @@ pub struct InternalScoreLevelEntry {
     index: usize,
 }
 impl InternalScoreLevelEntry {
-    fn new(value: f64, index: usize) -> anyhow::Result<Self> {
+    fn new<K: InLvKind>(value: f64, index: usize) -> anyhow::Result<Self> {
         Ok(Self {
-            value: value.try_into()?,
+            // value: value.try_into()?,
+            value: todo!(),
             index,
         })
     }

@@ -1,10 +1,10 @@
-use std::path::PathBuf;
+use std::{marker::PhantomData, path::PathBuf};
 
 use anyhow::{bail, Context};
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::maimai::{
-    load_score_level::{MaimaiVersion, SongRaw},
+    load_score_level::{self, MaimaiVersion, SongRaw},
     rating::ScoreLevel,
     schema::latest::ScoreGeneration,
     song_list::{database::SongDatabase, Song},
@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
         // let version = if song_name == "ジングルベル" &&
         //     i8::from(convert_version(&song.version)?) * negate_version;
         let song_raw = |dx, lv, v| {
-            anyhow::Ok(SongRaw {
+            anyhow::Ok(SongRaw::<load_score_level::Levels> {
                 dx,
                 v,
                 lv,
@@ -55,6 +55,7 @@ fn main() -> anyhow::Result<()> {
                     .standard_part()
                     .context("Nonstandard icon URL")?
                     .to_owned(),
+                _phantom: PhantomData,
             })
         };
         for scores in song.scoreses() {
