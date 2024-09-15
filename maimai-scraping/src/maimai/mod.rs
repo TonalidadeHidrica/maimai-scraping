@@ -144,8 +144,9 @@ pub struct MaimaiUserData {
     #[serde(default)]
     pub rating_targets: RatingTargetFile,
     #[serde(default)]
-    pub idx_to_icon_map: HashMap<ScoreIdx, SongIcon>,
+    pub idx_to_icon_map: IdxToIconMap,
 }
+pub type IdxToIconMap = HashMap<ScoreIdx, SongIcon>;
 impl SegaUserData<Maimai> for MaimaiUserData {
     fn records_mut(&mut self) -> &mut RecordMap<Maimai> {
         &mut self.records

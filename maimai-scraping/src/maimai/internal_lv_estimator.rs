@@ -14,6 +14,7 @@ use std::{
 use anyhow::{bail, Context};
 use chrono::{NaiveDateTime, NaiveTime};
 use derive_more::Display;
+use getset::{CopyGetters, Getters};
 use hashbrown::HashMap;
 use itertools::Itertools;
 use joinery::JoinableIterator;
@@ -57,10 +58,14 @@ impl<T> IndexedVec<T> {
 }
 
 /// See the [module doc](`self`) for the definition of type parameters `'s` and `L`.
+#[derive(Getters, CopyGetters)]
 pub struct Event<'s, LD, LL> {
     #[allow(unused)]
+    #[getset(get_copy = "pub")]
     score: OrdinaryScoreRef<'s>,
+    #[getset(get = "pub")]
     candidates: CandidateList,
+    #[getset(get = "pub")]
     reason: Reason<LD, LL>,
 }
 impl<LD, LL> Display for Event<'_, LD, LL>
@@ -71,7 +76,13 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Constrained to [{}] {}",
+            "{}: {} to [{}] {}",
+            self.score,
+            if self.candidates.len() == 1 {
+                "determined"
+            } else {
+                "constrained"
+            },
             self.candidates.iter().join_with(", "),
             self.reason
         )?;
@@ -87,7 +98,7 @@ pub enum Reason<LD, LL> {
         fmt = "because the record achieving {_0} determines the single-song rating to be {_1} (source: {_2})"
     )]
     Delta(AchievementValue, i16, LD),
-    #[display(fmt = "by the rating target list (source: {_0}")]
+    #[display(fmt = "by the rating target list (source: {_0})")]
     List(LL),
 }
 
@@ -143,7 +154,10 @@ impl<'s, LD, LL> Estimator<'s, LD, LL> {
         Ok(())
     }
 
-    fn event_len(&self) -> usize {
+    pub fn events(&self) -> &[Event<'s, LD, LL>] {
+        &self.events.0
+    }
+    pub fn event_len(&self) -> usize {
         self.events.0.len()
     }
 }

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use anyhow::{bail, Context};
 use derive_by_key::DeriveByKey;
 use getset::{CopyGetters, Getters};
@@ -212,6 +214,17 @@ impl<'s> OrdinaryScoreRef<'s> {
             version,
             level: self.score.levels[version],
         })
+    }
+}
+impl Display for OrdinaryScoreRef<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} ({} {})",
+            self.scores.song.latest_song_name(),
+            self.scores.generation.abbrev(),
+            self.difficulty.abbrev(),
+        )
     }
 }
 

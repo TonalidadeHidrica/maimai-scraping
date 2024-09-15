@@ -12,7 +12,7 @@ use super::{
     parser::rating_target,
     schema::latest::{self as schema, PlayTime},
     song_list::database::{OrdinaryScoreForVersionRef, ScoreForVersionRef, SongDatabase},
-    MaimaiUserData,
+    IdxToIconMap, MaimaiUserData,
 };
 
 #[derive(Getters)]
@@ -168,7 +168,12 @@ impl<'d, 's> UserData<'d, 's> {
             .map(|(&time, file)| {
                 anyhow::Ok((
                     time,
-                    RatingTargetList::annotate(database, file, time.get())?,
+                    RatingTargetList::annotate(
+                        database,
+                        file,
+                        time.get(),
+                        &user_data.idx_to_icon_map,
+                    )?,
                 ))
             })
             .collect::<Result<_, _>>()?;
@@ -222,6 +227,7 @@ impl<'d, 's> RatingTargetList<'d, 's> {
         database: &SongDatabase<'s>,
         list: &'d rating_target::RatingTargetList,
         time: NaiveDateTime,
+        idx_map: &IdxToIconMap,
     ) -> anyhow::Result<Self> {
         let version = MaimaiVersion::of_time(time).with_context(|| {
             format!("Target list as of {time:?} found, but there is no corresponding version")
@@ -229,7 +235,7 @@ impl<'d, 's> RatingTargetList<'d, 's> {
         let parse = |entries: &'d Vec<rating_target::RatingTargetEntry>| {
             entries
                 .iter()
-                .map(|entry| RatingTargetEntry::annotate(database, version, entry))
+                .map(|entry| RatingTargetEntry::annotate(database, version, entry, idx_map))
                 .collect::<Result<Vec<_>, _>>()
                 .with_context(|| format!("Failed to parse rating target list as of {time:?}"))
         };
@@ -248,15 +254,25 @@ impl<'d, 's> RatingTargetEntry<'d, 's> {
         database: &SongDatabase<'s>,
         version: MaimaiVersion,
         data: &'d rating_target::RatingTargetEntry,
+        idx_map: &IdxToIconMap,
     ) -> anyhow::Result<Self> {
         let score = (|| {
             let song = match database.song_from_name(data.song_name()).collect_vec()[..] {
                 [song] => song,
-                ref songs => bail!(
-                    "Song cannot be uniquely determiend from song name {:?}: {:?}",
-                    data.song_name(),
-                    songs
-                ),
+                ref songs => match idx_map
+                    .get(data.idx())
+                    .with_context(|| format!("Idx not registered: {:?}", data.idx()))
+                    .and_then(|icon| database.song_from_icon(icon))
+                {
+                    Ok(song) => song,
+                    Err(e) => {
+                        return Err(e.context(format!(
+                            "Song cannot be uniquely determiend from song name {:?}: {:?}",
+                            data.song_name(),
+                            songs
+                        )))
+                    }
+                },
             };
             let generation = data.score_metadata().generation();
             let scores = song

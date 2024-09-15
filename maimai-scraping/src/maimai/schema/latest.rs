@@ -271,6 +271,15 @@ pub enum ScoreGeneration {
     Standard,
     Deluxe,
 }
+impl ScoreGeneration {
+    pub fn abbrev(self) -> &'static str {
+        use ScoreGeneration::*;
+        match self {
+            Standard => "Std",
+            Deluxe => "DX",
+        }
+    }
+}
 
 #[derive(
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize, EnumIter,
@@ -282,6 +291,31 @@ pub enum ScoreDifficulty {
     Master,
     ReMaster,
     Utage,
+}
+impl ScoreDifficulty {
+    pub fn abbrev(self) -> &'static str {
+        use ScoreDifficulty::*;
+        match self {
+            Basic => "Bas",
+            Advanced => "Adv",
+            Expert => "Exp",
+            Master => "Mas",
+            ReMaster => "ReMas",
+            Utage => "Utg",
+        }
+    }
+
+    pub fn abbrev_kanji(self) -> char {
+        use ScoreDifficulty::*;
+        match self {
+            Basic => '緑',
+            Advanced => '黄',
+            Expert => '赤',
+            Master => '紫',
+            ReMaster => '白',
+            Utage => '宴',
+        }
+    }
 }
 
 impl FromStr for ScoreDifficulty {
