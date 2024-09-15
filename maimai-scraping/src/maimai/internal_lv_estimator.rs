@@ -5,7 +5,9 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fmt::Display,
+    fmt::{Debug, Display},
+    marker::PhantomData,
+    ops::Range,
 };
 
 use anyhow::{bail, Context};
@@ -14,19 +16,14 @@ use derive_more::Display;
 use hashbrown::HashMap;
 use itertools::Itertools;
 use joinery::JoinableIterator;
-use log::warn;
 use smallvec::{smallvec, SmallVec};
 
-use crate::{
-    algorithm::possibilties_from_sum_and_ordering,
-    maimai::associated_user_data::RatingTargetEntryAssociated,
-};
+use crate::algorithm::possibilties_from_sum_and_ordering;
 
 use super::{
-    associated_user_data::{OrdinaryPlayRecordAssociated, RatingTargetList},
     load_score_level::{InternalScoreLevel, MaimaiVersion},
     rating::{rank_coef, single_song_rating, ScoreConstant},
-    schema::latest::{AchievementValue, PlayTime},
+    schema::latest::{AchievementValue, PlayTime, RatingValue},
     song_list::{
         database::{OrdinaryScoreForVersionRef, OrdinaryScoreRef, SongDatabase},
         RemoveState,
@@ -36,10 +33,10 @@ use super::{
 type CandidateList = SmallVec<[ScoreConstant; 6]>;
 
 /// See the [module doc](`self`) for the definition of type parameters `'s` and `L`.
-pub struct Estimator<'s, L> {
+pub struct Estimator<'s, LD, LL> {
     version: MaimaiVersion,
     map: HashMap<OrdinaryScoreRef<'s>, Candidates<'s>>,
-    events: IndexedVec<Event<'s, L>>,
+    events: IndexedVec<Event<'s, LD, LL>>,
 }
 
 #[derive(Debug)]
@@ -59,16 +56,16 @@ impl<T> IndexedVec<T> {
 }
 
 /// See the [module doc](`self`) for the definition of type parameters `'s` and `L`.
-pub struct Event<'s, L> {
+pub struct Event<'s, LD, LL> {
     #[allow(unused)]
     score: OrdinaryScoreRef<'s>,
     candidates: CandidateList,
-    reason: Reason,
-    user: Option<L>,
+    reason: Reason<LD, LL>,
 }
-impl<L> Display for Event<'_, L>
+impl<LD, LL> Display for Event<'_, LD, LL>
 where
-    L: Display,
+    LD: Display,
+    LL: Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -77,25 +74,23 @@ where
             self.candidates.iter().join_with(", "),
             self.reason
         )?;
-        if let Some(user) = &self.user {
-            write!(f, " (played by {user})")?;
-        }
         Ok(())
     }
 }
 #[derive(Debug, Display)]
-pub enum Reason {
+#[display(bound = "LD: Display, LL: Display")]
+pub enum Reason<LD, LL> {
     #[display(fmt = "according to the database which stores {_0:?}")]
     Database(InternalScoreLevel),
     #[display(
-        fmt = "because the record played at {_0:?} achieving {_1} determines the single-song rating to be {_2}"
+        fmt = "because the record achieving {_0} determines the single-song rating to be {_1} (source: {_2})"
     )]
-    Delta(PlayTime, AchievementValue, i16),
-    #[display(fmt = "by the rating target list on {_0}")]
-    List(PlayTime),
+    Delta(AchievementValue, i16, LD),
+    #[display(fmt = "by the rating target list (source: {_0}")]
+    List(LL),
 }
 
-impl<'s, L> Estimator<'s, L> {
+impl<'s, LD, LL> Estimator<'s, LD, LL> {
     pub fn new(database: &SongDatabase<'s>, version: MaimaiVersion) -> Self {
         // TODO check if version is supported
 
@@ -116,11 +111,10 @@ impl<'s, L> Estimator<'s, L> {
         &mut self,
         score: OrdinaryScoreRef<'s>,
         predicate: impl Fn(ScoreConstant) -> bool,
-        reason: Reason,
-        user: Option<L>,
+        reason: Reason<LD, LL>,
     ) -> anyhow::Result<()>
     where
-        L: Display,
+        Event<'s, LD, LL>: Display,
     {
         let candidates = self
             .map
@@ -133,7 +127,6 @@ impl<'s, L> Estimator<'s, L> {
                 score,
                 candidates: candidates.candidates.clone(),
                 reason,
-                user,
             }));
         }
         if candidates.candidates.is_empty() {
@@ -155,22 +148,22 @@ pub enum NewOrOld {
     New,
     Old,
 }
-impl<'s, L> Estimator<'s, L>
+impl<'s, LD, LL> Estimator<'s, LD, LL>
 where
-    L: Copy + Display,
+    Event<'s, LD, LL>: Display,
 {
-    pub fn determine_by_delta<'d>(
+    pub fn determine_by_delta<R>(
         &mut self,
-        user: Option<L>,
-        records: impl IntoIterator<Item = OrdinaryPlayRecordAssociated<'d, 's>>,
+        records: impl IntoIterator<Item = R>,
         new_or_old: NewOrOld,
-        ignore_time: bool,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<()>
+    where
+        R: RecordLike<'s, LD>,
+    {
         let start_time: PlayTime = self.version.start_time().into();
         let end_time: PlayTime = self.version.end_time().into();
         let mut r2s = BTreeSet::<(i16, _)>::new();
         let mut s2r = HashMap::<_, i16>::new();
-        let mut key_to_record = HashMap::new();
         let max_count = match new_or_old {
             NewOrOld::New => 15,
             NewOrOld::Old => 35,
@@ -181,13 +174,11 @@ where
         // but there is no such process!
 
         for record in records {
-            if !(ignore_time
-                || (start_time..end_time).contains(&record.record().played_at().time()))
-            {
+            if !record.played_within(start_time..end_time) {
                 continue;
             }
 
-            let score = record.score().score();
+            let score = record.score();
             // TODO: I wish this property is guaranteed at the database level.
             let score_version = score
                 .scores()
@@ -215,7 +206,7 @@ where
             //     continue;
             // };
 
-            let delta = record.record().rating_result().delta();
+            let delta = record.rating_delta();
             if !((matches!(new_or_old, NewOrOld::Old) ^ (score_version == self.version))
                 && delta > 0)
             {
@@ -250,15 +241,8 @@ where
                     }
                 }
             };
-            key_to_record.insert(score, record);
 
-            self.register_single_song_rating(
-                score,
-                record.record().achievement_result().value(),
-                user,
-                rating,
-                record.record().played_at().time(),
-            )?;
+            self.register_single_song_rating(score, record.achievement(), rating, record.label())?;
         }
 
         Ok(())
@@ -267,25 +251,27 @@ where
     pub fn register_single_song_rating(
         &mut self,
         score: OrdinaryScoreRef<'s>,
-        a: AchievementValue,
-        user: Option<L>,
+        achievement: AchievementValue,
         rating: i16,
-        time: PlayTime,
+        label: LD,
     ) -> anyhow::Result<()> {
+        let a = achievement;
         self.set(
             score,
             |lv| single_song_rating(lv, a, rank_coef(a)).get() as i16 == rating,
-            Reason::Delta(time, a, rating),
-            user,
+            Reason::Delta(a, rating, label),
         )
     }
 
-    pub fn guess_from_rating_target_order<'d>(
+    /// `rating_targets.iter().all(|(x, y)| x == y.timestamp())` should hold.
+    pub fn guess_from_rating_target_order<R>(
         &mut self,
-        user: Option<L>,
-        rating_targets: &BTreeMap<PlayTime, RatingTargetList<'d, 's>>,
-        ignore_time: bool,
-    ) -> anyhow::Result<()> {
+        rating_targets: &BTreeMap<PlayTime, R>,
+    ) -> anyhow::Result<()>
+    where
+        R: RatingTargetListLike<'s, LL>,
+        R::Entry: Copy + Debug,
+    {
         let start_time: PlayTime = self.version.start_time().into();
         let end_time: PlayTime = self.version.end_time().into();
 
@@ -318,18 +304,18 @@ where
         // println!("{removal_time:?}");
         for (&play_time, list) in rating_targets
             .iter()
-            .filter(|p| ignore_time || (start_time..end_time).contains(p.0))
+            .filter(|p| p.1.played_within(start_time..end_time))
         {
             let rating_sum_is_reliable =
                 removal_time.map_or(true, |removal_time| play_time.get() < removal_time);
             // println!("{rating_sum_is_reliable}");
             let mut sub_list = vec![];
             #[derive(Clone, Copy)]
-            struct Entry<'a, 'k> {
+            struct Entry<'s, 'a, E> {
                 new: bool,
                 contributes_to_sum: bool,
-                rating_target_entry: RatingTargetEntryAssociated<'a, 'k>,
-                key: OrdinaryScoreRef<'k>,
+                rating_target_entry: E,
+                key: OrdinaryScoreRef<'s>,
                 levels: &'a [ScoreConstant],
             }
             for (new, contributes_to_sum, entries) in [
@@ -339,18 +325,18 @@ where
                 (false, false, list.candidates_old()),
             ] {
                 for rating_target_entry in entries {
-                    let rating_target_entry = match rating_target_entry.as_associated() {
-                        Ok(entry) => entry,
-                        Err(e) => {
-                            warn!("Not unique: {:?}: {e:#}", rating_target_entry.data());
-                            continue;
-                        }
-                    };
-                    let score = rating_target_entry.score().score();
+                    // let rating_target_entry = match rating_target_entry.as_associated() {
+                    //     Ok(entry) => entry,
+                    //     Err(e) => {
+                    //         warn!("Not unique: {:?}: {e:#}", rating_target_entry.data());
+                    //         continue;
+                    //     }
+                    // };
+                    let score = rating_target_entry.score();
                     let levels = self.map.get(&score).with_context(|| {
                         format!(
                             "While procesing {:?}: no key matches {score:?}",
-                            rating_target_entry.data(),
+                            rating_target_entry,
                         )
                     })?;
                     sub_list.push(Entry {
@@ -375,21 +361,28 @@ where
                 }
             }
             #[derive(Clone, Copy)]
-            struct DpElement<'a, 'k> {
+            struct DpElement<'s, 'a, E, L> {
                 level: ScoreConstant,
                 single_song_rating: usize,
-                entry: Entry<'a, 'k>,
+                entry: Entry<'s, 'a, E>,
+                _phantom: PhantomData<fn() -> L>,
             }
-            impl DpElement<'_, '_> {
-                fn tuple(self) -> (bool, usize, AchievementValue) {
+            impl<'s, E, L> DpElement<'s, '_, E, L>
+            where
+                E: RatingTargetEntryLike<'s, L>,
+            {
+                fn tuple(&self) -> (bool, usize, AchievementValue) {
                     (
                         self.entry.new,
                         self.single_song_rating,
-                        self.entry.rating_target_entry.data().achievement(),
+                        self.entry.rating_target_entry.achievement(),
                     )
                 }
             }
-            impl std::fmt::Debug for DpElement<'_, '_> {
+            impl<'s, E, L> std::fmt::Debug for DpElement<'s, '_, E, L>
+            where
+                E: RatingTargetEntryLike<'s, L>,
+            {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     let (new, score, a) = self.tuple();
                     write!(f, "({new}, {score}, {a})")
@@ -400,7 +393,7 @@ where
                 |i| {
                     let entry = sub_list[i];
                     entry.levels.iter().map(move |&level| {
-                        let a = entry.rating_target_entry.data().achievement();
+                        let a = entry.rating_target_entry.achievement();
                         let single_song_rating =
                             single_song_rating(level, a, rank_coef(a)).get() as usize;
                         let score = entry.contributes_to_sum as usize
@@ -410,12 +403,13 @@ where
                             level,
                             entry,
                             single_song_rating,
+                            _phantom: PhantomData,
                         };
                         (score, element)
                     })
                 },
                 |(_, x), (_, y)| x.tuple().cmp(&y.tuple()).reverse(),
-                list.list().rating().get() as usize * rating_sum_is_reliable as usize,
+                list.rating().get() as usize * rating_sum_is_reliable as usize,
             );
             let keys = sub_list.iter().map(|e| e.key).collect_vec();
             let res = res
@@ -432,7 +426,7 @@ where
                 //     display_played_by(name),
                 // );
                 // self.set(key, res.into_iter(), reason)?;
-                self.set(key, |lv| res.contains(&lv), Reason::List(play_time), user)?;
+                self.set(key, |lv| res.contains(&lv), Reason::List(list.label()))?;
             }
         }
         Ok(())
@@ -581,9 +575,43 @@ where
     // }
 }
 
+pub trait RecordLike<'s, L> {
+    /// The argument is the time span of the version specified.
+    /// If you want to assume always that it was played within the version,
+    /// just return `true`.
+    fn played_within(&self, time_range: Range<PlayTime>) -> bool;
+
+    fn score(&self) -> OrdinaryScoreRef<'s>;
+    fn achievement(&self) -> AchievementValue;
+    fn rating_delta(&self) -> i16;
+
+    fn label(&self) -> L;
+}
+pub trait RatingTargetListLike<'s, L> {
+    /// The argument is the time span of the version specified.
+    /// If you want to assume always that it was played within the version,
+    /// just return `true`.
+    fn played_within(&self, time_range: Range<PlayTime>) -> bool;
+
+    fn rating(&self) -> RatingValue;
+
+    type Entry: RatingTargetEntryLike<'s, L>;
+    type Entries: IntoIterator<Item = Self::Entry>;
+    fn target_new(&self) -> Self::Entries;
+    fn target_old(&self) -> Self::Entries;
+    fn candidates_new(&self) -> Self::Entries;
+    fn candidates_old(&self) -> Self::Entries;
+
+    fn label(&self) -> L;
+}
+pub trait RatingTargetEntryLike<'s, L> {
+    fn score(&self) -> OrdinaryScoreRef<'s>;
+    fn achievement(&self) -> AchievementValue;
+}
+
 impl<'s> Candidates<'s> {
-    fn new<L>(
-        events: &mut IndexedVec<Event<'s, L>>,
+    fn new<LD, LL>(
+        events: &mut IndexedVec<Event<'s, LD, LL>>,
         version: MaimaiVersion,
         score: OrdinaryScoreForVersionRef<'s>,
     ) -> Candidates<'s> {
@@ -600,7 +628,6 @@ impl<'s> Candidates<'s> {
                     score: score.score(),
                     candidates: candidates.clone(),
                     reason: Reason::Database(lv),
-                    user: None,
                 }));
                 candidates
             }
