@@ -63,7 +63,7 @@ fn main() -> anyhow::Result<()> {
                 difficulty,
             };
             let (_, candidates) = levels.get(key)?.context("Entry not found for {key:?}")?;
-            if !level.is_known() && candidates.len() == 1 {
+            if !level.is_unique() && candidates.len() == 1 {
                 tasks.push((token.range(), candidates[0]));
             }
         }

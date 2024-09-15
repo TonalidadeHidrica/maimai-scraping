@@ -1,11 +1,17 @@
-use std::{fmt::Debug, marker::PhantomData, path::PathBuf};
+use std::{
+    fmt::{Debug, Display},
+    marker::PhantomData,
+    path::PathBuf,
+};
 
 use anyhow::{anyhow, bail};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use derive_more::Display;
 use enum_iterator::Sequence;
 use enum_map::Enum;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
+use itertools::{iterate, Itertools};
 use maimai_scraping_utils::fs_json_util::read_json;
 use serde::{Deserialize, Deserializer, Serialize};
 use strum::EnumString;
@@ -205,7 +211,7 @@ impl<K: InLvKind> InternalScoreLevelEntry<K> {
         })
     }
 }
-#[derive(Clone, Copy, PartialEq, Eq, Debug, derive_more::Display, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Display, Serialize, Deserialize)]
 pub enum InternalScoreLevel {
     Unknown(ScoreLevel),
     Known(ScoreConstant),
@@ -235,20 +241,22 @@ impl TryFrom<f64> for InternalScoreLevel {
     }
 }
 impl InternalScoreLevel {
-    pub fn known(self) -> Option<ScoreConstant> {
+    pub fn get_if_unique(self) -> Option<ScoreConstant> {
         match self {
             InternalScoreLevel::Unknown(_) => None,
+            // InternalScoreLevel::Candidates(..) => None,
             InternalScoreLevel::Known(x) => Some(x),
         }
     }
 
-    pub fn is_known(self) -> bool {
-        self.known().is_some()
+    pub fn is_unique(self) -> bool {
+        self.get_if_unique().is_some()
     }
 
     pub fn into_level(self, version: MaimaiVersion) -> ScoreLevel {
         match self {
             InternalScoreLevel::Unknown(v) => v,
+            // InternalScoreLevel::Candidates(v) => v.level.to_lv(version),
             InternalScoreLevel::Known(v) => v.to_lv(version),
         }
     }
@@ -437,7 +445,25 @@ where
         .transpose()
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters, Serialize, Deserialize)]
+#[getset(get_copy = "pub")]
+pub struct Candidates {
+    level: ScoreConstant,
+    mask: CandidateBitmask,
+}
+impl Display for Candidates {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let x = u8::from(self.level);
+        write!(
+            f,
+            "{}.{}",
+            x / 10,
+            self.mask.bits().map(|i| i + x % 10).join(","),
+        )
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct CandidateBitmask(u16);
 impl TryFrom<f64> for CandidateBitmask {
     type Error = anyhow::Error;
@@ -451,5 +477,35 @@ impl TryFrom<f64> for CandidateBitmask {
             bail!("Too large mask: {value}");
         }
         Ok(Self(mask))
+    }
+}
+impl CandidateBitmask {
+    pub fn has(self, x: u8) -> bool {
+        ((1 << x) & self.0) > 0
+    }
+    pub fn bits(self) -> impl Iterator<Item = u8> {
+        iterate(self.0, |x| x >> 1)
+            .enumerate()
+            .take_while(|&(_, x)| x > 0)
+            .filter_map(|(i, x)| ((x & 1) > 0).then_some(i as u8))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use itertools::Itertools;
+
+    use super::CandidateBitmask;
+
+    fn test_candidate_bitmask() {
+        let x = CandidateBitmask(0b0100_1011);
+        assert!(x.has(0));
+        assert!(!x.has(2));
+        assert!(x.has(7));
+        assert!(!x.has(8));
+        assert!(!x.has(15));
+        assert!(!x.has(16));
+        assert!(!x.has(255));
+        assert!(x.bits().collect_vec() == [0, 1, 3, 6])
     }
 }

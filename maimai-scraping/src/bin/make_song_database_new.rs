@@ -820,6 +820,7 @@ impl Results {
             match item {
                 EitherOrBoth::Both(collected, (song, score)) => {
                     let level_ok = |x: ScoreLevel| {
+                        // x == y.into_level()
                         move |y: InternalScoreLevel| match y {
                             InternalScoreLevel::Unknown(y) => x == y,
                             InternalScoreLevel::Known(y) => x == y.to_lv(version),
