@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{ops::Range, path::PathBuf};
 
 use anyhow::anyhow;
 use chrono::NaiveDateTime;
@@ -9,13 +9,15 @@ use maimai_scraping_utils::fs_json_util::read_json;
 use serde::Deserialize;
 
 use crate::maimai::{
-    associated_user_data::{self, OrdinaryPlayRecordAssociated},
-    schema::latest::PlayTime,
-    song_list::database::SongDatabase,
+    associated_user_data::{
+        self, OrdinaryPlayRecordAssociated, RatingTargetEntryAssociated, RatingTargetListAssociated,
+    },
+    schema::latest::{AchievementValue, PlayTime, RatingValue},
+    song_list::database::{OrdinaryScoreRef, SongDatabase},
     MaimaiUserData,
 };
 
-use super::{Estimator, NewOrOld, RecordLike};
+use super::{Estimator, NewOrOld, RatingTargetEntryLike, RatingTargetListLike, RecordLike};
 
 #[derive(Deserialize, Getters)]
 pub struct Config {
@@ -64,21 +66,21 @@ pub struct RecordLabel<'n> {
 #[derive(Clone, Copy, Debug, Display)]
 #[display(fmt = "rating target recorded at {timestamp} by {user}")]
 pub struct RatingTargetLabel<'n> {
-    timestamp: NaiveDateTime,
+    timestamp: PlayTime,
     user: &'n UserName,
 }
 
-impl<'c, 't, 'd, 's> RecordLike<'s, RecordLabel<'c>>
-    for (&'c UserConfig, &'t OrdinaryPlayRecordAssociated<'d, 's>)
+impl<'c, 'd, 's> RecordLike<'s, RecordLabel<'c>>
+    for (&'c UserConfig, OrdinaryPlayRecordAssociated<'d, 's>)
 {
-    fn played_within(&self, time_range: std::ops::Range<PlayTime>) -> bool {
+    fn played_within(&self, time_range: Range<PlayTime>) -> bool {
         self.0.estimator_config.ignore_time
             || time_range.contains(&self.1.record().played_at().time())
     }
-    fn score(&self) -> crate::maimai::song_list::database::OrdinaryScoreRef<'s> {
+    fn score(&self) -> OrdinaryScoreRef<'s> {
         self.1.score().score()
     }
-    fn achievement(&self) -> crate::maimai::schema::latest::AchievementValue {
+    fn achievement(&self) -> AchievementValue {
         self.1.record().achievement_result().value()
     }
     fn rating_delta(&self) -> i16 {
@@ -91,11 +93,58 @@ impl<'c, 't, 'd, 's> RecordLike<'s, RecordLabel<'c>>
         }
     }
 }
+impl<'c, 'a, 'd, 's> RatingTargetListLike<'s, RatingTargetLabel<'c>>
+    for (
+        &'c UserConfig,
+        PlayTime,
+        &'a RatingTargetListAssociated<'d, 's>,
+    )
+{
+    fn played_within(&self, time_range: Range<PlayTime>) -> bool {
+        self.0.estimator_config.ignore_time || time_range.contains(&self.1)
+    }
+    fn play_time(&self) -> NaiveDateTime {
+        self.1.get()
+    }
+    fn rating(&self) -> RatingValue {
+        self.2.list().rating()
+    }
+
+    type Entry = RatingTargetEntryAssociated<'d, 's>;
+    type Entries = std::iter::Copied<std::slice::Iter<'a, RatingTargetEntryAssociated<'d, 's>>>;
+    fn target_new(&self) -> Self::Entries {
+        self.2.target_new().iter().copied()
+    }
+    fn target_old(&self) -> Self::Entries {
+        self.2.target_old().iter().copied()
+    }
+    fn candidates_new(&self) -> Self::Entries {
+        self.2.candidates_new().iter().copied()
+    }
+    fn candidates_old(&self) -> Self::Entries {
+        self.2.candidates_old().iter().copied()
+    }
+
+    fn label(&self) -> RatingTargetLabel<'c> {
+        RatingTargetLabel {
+            timestamp: self.1,
+            user: &self.0.name,
+        }
+    }
+}
+impl<'d, 's> RatingTargetEntryLike<'s> for RatingTargetEntryAssociated<'d, 's> {
+    fn score(&self) -> OrdinaryScoreRef<'s> {
+        RatingTargetEntryAssociated::score(self).score()
+    }
+    fn achievement(&self) -> AchievementValue {
+        self.data().achievement()
+    }
+}
 
 pub fn update_all<'s, 'c>(
     database: &SongDatabase<'s>,
     datas: &[(&'c UserConfig, MaimaiUserData)],
-    constants: &mut Estimator<'s, RecordLabel<'c>, RatingTargetLabel<'c>>,
+    estimator: &mut Estimator<'s, RecordLabel<'c>, RatingTargetLabel<'c>>,
 ) -> anyhow::Result<()> {
     let datas = datas
         .iter()
@@ -107,30 +156,39 @@ pub fn update_all<'s, 'c>(
                 .filter_map(|r| Some(r.as_ordinary()?.into_associated()))
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| anyhow!("{e:#?}"))?;
-            anyhow::Ok((config, data, ordinary_records))
+            let rating_targets = data
+                .rating_target()
+                .iter()
+                .map(|(&time, r)| Ok((time, r.as_associated()?)))
+                .collect::<Result<Vec<_>, &anyhow::Error>>()
+                .map_err(|e| anyhow!("{e:#?}"))?;
+            anyhow::Ok((config, ordinary_records, rating_targets))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
     // It never happens that once "determine by delta" fails,
     // but succeeds afterwards due to additionally determined internal levels.
-    for &(config, _, ref ordinary_records) in &datas {
+    for &(config, ref ordinary_records, _) in &datas {
         if config.estimator_config.new_songs_are_complete {
-            constants
-                .determine_by_delta(ordinary_records.iter().map(|r| (config, r)), NewOrOld::New)?;
+            estimator
+                .determine_by_delta(ordinary_records.iter().map(|&r| (config, r)), NewOrOld::New)?;
         }
         if config.estimator_config.old_songs_are_complete {
-            constants
-                .determine_by_delta(ordinary_records.iter().map(|r| (config, r)), NewOrOld::Old)?;
+            estimator
+                .determine_by_delta(ordinary_records.iter().map(|&r| (config, r)), NewOrOld::Old)?;
         }
     }
 
     while {
-        let mut changed = false;
-        for (_config, _data, _) in &datas {
-            // TODO
-            changed = true;
+        let before_len = estimator.event_len();
+        for &(config, _, ref rating_targets) in &datas {
+            estimator.guess_from_rating_target_order(
+                rating_targets
+                    .iter()
+                    .map(|&(time, ref list)| (config, time, list)),
+            )?;
         }
-        changed
+        before_len < estimator.event_len()
     } {}
     Ok(())
 }

@@ -88,6 +88,38 @@ pub struct RatingTargetList<'d, 's> {
     #[getset(get = "pub")]
     candidates_old: Vec<RatingTargetEntry<'d, 's>>,
 }
+impl<'d, 's> RatingTargetList<'d, 's> {
+    pub fn as_associated<'p>(
+        &'p self,
+    ) -> Result<RatingTargetListAssociated<'d, 's>, &'p anyhow::Error> {
+        let convert = |list: &'p [RatingTargetEntry<'d, 's>]| {
+            list.iter()
+                .map(|r| r.as_associated())
+                .collect::<Result<Vec<_>, _>>()
+        };
+        Ok(RatingTargetListAssociated {
+            list: self.list,
+            target_new: convert(&self.target_new)?,
+            target_old: convert(&self.target_old)?,
+            candidates_new: convert(&self.candidates_new)?,
+            candidates_old: convert(&self.candidates_old)?,
+        })
+    }
+}
+
+#[derive(Getters, CopyGetters)]
+pub struct RatingTargetListAssociated<'d, 's> {
+    #[getset(get_copy = "pub")]
+    list: &'d rating_target::RatingTargetList,
+    #[getset(get = "pub")]
+    target_new: Vec<RatingTargetEntryAssociated<'d, 's>>,
+    #[getset(get = "pub")]
+    target_old: Vec<RatingTargetEntryAssociated<'d, 's>>,
+    #[getset(get = "pub")]
+    candidates_new: Vec<RatingTargetEntryAssociated<'d, 's>>,
+    #[getset(get = "pub")]
+    candidates_old: Vec<RatingTargetEntryAssociated<'d, 's>>,
+}
 
 #[derive(CopyGetters)]
 pub struct RatingTargetEntry<'d, 's> {
@@ -113,7 +145,7 @@ impl<'d, 's> RatingTargetEntry<'d, 's> {
     }
 }
 
-#[derive(Clone, Copy, CopyGetters)]
+#[derive(Clone, Copy, Debug, CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct RatingTargetEntryAssociated<'d, 's> {
     data: &'d rating_target::RatingTargetEntry,

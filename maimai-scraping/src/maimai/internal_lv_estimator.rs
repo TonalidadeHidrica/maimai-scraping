@@ -6,14 +6,13 @@
 pub mod multi_user;
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
     fmt::{Debug, Display},
-    marker::PhantomData,
     ops::Range,
 };
 
 use anyhow::{bail, Context};
-use chrono::NaiveTime;
+use chrono::{NaiveDateTime, NaiveTime};
 use derive_more::Display;
 use hashbrown::HashMap;
 use itertools::Itertools;
@@ -143,6 +142,10 @@ impl<'s, LD, LL> Estimator<'s, LD, LL> {
         }
         Ok(())
     }
+
+    fn event_len(&self) -> usize {
+        self.events.0.len()
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -154,6 +157,9 @@ impl<'s, LD, LL> Estimator<'s, LD, LL>
 where
     Event<'s, LD, LL>: Display,
 {
+    /// It is allowed for `records` to contain target list
+    /// that is recorded outside the specified version.
+    /// Such records are omitted internally.
     pub fn determine_by_delta<R>(
         &mut self,
         records: impl IntoIterator<Item = R>,
@@ -265,10 +271,12 @@ where
         )
     }
 
-    /// `rating_targets.iter().all(|(x, y)| x == y.timestamp())` should hold.
+    /// It is allowed for `rating_targets` to contain target list
+    /// that is recorded outside the specified version.
+    /// Such list are omitted internally.
     pub fn guess_from_rating_target_order<R>(
         &mut self,
-        rating_targets: &BTreeMap<PlayTime, R>,
+        rating_targets: impl IntoIterator<Item = R>,
     ) -> anyhow::Result<()>
     where
         R: RatingTargetListLike<'s, LL>,
@@ -304,12 +312,12 @@ where
         //     .min();
 
         // println!("{removal_time:?}");
-        for (&play_time, list) in rating_targets
-            .iter()
-            .filter(|p| p.1.played_within(start_time..end_time))
+        for list in rating_targets
+            .into_iter()
+            .filter(|p| p.played_within(start_time..end_time))
         {
             let rating_sum_is_reliable =
-                removal_time.map_or(true, |removal_time| play_time.get() < removal_time);
+                removal_time.map_or(true, |removal_time| list.play_time() < removal_time);
             // println!("{rating_sum_is_reliable}");
             let mut sub_list = vec![];
             #[derive(Clone, Copy)]
@@ -363,15 +371,15 @@ where
                 }
             }
             #[derive(Clone, Copy)]
-            struct DpElement<'s, 'a, E, L> {
+            struct DpElement<'s, 'a, E> {
                 level: ScoreConstant,
                 single_song_rating: usize,
                 entry: Entry<'s, 'a, E>,
-                _phantom: PhantomData<fn() -> L>,
+                // _phantom: PhantomData<fn() -> L>,
             }
-            impl<'s, E, L> DpElement<'s, '_, E, L>
+            impl<'s, E> DpElement<'s, '_, E>
             where
-                E: RatingTargetEntryLike<'s, L>,
+                E: RatingTargetEntryLike<'s>,
             {
                 fn tuple(&self) -> (bool, usize, AchievementValue) {
                     (
@@ -381,9 +389,9 @@ where
                     )
                 }
             }
-            impl<'s, E, L> std::fmt::Debug for DpElement<'s, '_, E, L>
+            impl<'s, E> std::fmt::Debug for DpElement<'s, '_, E>
             where
-                E: RatingTargetEntryLike<'s, L>,
+                E: RatingTargetEntryLike<'s>,
             {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     let (new, score, a) = self.tuple();
@@ -405,7 +413,7 @@ where
                             level,
                             entry,
                             single_song_rating,
-                            _phantom: PhantomData,
+                            // _phantom: PhantomData,
                         };
                         (score, element)
                     })
@@ -593,11 +601,15 @@ pub trait RatingTargetListLike<'s, L> {
     /// The argument is the time span of the version specified.
     /// If you want to assume always that it was played within the version,
     /// just return `true`.
+    /// This is used for filtering by version.
     fn played_within(&self, time_range: Range<PlayTime>) -> bool;
+    /// This is used to compare with the first removal time during the version,
+    /// determining whether the rating sum is reliable or not.
+    fn play_time(&self) -> NaiveDateTime;
 
     fn rating(&self) -> RatingValue;
 
-    type Entry: RatingTargetEntryLike<'s, L>;
+    type Entry: RatingTargetEntryLike<'s>;
     type Entries: IntoIterator<Item = Self::Entry>;
     fn target_new(&self) -> Self::Entries;
     fn target_old(&self) -> Self::Entries;
@@ -606,7 +618,7 @@ pub trait RatingTargetListLike<'s, L> {
 
     fn label(&self) -> L;
 }
-pub trait RatingTargetEntryLike<'s, L> {
+pub trait RatingTargetEntryLike<'s> {
     fn score(&self) -> OrdinaryScoreRef<'s>;
     fn achievement(&self) -> AchievementValue;
 }
