@@ -28,24 +28,39 @@ pub struct PlayRecord<'d, 's> {
     record: &'d schema::PlayRecord,
     score: anyhow::Result<ScoreForVersionRef<'s>>,
 }
-impl<'s> PlayRecord<'_, 's> {
+impl<'d, 's> PlayRecord<'d, 's> {
     pub fn score(&self) -> Result<ScoreForVersionRef<'s>, &anyhow::Error> {
         self.score.as_ref().copied()
     }
+
+    pub fn as_ordinary<'p>(&'p self) -> Option<OrdinaryPlayRecord<'d, 's, 'p>> {
+        match self.record.utage_metadata() {
+            Some(_) => None,
+            None => Some(OrdinaryPlayRecord {
+                record: self.record,
+                score: match self.score {
+                    Ok(ScoreForVersionRef::Ordinary(score)) => Ok(score),
+                    Ok(ScoreForVersionRef::Utage(_)) => {
+                        panic!("Ordinary record associated with utage score")
+                    }
+                    Err(ref e) => Err(e),
+                },
+            }),
+        }
+    }
 }
 
-#[derive(CopyGetters)]
-pub struct OrdinaryPlayRecord<'d, 's> {
+#[derive(Getters, CopyGetters)]
+pub struct OrdinaryPlayRecord<'d, 's, 'p> {
     #[getset(get_copy = "pub")]
     record: &'d schema::PlayRecord,
-    score: anyhow::Result<OrdinaryScoreForVersionRef<'s>>,
+    #[getset(get = "pub")]
+    score: Result<OrdinaryScoreForVersionRef<'s>, &'p anyhow::Error>,
 }
-impl<'d, 's> OrdinaryPlayRecord<'d, 's> {
-    pub fn score(&self) -> Result<OrdinaryScoreForVersionRef<'s>, &anyhow::Error> {
-        self.score.as_ref().copied()
-    }
-
-    pub fn into_associated(self) -> anyhow::Result<OrdinaryPlayRecordAssociated<'d, 's>> {
+impl<'d, 's, 'p> OrdinaryPlayRecord<'d, 's, 'p> {
+    pub fn into_associated(
+        self,
+    ) -> Result<OrdinaryPlayRecordAssociated<'d, 's>, &'p anyhow::Error> {
         self.score.map(move |score| OrdinaryPlayRecordAssociated {
             record: self.record,
             score,

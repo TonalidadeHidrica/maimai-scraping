@@ -3,6 +3,8 @@
 //! - Type parameter `L` is the label for the source, i.e. play record / rating target list.
 //!   `L` is used for debugging and must implement cheap `Copy`.
 
+pub mod multi_user;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::{Debug, Display},
