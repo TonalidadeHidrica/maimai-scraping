@@ -18,7 +18,9 @@ use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::info;
 use maimai_scraping::maimai::{
-    load_score_level::{self, InternalScoreLevel, MaimaiVersion, Song as InLvSong, SongRaw},
+    load_score_level::{
+        self, in_lv_kind, InternalScoreLevel, MaimaiVersion, Song as InLvSong, SongRaw,
+    },
     official_song_list::{self, ScoreDetails, UtageIdentifier},
     rating::{ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
@@ -48,13 +50,14 @@ struct Opts {
     skip_latest_in_lv_data: bool,
 }
 
+type InLvSongMask = InLvSong<in_lv_kind::Bitmask>;
 type UtageIdentifierMergeMap =
     HashMap<(SongIcon, UtageIdentifier<'static>), UtageIdentifier<'static>>;
 #[derive(Default)]
 /// Collects the resources for the song list.
 struct Resources {
     in_lv: BTreeMap<MaimaiVersion, Vec<InLvSong>>,
-    in_lv_bitmask: BTreeMap<MaimaiVersion, Vec<InLvSong>>,
+    in_lv_bitmask: BTreeMap<MaimaiVersion, Vec<InLvSongMask>>,
     in_lv_data: BTreeMap<MaimaiVersion, InLvData>,
     removed_songs_wiki: RemovedSongsWiki,
     removed_songs_supplemental: Vec<RemovedSongSupplemental>,
@@ -83,7 +86,7 @@ impl Resources {
                 continue;
             }
             let path = format!("{}.json", i8::from(version));
-            let levels = load_score_level::load(opts.in_lv_bitmask_dir.join(path))?;
+            let levels = load_score_level::load_mask(opts.in_lv_bitmask_dir.join(path))?;
             assert!(ret.in_lv_bitmask.insert(version, levels).is_none());
         }
 
@@ -328,9 +331,41 @@ impl Results {
         }
         Ok(())
     }
+}
 
+trait InLvKind: in_lv_kind::Kind {
+    fn merge_levels(
+        levels: &mut Option<InternalScoreLevel>,
+        value: Self::Value,
+        version: MaimaiVersion,
+    ) -> anyhow::Result<()>;
+}
+impl InLvKind for in_lv_kind::Levels {
+    fn merge_levels(
+        levels: &mut Option<InternalScoreLevel>,
+        value: Self::Value,
+        version: MaimaiVersion,
+    ) -> anyhow::Result<()> {
+        merge_levels(levels, value, version)
+    }
+}
+impl InLvKind for in_lv_kind::Bitmask {
+    fn merge_levels(
+        levels: &mut Option<InternalScoreLevel>,
+        value: Self::Value,
+        version: MaimaiVersion,
+    ) -> anyhow::Result<()> {
+        todo!()
+    }
+}
+
+impl Results {
     /// This function is to be called at most once per version.
-    fn read_in_lv(&mut self, version: MaimaiVersion, in_lv: &[InLvSong]) -> anyhow::Result<()> {
+    fn read_in_lv<K: InLvKind>(
+        &mut self,
+        version: MaimaiVersion,
+        in_lv: &[InLvSong<K>],
+    ) -> anyhow::Result<()> {
         // generation: ScoreGeneration,
         // version: MaimaiVersion,
         // levels: ScoreLevels,
@@ -366,13 +401,13 @@ impl Results {
         Ok(())
     }
 
-    fn read_in_lv_song(
+    fn read_in_lv_song<K: InLvKind>(
         name_to_song: &mut HashMap<SongName, HashSet<SongIndex>>,
         abbrev_to_song: &mut HashMap<SongAbbreviation, SongIndex>,
         index: SongIndex,
         song: &mut Song,
         version: MaimaiVersion,
-        data: &InLvSong,
+        data: &InLvSong<K>,
     ) -> Result<(), anyhow::Error> {
         (|| {
             // Update song name map
@@ -400,22 +435,51 @@ impl Results {
             }
 
             // Record `levels` (indexed by `generation` and `version`)
-            scores.basic.levels[version] = Some(data.levels().get(ScoreDifficulty::Basic).unwrap());
-            scores.advanced.levels[version] =
-                Some(data.levels().get(ScoreDifficulty::Advanced).unwrap());
-            scores.expert.levels[version] =
-                Some(data.levels().get(ScoreDifficulty::Expert).unwrap());
-            scores.master.levels[version] =
-                Some(data.levels().get(ScoreDifficulty::Master).unwrap());
+            K::merge_levels(
+                &mut scores.basic.levels[version],
+                data.levels().get(ScoreDifficulty::Basic).unwrap(),
+                version,
+            )?;
+            K::merge_levels(
+                &mut scores.advanced.levels[version],
+                data.levels().get(ScoreDifficulty::Advanced).unwrap(),
+                version,
+            )?;
+            K::merge_levels(
+                &mut scores.expert.levels[version],
+                data.levels().get(ScoreDifficulty::Expert).unwrap(),
+                version,
+            )?;
+            K::merge_levels(
+                &mut scores.master.levels[version],
+                data.levels().get(ScoreDifficulty::Master).unwrap(),
+                version,
+            )?;
             if let Some(level) = data.levels().get(ScoreDifficulty::ReMaster) {
-                scores.re_master.get_or_insert_with(Default::default).levels[version] = Some(level);
+                K::merge_levels(
+                    &mut scores.re_master.get_or_insert_with(Default::default).levels[version],
+                    level,
+                    version,
+                )?;
             }
+            // scores.basic.levels[version] = Some(data.levels().get(ScoreDifficulty::Basic).unwrap());
+            // scores.advanced.levels[version] =
+            //     Some(data.levels().get(ScoreDifficulty::Advanced).unwrap());
+            // scores.expert.levels[version] =
+            //     Some(data.levels().get(ScoreDifficulty::Expert).unwrap());
+            // scores.master.levels[version] =
+            //     Some(data.levels().get(ScoreDifficulty::Master).unwrap());
+            // if let Some(level) = data.levels().get(ScoreDifficulty::ReMaster) {
+            //     scores.re_master.get_or_insert_with(Default::default).levels[version] = Some(level);
+            // }
 
             anyhow::Ok(())
         })()
         .with_context(|| format!("While incorporating {data:?} into {song:?}"))
     }
+}
 
+impl Results {
     fn register_abbrev(
         abbrev_to_song: &mut HashMap<SongAbbreviation, SongIndex>,
         abbrev: &SongAbbreviation,
@@ -1034,6 +1098,9 @@ fn main() -> anyhow::Result<()> {
     }
     for (&version, in_lv) in &resources.in_lv {
         results.read_in_lv(version, in_lv)?;
+    }
+    for (&version, in_lv_bitmask) in &resources.in_lv_bitmask {
+        results.read_in_lv(version, in_lv_bitmask)?;
     }
     results.read_removed_songs_wiki(&resources.removed_songs_wiki)?;
     results.read_removed_songs_supplemental(&resources.removed_songs_supplemental)?;

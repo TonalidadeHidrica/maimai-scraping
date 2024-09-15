@@ -17,8 +17,18 @@ use super::{
 };
 
 pub fn load(path: impl Into<PathBuf> + Debug) -> anyhow::Result<Vec<Song>> {
-    let songs: Vec<SongRaw> = read_json(path)?;
-    songs.into_iter().map(Song::try_from).collect()
+    load_impl(path)
+}
+pub fn load_mask(
+    path: impl Into<PathBuf> + Debug,
+) -> anyhow::Result<Vec<Song<in_lv_kind::Bitmask>>> {
+    load_impl(path)
+}
+fn load_impl<K: in_lv_kind::Kind>(
+    path: impl Into<PathBuf> + Debug,
+) -> anyhow::Result<Vec<Song<K>>> {
+    let songs: Vec<SongRaw<K>> = read_json(path)?;
+    songs.into_iter().map(Song::<K>::try_from).collect()
 }
 pub fn make_map<T, I, U, F>(songs: I, mut key: F) -> anyhow::Result<HashMap<U, T>>
 where
@@ -153,8 +163,8 @@ pub struct ScoreLevels<K: InLvKind = in_lv_kind::Levels> {
     master: InternalScoreLevelEntry<K>,
     re_master: Option<InternalScoreLevelEntry<K>>,
 }
-impl ScoreLevels {
-    pub fn get(&self, difficulty: ScoreDifficulty) -> Option<InternalScoreLevel> {
+impl<K: InLvKind> ScoreLevels<K> {
+    pub fn get(&self, difficulty: ScoreDifficulty) -> Option<K::Value> {
         use ScoreDifficulty::*;
         Some(match difficulty {
             Basic => self.basic.value,
