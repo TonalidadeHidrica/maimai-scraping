@@ -140,9 +140,9 @@ impl<'s, LD, LL> Estimator<'s, LD, LL> {
                 reason,
             }));
         }
-        if candidates.candidates.is_unique() {
+        if candidates.candidates.is_empty() {
             bail!(
-                "No more candidates for {score:?}: {}",
+                "No more candidates for {score}: {}",
                 candidates
                     .reasons
                     .iter()

@@ -293,6 +293,10 @@ impl InternalScoreLevel {
         self.mask.count_bits() == 1
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.mask.count_bits() == 0
+    }
+
     pub fn into_level(self, version: MaimaiVersion) -> ScoreLevel {
         self.offset.to_lv(version)
     }
