@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use hashbrown::HashSet;
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
@@ -15,6 +15,14 @@ use maimai_scraping_utils::fs_json_util::read_json;
 struct Opts {
     database: PathBuf,
     estimator_config: PathBuf,
+    #[arg(long)]
+    format: Option<ReportFormat>,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum ReportFormat {
+    Tsv,
+    JsonArray,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -46,48 +54,81 @@ fn main() -> anyhow::Result<()> {
         scores
     };
 
-    println!("曲名\t\t\t確定Lv\t変更前mask\t変更後mask\t事由");
+    if let Some(ReportFormat::Tsv) = opts.format {
+        println!("曲名\t\t\t確定Lv\t変更前mask\t変更後mask\t事由");
+    }
+    let mut out = vec![];
     for score in scores {
         let candidates = estimator.get(score).unwrap();
-        let lv = lazy_format!(match (candidates.candidates().get_if_unique()) {
-            None => "",
-            Some(lv) => "{lv}",
-        });
-        let song_name = score.scores().song().latest_song_name();
-        let generation = score.scores().generation().abbrev();
-        let difficulty = score.difficulty().abbrev();
-        let mask_before = score.score().levels[version]
-            .unwrap()
-            .in_lv_mask(version)
-            .get();
-        let mask_after = candidates.candidates().in_lv_mask(version).get();
-        let reasons = candidates
-            .reasons()
-            .map(|e| {
-                let reason = lazy_format!(match (e.reason()) {
-                    Reason::Database(_) => "既知データより",
-                    Reason::Delta(a, d, x) => (
-                        "カード {} での {} のプレイで達成率 {a}、単曲レート {d} より",
-                        x.user(),
-                        x.play_time()
-                    ),
-                    Reason::List(x) => (
-                        "カード {} での {} 時点のベスト枠 ({}周目) より",
-                        x.user(),
-                        x.timestamp(),
-                        x.iteration() + 1,
-                    ),
+        match opts.format {
+            Some(ReportFormat::Tsv) => {
+                let lv = lazy_format!(match (candidates.candidates().get_if_unique()) {
+                    None => "",
+                    Some(lv) => "{lv}",
                 });
-                lazy_format!(
-                    "{reason} {} に{}",
-                    e.candidates(),
-                    lazy_format!(if e.candidates().is_unique() => "確定" else => "限定")
-                )
-            })
-            .join_with("\t");
-        println!(
-            "{song_name}\t{generation}\t{difficulty}\t{lv}\t{mask_before}\t{mask_after}\t{reasons}"
-        );
+                let song_name = score.scores().song().latest_song_name();
+                let generation = score.scores().generation().abbrev();
+                let difficulty = score.difficulty().abbrev();
+                let mask_before = score.score().levels[version]
+                    .unwrap()
+                    .in_lv_mask(version)
+                    .get();
+                let mask_after = candidates.candidates().in_lv_mask(version).get();
+                let reasons = candidates
+                    .reasons()
+                    .map(|e| {
+                        let reason = lazy_format!(match (e.reason()) {
+                            Reason::Database(_) => "既知データより",
+                            Reason::Delta(a, d, x) => (
+                                "カード {} での {} のプレイで達成率 {a}、単曲レート {d} より",
+                                x.user(),
+                                x.play_time()
+                            ),
+                            Reason::List(x) => (
+                                "カード {} での {} 時点のベスト枠 ({}周目) より",
+                                x.user(),
+                                x.timestamp(),
+                                x.iteration() + 1,
+                            ),
+                        });
+                        lazy_format!(
+                            "{reason} {} に{}",
+                            e.candidates(),
+                            lazy_format!(if e.candidates().is_unique() => "確定" else => "限定")
+                        )
+                    })
+                    .join_with("\t");
+                println!(
+                    "{song_name}\t{generation}\t{difficulty}\t{lv}\t{mask_before}\t{mask_after}\t{reasons}"
+                );
+            }
+            Some(ReportFormat::JsonArray) => {
+                if let Some(lv) = candidates.candidates().get_if_unique() {
+                    let song = candidates.score().scores().song();
+                    let song_name = song.latest_song_name();
+                    let song_name: &str = if database.song_from_name(song_name).count() != 1 {
+                        song.song()
+                            .abbreviation
+                            .values()
+                            .flatten()
+                            .last()
+                            .map_or_else(|| song_name.as_ref(), |x| x.as_ref())
+                    } else {
+                        song_name.as_ref()
+                    };
+                    out.push([
+                        Cow::Borrowed(song_name),
+                        Cow::Borrowed(score.scores().generation().abbrev()),
+                        Cow::Borrowed(score.difficulty().abbrev()),
+                        Cow::Owned(lv.to_string()),
+                    ]);
+                }
+            }
+            None => {}
+        }
+    }
+    if let Some(ReportFormat::JsonArray) = opts.format {
+        println!("{}", serde_json::to_string_pretty(&out)?);
     }
 
     Ok(())
