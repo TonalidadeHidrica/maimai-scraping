@@ -187,6 +187,79 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    if !opts.dry_run {
+        let (mut client, _) = SegaClient::<Maimai>::new(SegaClientInitializer {
+            credentials_path: &opts.credentials_path,
+            cookie_store_path: &opts.cookie_store_path,
+            user_identifier: &opts.user_identifier,
+            // There is no need to be Standard member to edit favorite songs
+            force_paid: false,
+        })
+        .await?;
+        let page = fetch_favorite_songs_form(&mut client).await?;
+        let map = song_name_to_idx_map(&page);
+        let mut idxs = HashSet::new();
+        if opts.append {
+            for song in page.songs.iter().filter(|x| x.checked) {
+                println!("Preserving existing song: {}", song.name);
+                idxs.insert(&song.idx);
+            }
+        }
+        let mut not_all = false;
+        let mut skipped = 0;
+
+        for score in scores {
+            let song = score.candidates.score().scores().song();
+            let song_name = song.latest_song_name();
+            match &map
+                .get(&(
+                    song.song().category[MaimaiVersion::latest()].context("Category unknown")?,
+                    song_name,
+                ))
+                .map_or(&[][..], |x| &x[..])
+            {
+                [] => println!("Song not found: {}", score.candidates.score(),),
+                [idx] => {
+                    let len = idxs.len();
+                    if let hashbrown::hash_set::Entry::Vacant(entry) = idxs.entry(*idx) {
+                        if len < limit {
+                            if skipped < opts.skip {
+                                skipped += 1;
+                            } else {
+                                entry.insert();
+                            }
+                        } else {
+                            not_all = true;
+                        }
+                    }
+                }
+                candidates => {
+                    // Now that songs are distinguished by category as well as title,
+                    // This should not happen
+                    bail!(
+                        "Multiple candidates are found: {} {candidates:?}",
+                        score.candidates.score()
+                    )
+                }
+            }
+        }
+        if skipped > 0 {
+            println!("Skipped {skipped} songs.");
+        }
+        if not_all {
+            println!("Only the first {limit} of the candidates will be added.");
+        }
+        SetFavoriteSong::builder()
+            .token(&page.token)
+            .music(idxs.into_iter().collect())
+            .build()
+            .send(&mut client)
+            .await?;
+        println!("Favorite songs have been edited.");
+    } else {
+        println!("WARNING: DRY-RUN!");
+    }
+
     // for (i, song) in songs.iter().enumerate() {
     //     let history = successors(Some(MaimaiVersion::SplashPlus), MaimaiVersion::next)
     //         .map(|v| match song.history.and_then(|h| h.get(&v)) {
