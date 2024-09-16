@@ -128,7 +128,11 @@ fn main() -> anyhow::Result<()> {
         }
     }
     if let Some(ReportFormat::JsonArray) = opts.format {
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        println!("[");
+        for out in out {
+            println!("  {},", serde_json::to_string(&out)?);
+        }
+        println!("]");
     }
 
     Ok(())
