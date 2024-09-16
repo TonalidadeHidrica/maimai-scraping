@@ -6,8 +6,9 @@ use enum_map::EnumMap;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    load_score_level::{InternalScoreLevel, MaimaiVersion},
+    load_score_level::MaimaiVersion,
     official_song_list::{ArtistName, Category, SongKana, UtageScore},
+    rating::InternalScoreLevel,
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
 };
 

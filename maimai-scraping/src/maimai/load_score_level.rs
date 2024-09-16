@@ -1,8 +1,4 @@
-use std::{
-    fmt::{Debug, Display},
-    marker::PhantomData,
-    path::PathBuf,
-};
+use std::{fmt::Debug, marker::PhantomData, path::PathBuf};
 
 use anyhow::{anyhow, bail};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
@@ -11,7 +7,6 @@ use enum_iterator::Sequence;
 use enum_map::Enum;
 use getset::{CopyGetters, Getters};
 use hashbrown::{HashMap, HashSet};
-use itertools::{iterate, Itertools};
 use maimai_scraping_utils::fs_json_util::read_json;
 use serde::{Deserialize, Deserializer, Serialize};
 use strum::EnumString;
@@ -70,7 +65,8 @@ pub mod in_lv_kind {
 
     use sealed::sealed;
 
-    use super::{CandidateBitmask, InternalScoreLevel};
+    use super::InternalScoreLevel;
+    use crate::maimai::rating::CandidateBitmask;
 
     #[sealed]
     pub trait Kind: Copy + Ord + Hash + Debug {
@@ -443,70 +439,4 @@ where
     Option::<SongRaw>::deserialize(deserializer)?
         .map(|song| Song::try_from(song).map_err(serde::de::Error::custom))
         .transpose()
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters, Serialize, Deserialize)]
-#[getset(get_copy = "pub")]
-pub struct Candidates {
-    level: ScoreConstant,
-    mask: CandidateBitmask,
-}
-impl Display for Candidates {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let x = u8::from(self.level);
-        write!(
-            f,
-            "{}.{}",
-            x / 10,
-            self.mask.bits().map(|i| i + x % 10).join(","),
-        )
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
-pub struct CandidateBitmask(u16);
-impl TryFrom<f64> for CandidateBitmask {
-    type Error = anyhow::Error;
-
-    fn try_from(value: f64) -> anyhow::Result<Self> {
-        let mask = value as u16;
-        if mask as f64 != value {
-            bail!("Unexpceted value (possibly fractional): {value}");
-        }
-        if mask > (1 << 10) {
-            bail!("Too large mask: {value}");
-        }
-        Ok(Self(mask))
-    }
-}
-impl CandidateBitmask {
-    pub fn has(self, x: u8) -> bool {
-        (x as u32) < u8::BITS && ((1 << x) & self.0) > 0
-    }
-    pub fn bits(self) -> impl Iterator<Item = u8> {
-        iterate(self.0, |x| x >> 1)
-            .enumerate()
-            .take_while(|&(_, x)| x > 0)
-            .filter_map(|(i, x)| ((x & 1) > 0).then_some(i as u8))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use itertools::Itertools;
-
-    use super::CandidateBitmask;
-
-    #[test]
-    fn test_candidate_bitmask() {
-        let x = CandidateBitmask(0b0100_1011);
-        assert!(x.has(0));
-        assert!(!x.has(2));
-        assert!(x.has(6));
-        assert!(!x.has(7));
-        assert!(!x.has(15));
-        assert!(!x.has(16));
-        assert!(!x.has(255));
-        assert!(x.bits().collect_vec() == [0, 1, 3, 6])
-    }
 }

@@ -54,3 +54,6 @@ typed-builder = "0.18.2"
 typed-html = { git = "https://github.com/bodil/typed-html.git", branch = "master" }
 url = { version = "2.2.1", features = ["serde"] }
 urlencoding = "2.1.3"
+
+[dev-dependencies]
+rand = "0.8.5"

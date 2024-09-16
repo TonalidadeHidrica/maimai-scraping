@@ -2023,6 +2023,7 @@ dependencies = [
  "once_cell",
  "ordered-float",
  "pretty_env_logger",
+ "rand",
  "regex",
  "reqwest",
  "rm",

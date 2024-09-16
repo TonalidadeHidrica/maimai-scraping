@@ -7,8 +7,9 @@ use hashbrown::HashMap;
 use itertools::Itertools;
 
 use crate::maimai::{
-    load_score_level::{InternalScoreLevel, MaimaiVersion},
+    load_score_level::MaimaiVersion,
     official_song_list::UtageScore,
+    rating::InternalScoreLevel,
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::RemoveState,
 };
@@ -237,7 +238,7 @@ pub struct OrdinaryScoreForVersionRef<'s> {
     level: Option<InternalScoreLevel>,
 }
 
-/// A reference to an utage score.
+/// A refegence to an utage score.
 #[derive(Clone, Copy, Debug, CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct UtageScoreRef<'s> {

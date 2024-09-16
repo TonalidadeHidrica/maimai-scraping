@@ -1,12 +1,17 @@
-#![allow(clippy::inconsistent_digit_grouping)]
-#![allow(clippy::zero_prefixed_literal)]
-use std::{fmt::Display, iter::successors, str::FromStr};
+use std::{
+    fmt::{Debug, Display},
+    iter::successors,
+    str::FromStr,
+};
 
 use anyhow::bail;
+use getset::CopyGetters;
+use itertools::iterate;
+use joinery::JoinableIterator;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    load_score_level::MaimaiVersion,
+    load_score_level::{self, MaimaiVersion},
     schema::latest::{AchievementValue, RatingValue},
 };
 
@@ -26,6 +31,8 @@ impl Display for RankCoefficient {
 // Retrieved 2023/07/10 20:02
 pub fn rank_coef(achievement_value: AchievementValue) -> RankCoefficient {
     #[allow(clippy::mistyped_literal_suffixes)]
+    #[allow(clippy::inconsistent_digit_grouping)]
+    #[allow(clippy::zero_prefixed_literal)]
     let ret = match achievement_value.get() {
         100_5000.. => 22_4,
         100_4999.. => 22_2,
@@ -61,6 +68,7 @@ impl TryFrom<u8> for ScoreConstant {
     type Error = u8;
 
     fn try_from(v: u8) -> Result<Self, u8> {
+        #[allow(clippy::inconsistent_digit_grouping)]
         match v {
             1_0..=15_0 => Ok(Self(v)),
             _ => Err(v),
@@ -78,6 +86,7 @@ impl Display for ScoreConstant {
 
 impl ScoreConstant {
     pub fn candidates() -> impl DoubleEndedIterator<Item = Self> {
+        #[allow(clippy::inconsistent_digit_grouping)]
         (1_0..=15_0).map(Self)
     }
 }
@@ -198,13 +207,213 @@ impl ScoreConstant {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters, Serialize, Deserialize)]
+#[getset(get_copy = "pub")]
+pub struct InternalScoreLevel {
+    offset: ScoreConstant,
+    mask: CandidateBitmask,
+}
+impl Display for InternalScoreLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.mask.empty() {
+            write!(f, "empty")
+        } else {
+            let x = u8::from(self.offset);
+            write!(
+                f,
+                "{}.{}",
+                x / 10,
+                self.mask.bits().map(|i| i + x % 10).join_with(","),
+            )
+        }
+    }
+}
+impl InternalScoreLevel {
+    fn empty() -> Self {
+        Self {
+            offset: ScoreConstant(10),
+            mask: CandidateBitmask(0),
+        }
+    }
+    pub fn new(
+        version: MaimaiVersion,
+        level: ScoreLevel,
+        mask: CandidateBitmask,
+    ) -> anyhow::Result<Self> {
+        let mut ret = Self::unknown(version, level);
+        if mask.0.trailing_zeros() < ret.mask.0.trailing_zeros() {
+            bail!("The given {mask:?} exceeds the range of score level {level}");
+        }
+        ret.mask.0 &= mask.0;
+        Ok(ret)
+    }
+
+    pub fn known(value: ScoreConstant) -> Self {
+        Self {
+            offset: value,
+            mask: CandidateBitmask(1),
+        }
+    }
+    pub fn unknown(version: MaimaiVersion, level: ScoreLevel) -> Self {
+        let (offset, count) = match level.level {
+            a @ 1..=6 => (a * 10, 10),
+            a @ 7..=14 => {
+                let boundary = if version >= MaimaiVersion::BuddiesPlus {
+                    6
+                } else {
+                    7
+                };
+                if level.plus {
+                    (a * 10 + boundary, 10 - boundary)
+                } else {
+                    (a * 10, boundary)
+                }
+            }
+            15 => (150, 1),
+            _ => unreachable!(),
+        };
+        Self {
+            offset: ScoreConstant::try_from(offset).unwrap(),
+            mask: CandidateBitmask((1 << count) - 1),
+        }
+    }
+    pub fn from_old(version: MaimaiVersion, value: load_score_level::InternalScoreLevel) -> Self {
+        use load_score_level::InternalScoreLevel::*;
+        match value {
+            Unknown(x) => Self::unknown(version, x),
+            Known(x) => Self::known(x),
+        }
+    }
+
+    pub fn get_if_unique(self) -> Option<ScoreConstant> {
+        self.is_unique().then(|| self.candidates().next().unwrap())
+    }
+
+    pub fn is_unique(self) -> bool {
+        self.mask.count_bits() == 1
+    }
+
+    pub fn into_level(self, version: MaimaiVersion) -> ScoreLevel {
+        self.offset.to_lv(version)
+    }
+
+    pub fn candidates(self) -> impl Iterator<Item = ScoreConstant> {
+        self.mask
+            .bits()
+            .map(move |x| ScoreConstant(self.offset.0 + x))
+    }
+
+    pub fn count_candidates(self) -> usize {
+        self.mask.count_bits() as _
+    }
+
+    pub fn retain(&mut self, mut f: impl FnMut(ScoreConstant) -> bool) {
+        for (i, lv) in self.mask.bits().zip(self.candidates()) {
+            if !f(lv) {
+                self.mask.0 &= !(1 << i);
+            }
+        }
+    }
+
+    pub fn intersection(self, other: Self) -> Self {
+        if self.mask.empty() || other.mask.empty() {
+            Self::empty()
+        } else {
+            let [x, y] = [self, other].map(Self::canonicaliize);
+            let merge = |x: Self, y: Self| {
+                //        v x.offset
+                // x 110101
+                // y    10101
+                //          ^ y.offset
+                //         ^^  diff
+                //      ^^^^^ y_span
+                //      ^^^  y_span - diff
+                // Only the least significant (y_span - diff) bits of `x.mask` is valid
+                let _: u16 = x.mask.0; // make sure that mask is 16 bit
+                let diff = x.offset.0 - y.offset.0;
+                let y_span = (16 - y.mask.0.leading_zeros()) as u8;
+                let x_mask = (1 << (y_span.saturating_sub(diff))) - 1;
+                let x_masked = x.mask.0 & x_mask;
+                if x_masked == 0 {
+                    Self::empty()
+                } else {
+                    Self {
+                        offset: y.offset,
+                        mask: CandidateBitmask((x_masked << diff) & y.mask.0),
+                    }
+                    .canonicaliize()
+                }
+            };
+            if x.offset.0 > y.offset.0 {
+                merge(x, y)
+            } else {
+                merge(y, x)
+            }
+        }
+    }
+
+    pub fn canonicaliize(self) -> Self {
+        if self.mask.empty() {
+            Self::empty()
+        } else {
+            let offset = self.mask.0.trailing_zeros();
+            Self {
+                offset: ScoreConstant(self.offset.0 + offset as u8),
+                mask: CandidateBitmask(self.mask.0 >> offset),
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CandidateBitmask(u16);
+impl TryFrom<f64> for CandidateBitmask {
+    type Error = anyhow::Error;
+
+    fn try_from(value: f64) -> anyhow::Result<Self> {
+        let mask = value as u16;
+        if mask as f64 != value {
+            bail!("Unexpceted value (possibly fractional): {value}");
+        }
+        if mask > (1 << 10) {
+            bail!("Too large mask: {value}");
+        }
+        Ok(Self(mask))
+    }
+}
+impl CandidateBitmask {
+    pub fn empty(self) -> bool {
+        self.0 == 0
+    }
+    pub fn has(self, x: u8) -> bool {
+        (x as u32) < u8::BITS && ((1 << x) & self.0) > 0
+    }
+    pub fn bits(self) -> impl Iterator<Item = u8> + Clone {
+        iterate(self.0, |x| x >> 1)
+            .enumerate()
+            .take_while(|&(_, x)| x > 0)
+            .filter_map(|(i, x)| ((x & 1) > 0).then_some(i as u8))
+    }
+    pub fn count_bits(self) -> usize {
+        self.0.count_ones() as _
+    }
+}
+impl Debug for CandidateBitmask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CandidateBitmask")
+            .field(&format_args!("{:#b}", self.0))
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
 
     use itertools::Itertools;
+    use rand::{thread_rng, Rng};
 
-    use super::ScoreLevel;
+    use super::{CandidateBitmask, InternalScoreLevel, ScoreConstant, ScoreLevel};
 
     #[test]
     fn test_song_level_range_inclusive() {
@@ -217,5 +426,89 @@ mod tests {
             .into_iter()
             .collect_vec();
         assert!(levels == set);
+    }
+
+    #[test]
+    fn test_candidate_bitmask() {
+        let x = CandidateBitmask(0b0100_1011);
+        assert!(x.has(0));
+        assert!(!x.has(2));
+        assert!(x.has(6));
+        assert!(!x.has(7));
+        assert!(!x.has(15));
+        assert!(!x.has(16));
+        assert!(!x.has(255));
+        assert!(x.bits().collect_vec() == [0, 1, 3, 6])
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    fn test_intersection() {
+        let x = InternalScoreLevel {
+            offset: ScoreConstant(130),
+            mask: CandidateBitmask(0b_110_100),
+        };
+        let y = InternalScoreLevel {
+            offset: ScoreConstant(130),
+            mask: CandidateBitmask(0b_101_110),
+        };
+        let z = InternalScoreLevel {
+            offset: ScoreConstant(131),
+            mask: CandidateBitmask(0b_100_10),
+        };
+        assert_eq!(x.intersection(y), z);
+
+        let x = InternalScoreLevel {
+            offset: ScoreConstant(50),
+            mask: CandidateBitmask(0b_110_100),
+        };
+        let y = InternalScoreLevel {
+            offset: ScoreConstant(130),
+            mask: CandidateBitmask(0b_101_110),
+        };
+        let z = InternalScoreLevel::empty();
+        assert_eq!(x.intersection(y), z);
+    }
+
+    #[test]
+    fn test_intersection_stress() {
+        let mut rng = thread_rng();
+        let mut gen = |bias| {
+            let offset = rng.gen_range(10..=150);
+            let max = (150 - offset + 1).min(bias);
+            let mask = rng.gen_range(0..(1 << max));
+            InternalScoreLevel {
+                offset: ScoreConstant(offset),
+                mask: CandidateBitmask(mask),
+            }
+        };
+        let mut run = |x, y| {
+            // Clippy false positive!!!!!
+            #[allow(clippy::redundant_closure)]
+            let [x, y] = [x, y].map(|x| gen(x));
+            let [xs, ys] = [x, y].map(|x| x.candidates().collect::<BTreeSet<_>>());
+            let mut expected = xs.intersection(&ys).peekable();
+            let z = match expected.peek() {
+                None => InternalScoreLevel::empty(),
+                Some(&&offset) => {
+                    let mut mask = 0;
+                    for lv in expected {
+                        mask |= 1u16.checked_shl((lv.0 - offset.0) as u32).unwrap();
+                    }
+                    InternalScoreLevel {
+                        offset,
+                        mask: CandidateBitmask(mask),
+                    }
+                }
+            };
+            assert_eq!(x.intersection(y), z, "While merging {x:?} and {y:?}");
+        };
+        for _ in 0..100_000 {
+            for x in [1, 5, 10] {
+                for y in [1, 5, 10] {
+                    run(x, y);
+                }
+            }
+        }
     }
 }

@@ -25,7 +25,7 @@ fn main() -> anyhow::Result<()> {
         toml::from_str(&fs_err::read_to_string(opts.estimator_config)?)?;
     let datas = config.read_all()?;
 
-    let mut estimator = Estimator::new(&database, MaimaiVersion::latest());
+    let mut estimator = Estimator::new(&database, MaimaiVersion::latest())?;
     let before_len = estimator.event_len();
     update_all(&database, &datas, &mut estimator)?;
     for event in &estimator.events()[before_len..] {

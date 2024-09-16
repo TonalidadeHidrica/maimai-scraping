@@ -18,13 +18,12 @@ use getset::{CopyGetters, Getters};
 use hashbrown::HashMap;
 use itertools::Itertools;
 use joinery::JoinableIterator;
-use smallvec::{smallvec, SmallVec};
 
 use crate::algorithm::possibilties_from_sum_and_ordering;
 
 use super::{
-    load_score_level::{InternalScoreLevel, MaimaiVersion},
-    rating::{rank_coef, single_song_rating, ScoreConstant},
+    load_score_level::MaimaiVersion,
+    rating::{rank_coef, single_song_rating, InternalScoreLevel, ScoreConstant},
     schema::latest::{AchievementValue, PlayTime, RatingValue},
     song_list::{
         database::{OrdinaryScoreForVersionRef, OrdinaryScoreRef, SongDatabase},
@@ -32,7 +31,7 @@ use super::{
     },
 };
 
-type CandidateList = SmallVec<[ScoreConstant; 6]>;
+type CandidateList = InternalScoreLevel;
 
 /// See the [module doc](`self`) for the definition of type parameters `'s` and `L`.
 pub struct Estimator<'s, LD, LL> {
@@ -76,14 +75,14 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}: {} to [{}] {}",
+            "{}: {} to {} {}",
             self.score,
-            if self.candidates.len() == 1 {
+            if self.candidates.is_unique() {
                 "determined"
             } else {
                 "constrained"
             },
-            self.candidates.iter().join_with(", "),
+            self.candidates,
             self.reason
         )?;
         Ok(())
@@ -103,20 +102,20 @@ pub enum Reason<LD, LL> {
 }
 
 impl<'s, LD, LL> Estimator<'s, LD, LL> {
-    pub fn new(database: &SongDatabase<'s>, version: MaimaiVersion) -> Self {
+    pub fn new(database: &SongDatabase<'s>, version: MaimaiVersion) -> anyhow::Result<Self> {
         // TODO check if version is supported
 
         let mut events = IndexedVec(vec![]);
         let map = database
             .all_scores_for_version(version)
-            .map(|score| (score.score(), Candidates::new(&mut events, version, score)))
-            .collect();
+            .map(|score| anyhow::Ok((score.score(), Candidates::new(&mut events, score)?)))
+            .collect::<Result<_, _>>()?;
 
-        Self {
+        Ok(Self {
             version,
             map,
             events,
-        }
+        })
     }
 
     pub fn set(
@@ -132,16 +131,16 @@ impl<'s, LD, LL> Estimator<'s, LD, LL> {
             .map
             .get_mut(&score)
             .with_context(|| format!("The following score was not in the map: {score:?}"))?;
-        let old_len = candidates.candidates.len();
-        candidates.candidates.retain(|&mut v| predicate(v));
-        if candidates.candidates.len() < old_len {
+        let old_len = candidates.candidates.count_candidates();
+        candidates.candidates.retain(predicate);
+        if candidates.candidates.count_candidates() < old_len {
             candidates.reasons.push(self.events.push(Event {
                 score,
-                candidates: candidates.candidates.clone(),
+                candidates: candidates.candidates,
                 reason,
             }));
         }
-        if candidates.candidates.is_empty() {
+        if candidates.candidates.is_unique() {
             bail!(
                 "No more candidates for {score:?}: {}",
                 candidates
@@ -335,12 +334,13 @@ where
             // println!("{rating_sum_is_reliable}");
             let mut sub_list = vec![];
             #[derive(Clone, Copy)]
-            struct Entry<'s, 'a, E> {
+            struct Entry<'s, E> {
                 new: bool,
                 contributes_to_sum: bool,
                 rating_target_entry: E,
                 key: OrdinaryScoreRef<'s>,
-                levels: &'a [ScoreConstant],
+                // levels: &'a [ScoreConstant],
+                levels: InternalScoreLevel,
             }
             for (new, contributes_to_sum, entries) in [
                 (true, true, list.target_new()),
@@ -368,7 +368,7 @@ where
                         contributes_to_sum,
                         rating_target_entry,
                         key: score,
-                        levels: &levels.candidates,
+                        levels: levels.candidates,
                     });
 
                     // let Some((key, levels)) = self.levels_from_target_entry(rating_target_entry)?
@@ -385,13 +385,13 @@ where
                 }
             }
             #[derive(Clone, Copy)]
-            struct DpElement<'s, 'a, E> {
+            struct DpElement<'s, E> {
                 level: ScoreConstant,
                 single_song_rating: usize,
-                entry: Entry<'s, 'a, E>,
+                entry: Entry<'s, E>,
                 // _phantom: PhantomData<fn() -> L>,
             }
-            impl<'s, E> DpElement<'s, '_, E>
+            impl<'s, E> DpElement<'s, E>
             where
                 E: RatingTargetEntryLike<'s>,
             {
@@ -403,7 +403,7 @@ where
                     )
                 }
             }
-            impl<'s, E> std::fmt::Debug for DpElement<'s, '_, E>
+            impl<'s, E> std::fmt::Debug for DpElement<'s, E>
             where
                 E: RatingTargetEntryLike<'s>,
             {
@@ -416,7 +416,7 @@ where
                 sub_list.len(),
                 |i| {
                     let entry = sub_list[i];
-                    entry.levels.iter().map(move |&level| {
+                    entry.levels.candidates().map(move |level| {
                         let a = entry.rating_target_entry.achievement();
                         let single_song_rating =
                             single_song_rating(level, a, rank_coef(a)).get() as usize;
@@ -640,31 +640,39 @@ pub trait RatingTargetEntryLike<'s> {
 impl<'s> Candidates<'s> {
     fn new<LD, LL>(
         events: &mut IndexedVec<Event<'s, LD, LL>>,
-        version: MaimaiVersion,
+        // version: MaimaiVersion,
         score: OrdinaryScoreForVersionRef<'s>,
-    ) -> Candidates<'s> {
+    ) -> anyhow::Result<Candidates<'s>> {
         let mut reasons = vec![];
-        let candidates = match score.level() {
-            Some(lv) => {
-                let candidates = match lv {
-                    InternalScoreLevel::Known(lv) => smallvec![lv],
-                    InternalScoreLevel::Unknown(lv) => lv
-                        .score_constant_candidates_aware(MaimaiVersion::BuddiesPlus <= version)
-                        .collect(),
-                };
-                reasons.push(events.push(Event {
-                    score: score.score(),
-                    candidates: candidates.clone(),
-                    reason: Reason::Database(lv),
-                }));
-                candidates
-            }
-            None => ScoreConstant::candidates().collect(),
-        };
-        Self {
+        let candidates = score
+            .level()
+            .with_context(|| format!("Missing score level: {score:?}"))?;
+        reasons.push(events.push(Event {
+            score: score.score(),
+            candidates,
+            reason: Reason::Database(candidates),
+        }));
+        // let candidates = match score.level() {
+        //     Some(lv) => {
+        //         let candidates = match lv {
+        //             InternalScoreLevel::Known(lv) => smallvec![lv],
+        //             InternalScoreLevel::Unknown(lv) => lv
+        //                 .score_constant_candidates_aware(MaimaiVersion::BuddiesPlus <= version)
+        //                 .collect(),
+        //         };
+        //         reasons.push(events.push(Event {
+        //             score: score.score(),
+        //             candidates,
+        //             reason: Reason::Database(candidates),
+        //         }));
+        //         candidates
+        //     }
+        //     None => ScoreConstant::candidates().collect(),
+        // };
+        Ok(Self {
             score: score.score(),
             candidates,
             reasons,
-        }
+        })
     }
 }

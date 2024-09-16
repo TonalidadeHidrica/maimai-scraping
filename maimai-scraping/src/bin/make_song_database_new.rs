@@ -18,11 +18,9 @@ use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::info;
 use maimai_scraping::maimai::{
-    load_score_level::{
-        self, in_lv_kind, InternalScoreLevel, MaimaiVersion, Song as InLvSong, SongRaw,
-    },
+    load_score_level::{self, in_lv_kind, MaimaiVersion, Song as InLvSong, SongRaw},
     official_song_list::{self, ScoreDetails, UtageIdentifier},
-    rating::{ScoreConstant, ScoreLevel},
+    rating::{InternalScoreLevel, ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::{
         database::SongDatabase, OrdinaryScore, OrdinaryScores, RemoveState, Song, SongAbbreviation,
@@ -264,34 +262,32 @@ impl Results {
                                     Some(&data.version().version()),
                                 )?;
                             }
+
+                            let lv = |v| InternalScoreLevel::unknown(version, v);
                             merge_levels(
                                 &mut scores.basic.levels[version],
-                                InternalScoreLevel::Unknown(scores_data.basic()),
+                                lv(scores_data.basic()),
                                 version,
                             )?;
                             merge_levels(
                                 &mut scores.advanced.levels[version],
-                                InternalScoreLevel::Unknown(scores_data.advanced()),
+                                lv(scores_data.advanced()),
                                 version,
                             )?;
                             merge_levels(
                                 &mut scores.expert.levels[version],
-                                InternalScoreLevel::Unknown(scores_data.expert()),
+                                lv(scores_data.expert()),
                                 version,
                             )?;
                             merge_levels(
                                 &mut scores.master.levels[version],
-                                InternalScoreLevel::Unknown(scores_data.master()),
+                                lv(scores_data.master()),
                                 version,
                             )?;
                             if let Some(level) = scores_data.re_master() {
                                 let re_master =
                                     scores.re_master.get_or_insert_with(Default::default);
-                                merge_levels(
-                                    &mut re_master.levels[version],
-                                    InternalScoreLevel::Unknown(level),
-                                    version,
-                                )?;
+                                merge_levels(&mut re_master.levels[version], lv(level), version)?;
                             }
                         }
                     }
@@ -346,7 +342,11 @@ impl InLvKind for in_lv_kind::Levels {
         value: Self::Value,
         version: MaimaiVersion,
     ) -> anyhow::Result<()> {
-        merge_levels(levels, value, version)
+        merge_levels(
+            levels,
+            InternalScoreLevel::from_old(version, value),
+            version,
+        )
     }
 }
 impl InLvKind for in_lv_kind::Bitmask {
@@ -355,7 +355,11 @@ impl InLvKind for in_lv_kind::Bitmask {
         value: Self::Value,
         version: MaimaiVersion,
     ) -> anyhow::Result<()> {
-        todo!()
+        let Some(level) = levels else {
+            bail!("Unable to determine base level");
+        };
+        let new = InternalScoreLevel::new(version, level.into_level(version), value)?;
+        merge_levels(levels, new, version)
     }
 }
 
@@ -566,7 +570,7 @@ impl Results {
                         } else {
                             last_version
                         };
-                        map[version] = Some(InternalScoreLevel::Unknown(level));
+                        map[version] = Some(InternalScoreLevel::unknown(version, level));
                         OrdinaryScore { levels: map }
                     })
                 };
@@ -670,7 +674,7 @@ impl Results {
                                 .get_score_mut(difficulty)
                                 .with_context(missing_song)?
                                 .levels[version],
-                            InternalScoreLevel::Unknown(level),
+                            InternalScoreLevel::unknown(version, level),
                             version,
                         )
                         .with_context(|| format!("While processing {entry:?} in {version:?}"))?;
@@ -723,7 +727,7 @@ impl Results {
                             .get_score_mut(entry.difficulty)
                             .with_context(missing_song)?
                             .levels[version],
-                        InternalScoreLevel::Known(level),
+                        InternalScoreLevel::known(level),
                         version,
                     )
                     .with_context(|| format!("While processing {entry:?} in {version:?}"))?;
@@ -819,13 +823,8 @@ impl Results {
         for item in collected_songs.iter().zip_longest(&official_songs) {
             match item {
                 EitherOrBoth::Both(collected, (song, score)) => {
-                    let level_ok = |x: ScoreLevel| {
-                        // x == y.into_level()
-                        move |y: InternalScoreLevel| match y {
-                            InternalScoreLevel::Unknown(y) => x == y,
-                            InternalScoreLevel::Known(y) => x == y.to_lv(version),
-                        }
-                    };
+                    let level_ok =
+                        |x: ScoreLevel| move |y: InternalScoreLevel| x == y.into_level(version);
                     let ok = |generation: ScoreGeneration| {
                         move |levels: official_song_list::Levels| {
                             Some(match &collected.scores[generation] {
@@ -982,53 +981,66 @@ fn merge_levels(
     version: MaimaiVersion,
 ) -> anyhow::Result<()> {
     enum Verdict {
-        Assign,
-        Keep,
+        Assign(InternalScoreLevel),
         Inconsistent(InternalScoreLevel),
     }
-    use InternalScoreLevel::*;
+    // use InternalScoreLevel::*;
     use Verdict::*;
     let verdict = match x {
-        None => Assign,
-        &mut Some(x0) => match (x0, y) {
-            (Unknown(x), Unknown(y)) => {
-                if x == y {
-                    Keep
-                } else {
-                    Inconsistent(x0)
-                }
+        None => Assign(y),
+        &mut Some(x) => {
+            if x.into_level(version) != y.into_level(version) {
+                Inconsistent(x)
+            } else {
+                Assign(x.intersection(y))
             }
-            (Unknown(x), Known(y)) => {
-                if y.to_lv(version) == x {
-                    Assign
-                } else {
-                    Inconsistent(x0)
-                }
-            }
-            (Known(x), Unknown(y)) => {
-                if x.to_lv(version) == y {
-                    Keep
-                } else {
-                    Inconsistent(x0)
-                }
-            }
-            (Known(x), Known(y)) => {
-                if x == y {
-                    Keep
-                } else {
-                    Inconsistent(x0)
-                }
-            }
-        },
+            // match (x0, y) {
+            //     (Unknown(x), Unknown(y)) => {
+            //         if x == y {
+            //             Keep
+            //         } else {
+            //             Inconsistent(x0)
+            //         }
+            //     }
+            //     (Unknown(x), Known(y)) => {
+            //         if y.to_lv(version) == x {
+            //             Assign
+            //         } else {
+            //             Inconsistent(x0)
+            //         }
+            //     }
+            //     (Known(x), Unknown(y)) => {
+            //         if x.to_lv(version) == y {
+            //             Keep
+            //         } else {
+            //             Inconsistent(x0)
+            //         }
+            //     }
+            //     (Known(x), Known(y)) => {
+            //         if x == y {
+            //             Keep
+            //         } else {
+            //             Inconsistent(x0)
+            //         }
+            //     }
+            // },
+        }
     };
-    if let Assign = verdict {
-        *x = Some(y);
+    match verdict {
+        Assign(y) => {
+            *x = Some(y);
+            Ok(())
+        }
+        Inconsistent(x) => bail!("Inconsistent levels: known to be {x:?}, found {y:?}"),
     }
-    if let Inconsistent(x) = verdict {
-        bail!("Inconsistent levels: known to be {x:?}, found {y:?}")
-    } else {
-        Ok(())
-    }
+    // if let Assign = verdict {
+    //     *x = Some(y);
+    // }
+    // if let Inconsistent(x) = verdict {
+    //     bail!("Inconsistent levels: known to be {x:?}, found {y:?}")
+    // } else {
+    //     Ok(())
+    // }
 }
 
 fn merge_remove_state(
