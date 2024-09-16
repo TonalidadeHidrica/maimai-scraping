@@ -51,6 +51,10 @@ struct Opts {
 type InLvSongMask = InLvSong<in_lv_kind::Bitmask>;
 type UtageIdentifierMergeMap =
     HashMap<(SongIcon, UtageIdentifier<'static>), UtageIdentifier<'static>>;
+type InLvCorrectionMap<K = in_lv_kind::Levels> = HashMap<
+    SongIcon,
+    HashMap<(MaimaiVersion, ScoreGeneration, ScoreDifficulty), [<K as in_lv_kind::Kind>::Value; 2]>,
+>;
 #[derive(Default)]
 /// Collects the resources for the song list.
 struct Resources {
@@ -63,6 +67,7 @@ struct Resources {
     additional_abbrevs: Vec<(SongAbbreviation, SongName)>,
     utage_identifier_merge: UtageIdentifierMergeMap,
     version_supplemental: Vec<VersionSupplemental>,
+    in_lv_override: InLvCorrectionMap,
 }
 impl Resources {
     fn load(opts: &Opts) -> anyhow::Result<Self> {
@@ -156,6 +161,24 @@ impl Resources {
             .collect();
 
         ret.version_supplemental = read_json(opts.database_dir.join("version_supplemental.json"))?;
+
+        // Read `in_lv` override map
+        ret.in_lv_override = read_json::<
+            _,
+            Vec<(
+                SongIcon,
+                Vec<((MaimaiVersion, ScoreGeneration, ScoreDifficulty), [f64; 2])>,
+            )>,
+        >(opts.database_dir.join("in_lv_override.json"))?
+        .into_iter()
+        .map(|(icon, values)| {
+            let map = values
+                .into_iter()
+                .map(|(key, [x, y])| anyhow::Ok((key, [x.try_into()?, y.try_into()?])))
+                .collect::<Result<_, _>>()?;
+            anyhow::Ok((icon, map))
+        })
+        .collect::<Result<_, _>>()?;
 
         Ok(ret)
     }
@@ -369,6 +392,7 @@ impl Results {
         &mut self,
         version: MaimaiVersion,
         in_lv: &[InLvSong<K>],
+        overrides: Option<&InLvCorrectionMap<K>>,
     ) -> anyhow::Result<()> {
         // generation: ScoreGeneration,
         // version: MaimaiVersion,
@@ -400,6 +424,7 @@ impl Results {
                 song,
                 version,
                 data,
+                overrides,
             )?;
         }
         Ok(())
@@ -412,6 +437,7 @@ impl Results {
         song: &mut Song,
         version: MaimaiVersion,
         data: &InLvSong<K>,
+        overrides: Option<&InLvCorrectionMap<K>>,
     ) -> Result<(), anyhow::Error> {
         (|| {
             // Update song name map
@@ -439,27 +465,46 @@ impl Results {
             }
 
             // Record `levels` (indexed by `generation` and `version`)
+            let get = |difficulty: ScoreDifficulty| {
+                let Some(level) = data.levels().get(difficulty) else {
+                    return Ok(None);
+                };
+                let Some(overrides) = overrides else {
+                    return Ok(Some(level));
+                };
+                let key = (version, data.generation(), difficulty);
+                let Some(&[before, after]) = overrides.get(data.icon()).and_then(|r| r.get(&key))
+                else {
+                    return Ok(Some(level));
+                };
+                if before != level {
+                    bail!(
+                        "Request to override {key:?} from {before:?} to {after:?}, but found {level:?}"
+                    );
+                }
+                Ok(Some(after))
+            };
             K::merge_levels(
                 &mut scores.basic.levels[version],
-                data.levels().get(ScoreDifficulty::Basic).unwrap(),
+                get(ScoreDifficulty::Basic)?.unwrap(),
                 version,
             )?;
             K::merge_levels(
                 &mut scores.advanced.levels[version],
-                data.levels().get(ScoreDifficulty::Advanced).unwrap(),
+                get(ScoreDifficulty::Advanced)?.unwrap(),
                 version,
             )?;
             K::merge_levels(
                 &mut scores.expert.levels[version],
-                data.levels().get(ScoreDifficulty::Expert).unwrap(),
+                get(ScoreDifficulty::Expert)?.unwrap(),
                 version,
             )?;
             K::merge_levels(
                 &mut scores.master.levels[version],
-                data.levels().get(ScoreDifficulty::Master).unwrap(),
+                get(ScoreDifficulty::Master)?.unwrap(),
                 version,
             )?;
-            if let Some(level) = data.levels().get(ScoreDifficulty::ReMaster) {
+            if let Some(level) = get(ScoreDifficulty::ReMaster)? {
                 K::merge_levels(
                     &mut scores.re_master.get_or_insert_with(Default::default).levels[version],
                     level,
@@ -479,7 +524,9 @@ impl Results {
 
             anyhow::Ok(())
         })()
-        .with_context(|| format!("While incorporating {data:?} into {song:?}"))
+        .with_context(|| {
+            format!("While incorporating {data:?} of in_lv version {version:?} into {song:?}")
+        })
     }
 }
 
@@ -629,6 +676,7 @@ impl Results {
                     song,
                     version,
                     &data,
+                    None,
                 )?;
             }
 
@@ -1110,10 +1158,10 @@ fn main() -> anyhow::Result<()> {
             })?;
     }
     for (&version, in_lv) in &resources.in_lv {
-        results.read_in_lv(version, in_lv)?;
+        results.read_in_lv(version, in_lv, Some(&resources.in_lv_override))?;
     }
     for (&version, in_lv_bitmask) in &resources.in_lv_bitmask {
-        results.read_in_lv(version, in_lv_bitmask)?;
+        results.read_in_lv(version, in_lv_bitmask, None)?;
     }
     results.read_removed_songs_wiki(&resources.removed_songs_wiki)?;
     results.read_removed_songs_supplemental(&resources.removed_songs_supplemental)?;

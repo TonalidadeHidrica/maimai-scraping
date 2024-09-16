@@ -266,6 +266,7 @@ impl InternalScoreLevel {
     Eq,
     PartialOrd,
     Ord,
+    Hash,
     Debug,
     EnumString,
     Serialize,
