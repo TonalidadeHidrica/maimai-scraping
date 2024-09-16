@@ -124,7 +124,7 @@ impl<'s> SongRef<'s> {
             .map(move |score| UtageScoreRef { song: self, score })
     }
 
-    pub fn latest_song_name(&self) -> &SongName {
+    pub fn latest_song_name(&self) -> &'s SongName {
         // Guaranteed to be present by `verify_songs`
         self.song.latest_song_name().unwrap()
     }

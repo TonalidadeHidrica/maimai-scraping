@@ -47,6 +47,25 @@ struct Candidates<'s> {
     candidates: CandidateList,
     reasons: Vec<usize>,
 }
+#[derive(Clone, Copy)]
+pub struct CandidatesRef<'s, 'e, LD, LL> {
+    candidates: &'e Candidates<'s>,
+    parent: &'s Estimator<'s, LD, LL>,
+}
+impl<'s, 'e, LD, LL> CandidatesRef<'s, 'e, LD, LL> {
+    pub fn score(self) -> OrdinaryScoreRef<'s> {
+        self.candidates.score
+    }
+    pub fn candidates(self) -> CandidateList {
+        self.candidates.candidates
+    }
+    pub fn reasons(self) -> impl Iterator<Item = &'e Event<'s, LD, LL>> + Clone {
+        self.candidates
+            .reasons
+            .iter()
+            .map(|&i| &self.parent.events.0[i])
+    }
+}
 
 struct IndexedVec<T>(Vec<T>);
 impl<T> IndexedVec<T> {
@@ -171,6 +190,15 @@ impl<'s, LD, LL> Estimator<'s, LD, LL> {
             );
         }
         Ok(())
+    }
+    pub fn get<'e: 's>(
+        &'e self,
+        score: OrdinaryScoreRef<'s>,
+    ) -> Option<CandidatesRef<'s, 'e, LD, LL>> {
+        Some(CandidatesRef {
+            candidates: self.map.get(&score)?,
+            parent: self,
+        })
     }
 
     pub fn events(&self) -> &[Event<'s, LD, LL>] {

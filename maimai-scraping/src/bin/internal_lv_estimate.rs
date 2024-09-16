@@ -1,8 +1,11 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use hashbrown::HashSet;
+use joinery::JoinableIterator;
+use lazy_format::lazy_format;
 use maimai_scraping::maimai::{
-    internal_lv_estimator::{self, multi_user::update_all, Estimator},
+    internal_lv_estimator::{self, multi_user::update_all, Estimator, Reason},
     load_score_level::MaimaiVersion,
     song_list::{self, database::SongDatabase},
 };
@@ -25,11 +28,66 @@ fn main() -> anyhow::Result<()> {
         toml::from_str(&fs_err::read_to_string(opts.estimator_config)?)?;
     let datas = config.read_all()?;
 
-    let mut estimator = Estimator::new(&database, MaimaiVersion::latest())?;
+    let version = MaimaiVersion::latest();
+
+    let mut estimator = Estimator::new(&database, version)?;
     let before_len = estimator.event_len();
     update_all(&database, &datas, &mut estimator)?;
-    for event in &estimator.events()[before_len..] {
-        println!("{event}");
+
+    let scores = {
+        let mut scores = vec![];
+        let mut appeared = HashSet::new();
+        for candidates in estimator.events()[before_len..].iter().rev() {
+            if appeared.insert(candidates.score()) {
+                scores.push(candidates.score());
+            }
+        }
+        scores.reverse();
+        scores
+    };
+
+    println!("曲名\t\t\t確定Lv\t変更前mask\t変更後mask\t事由");
+    for score in scores {
+        let candidates = estimator.get(score).unwrap();
+        let lv = lazy_format!(match (candidates.candidates().get_if_unique()) {
+            None => "",
+            Some(lv) => "{lv}",
+        });
+        let song_name = score.scores().song().latest_song_name();
+        let generation = score.scores().generation().abbrev();
+        let difficulty = score.difficulty().abbrev();
+        let mask_before = score.score().levels[version]
+            .unwrap()
+            .in_lv_mask(version)
+            .get();
+        let mask_after = candidates.candidates().in_lv_mask(version).get();
+        let reasons = candidates
+            .reasons()
+            .map(|e| {
+                let reason = lazy_format!(match (e.reason()) {
+                    Reason::Database(_) => "既知データより",
+                    Reason::Delta(a, d, x) => (
+                        "カード {} での {} のプレイで達成率 {a}、単曲レート {d} より",
+                        x.user(),
+                        x.play_time()
+                    ),
+                    Reason::List(x) => (
+                        "カード {} での {} 時点のベスト枠 ({}周目) より",
+                        x.user(),
+                        x.timestamp(),
+                        x.iteration() + 1,
+                    ),
+                });
+                lazy_format!(
+                    "{reason} {} に{}",
+                    e.candidates(),
+                    lazy_format!(if e.candidates().is_unique() => "確定" else => "限定")
+                )
+            })
+            .join_with("\t");
+        println!(
+            "{song_name}\t{generation}\t{difficulty}\t{lv}\t{mask_before}\t{mask_after}\t{reasons}"
+        );
     }
 
     Ok(())

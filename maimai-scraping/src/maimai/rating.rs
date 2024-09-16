@@ -255,23 +255,7 @@ impl InternalScoreLevel {
         }
     }
     pub fn unknown(version: MaimaiVersion, level: ScoreLevel) -> Self {
-        let (offset, count) = match level.level {
-            a @ 1..=6 => (a * 10, 10),
-            a @ 7..=14 => {
-                let boundary = if version >= MaimaiVersion::BuddiesPlus {
-                    6
-                } else {
-                    7
-                };
-                if level.plus {
-                    (a * 10 + boundary, 10 - boundary)
-                } else {
-                    (a * 10, boundary)
-                }
-            }
-            15 => (150, 1),
-            _ => unreachable!(),
-        };
+        let (offset, count) = offset_and_count(version, level);
         Self {
             offset: ScoreConstant::try_from(offset).unwrap(),
             mask: CandidateBitmask((1 << count) - 1),
@@ -367,10 +351,41 @@ impl InternalScoreLevel {
             }
         }
     }
+
+    pub fn in_lv_mask(self, version: MaimaiVersion) -> CandidateBitmask {
+        let level = self.into_level(version);
+        let (offset, _) = offset_and_count(version, level);
+        CandidateBitmask(self.mask.0 << (self.offset.0 - offset))
+    }
+}
+
+fn offset_and_count(version: MaimaiVersion, level: ScoreLevel) -> (u8, u8) {
+    match level.level {
+        a @ 1..=6 => (a * 10, 10),
+        a @ 7..=14 => {
+            let boundary = if version >= MaimaiVersion::BuddiesPlus {
+                6
+            } else {
+                7
+            };
+            if level.plus {
+                (a * 10 + boundary, 10 - boundary)
+            } else {
+                (a * 10, boundary)
+            }
+        }
+        15 => (150, 1),
+        _ => unreachable!(),
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CandidateBitmask(u16);
+impl CandidateBitmask {
+    pub fn get(self) -> u16 {
+        self.0
+    }
+}
 impl TryFrom<f64> for CandidateBitmask {
     type Error = anyhow::Error;
 
@@ -416,6 +431,8 @@ mod tests {
 
     use itertools::Itertools;
     use rand::{thread_rng, Rng};
+
+    use crate::maimai::load_score_level::MaimaiVersion;
 
     use super::{CandidateBitmask, InternalScoreLevel, ScoreConstant, ScoreLevel};
 
@@ -514,5 +531,27 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    pub fn test_in_lv_mask() {
+        let x = InternalScoreLevel {
+            offset: ScoreConstant(130),
+            mask: CandidateBitmask(0b_110_100),
+        };
+        assert_eq!(
+            x.in_lv_mask(MaimaiVersion::Buddies),
+            CandidateBitmask(0b_110_100)
+        );
+
+        let x = InternalScoreLevel {
+            offset: ScoreConstant(56),
+            mask: CandidateBitmask(0b_1011),
+        };
+        assert_eq!(
+            x.in_lv_mask(MaimaiVersion::Buddies),
+            CandidateBitmask(0b_1011_000_000)
+        );
     }
 }

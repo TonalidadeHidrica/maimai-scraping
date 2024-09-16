@@ -1,6 +1,6 @@
 use std::{ops::Range, path::PathBuf};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use chrono::NaiveDateTime;
 use clap::Args;
 use derive_more::{Display, From};
@@ -57,17 +57,20 @@ impl Config {
     }
 }
 
-#[derive(Clone, Copy, Debug, Display)]
+#[derive(Clone, Copy, Debug, Display, CopyGetters)]
 #[display(fmt = "play record played at {play_time} by {user}")]
+#[getset(get_copy = "pub")]
 pub struct RecordLabel<'n> {
     play_time: PlayTime,
     user: &'n UserName,
 }
-#[derive(Clone, Copy, Debug, Display)]
-#[display(fmt = "rating target recorded at {timestamp} by {user}")]
+#[derive(Clone, Copy, Debug, Display, CopyGetters)]
+#[display(fmt = "rating target recorded at {timestamp} by {user} (iteration {iteration})")]
+#[getset(get_copy = "pub")]
 pub struct RatingTargetLabel<'n> {
     timestamp: PlayTime,
     user: &'n UserName,
+    iteration: usize,
 }
 
 impl<'c, 'd, 's> RecordLike<'s, RecordLabel<'c>>
@@ -98,6 +101,7 @@ impl<'c, 'a, 'd, 's> RatingTargetListLike<'s, RatingTargetLabel<'c>>
         &'c UserConfig,
         PlayTime,
         &'a RatingTargetListAssociated<'d, 's>,
+        usize,
     )
 {
     fn played_within(&self, time_range: Range<PlayTime>) -> bool {
@@ -129,6 +133,7 @@ impl<'c, 'a, 'd, 's> RatingTargetListLike<'s, RatingTargetLabel<'c>>
         RatingTargetLabel {
             timestamp: self.1,
             user: &self.0.name,
+            iteration: self.3,
         }
     }
 }
@@ -179,16 +184,18 @@ pub fn update_all<'s, 'c>(
         }
     }
 
-    while {
+    for i in 0.. {
         let before_len = estimator.event_len();
         for &(config, _, ref rating_targets) in &datas {
             estimator.guess_from_rating_target_order(
                 rating_targets
                     .iter()
-                    .map(|&(time, ref list)| (config, time, list)),
+                    .map(|&(time, ref list)| (config, time, list, i)),
             )?;
         }
-        before_len < estimator.event_len()
-    } {}
-    Ok(())
+        if before_len == estimator.event_len() {
+            return Ok(());
+        }
+    }
+    bail!("Did not finish after 2^64-1 times (whoa, are humans still there?)");
 }
