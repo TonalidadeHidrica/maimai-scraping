@@ -200,15 +200,15 @@ impl<'s> OrdinaryScoreRef<'s> {
             if version < start_version {
                 return None;
             }
-            if !self
-                .scores
-                .song
-                .song
-                .remove_state
-                .exist_for_version(version)
-            {
-                return None;
-            }
+        }
+        if !self
+            .scores
+            .song
+            .song
+            .remove_state
+            .exist_for_version(version)
+        {
+            return None;
         }
         Some(OrdinaryScoreForVersionRef {
             score: self,
