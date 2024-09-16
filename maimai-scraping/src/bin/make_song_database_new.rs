@@ -72,6 +72,7 @@ struct Resources {
     utage_identifier_merge: UtageIdentifierMergeMap,
     version_supplemental: Vec<VersionSupplemental>,
     in_lv_override: InLvCorrectionMap,
+    in_lv_bitmask_override: InLvCorrectionMap<in_lv_kind::Bitmask>,
     in_lv_data_override: InLvDataCorrectionMap,
 }
 impl Resources {
@@ -184,6 +185,25 @@ impl Resources {
             anyhow::Ok((icon, map))
         })
         .collect::<Result<_, _>>()?;
+
+        // Read `in_lv_bitmask` override map
+        ret.in_lv_bitmask_override =
+            read_json::<
+                _,
+                Vec<(
+                    SongIcon,
+                    Vec<((MaimaiVersion, ScoreGeneration, ScoreDifficulty), [f64; 2])>,
+                )>,
+            >(opts.database_dir.join("in_lv_bitmask_override.json"))?
+            .into_iter()
+            .map(|(icon, values)| {
+                let map = values
+                    .into_iter()
+                    .map(|(key, [x, y])| anyhow::Ok((key, [x.try_into()?, y.try_into()?])))
+                    .collect::<Result<_, _>>()?;
+                anyhow::Ok((icon, map))
+            })
+            .collect::<Result<_, _>>()?;
 
         // Read `in_lv_data` override map
         ret.in_lv_data_override = read_json::<
@@ -1220,7 +1240,11 @@ fn main() -> anyhow::Result<()> {
         results.read_in_lv(version, in_lv, Some(&resources.in_lv_override))?;
     }
     for (&version, in_lv_bitmask) in &resources.in_lv_bitmask {
-        results.read_in_lv(version, in_lv_bitmask, None)?;
+        results.read_in_lv(
+            version,
+            in_lv_bitmask,
+            Some(&resources.in_lv_bitmask_override),
+        )?;
     }
     results.read_removed_songs_wiki(&resources.removed_songs_wiki)?;
     results.read_removed_songs_supplemental(&resources.removed_songs_supplemental)?;

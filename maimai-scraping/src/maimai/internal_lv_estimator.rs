@@ -103,12 +103,32 @@ pub enum Reason<LD, LL> {
 
 impl<'s, LD, LL> Estimator<'s, LD, LL> {
     pub fn new(database: &SongDatabase<'s>, version: MaimaiVersion) -> anyhow::Result<Self> {
+        Self::new_impl(database, version, false)
+    }
+
+    pub fn new_distrust_all(
+        database: &SongDatabase<'s>,
+        version: MaimaiVersion,
+    ) -> anyhow::Result<Self> {
+        Self::new_impl(database, version, true)
+    }
+
+    fn new_impl(
+        database: &SongDatabase<'s>,
+        version: MaimaiVersion,
+        distrust_all: bool,
+    ) -> anyhow::Result<Self> {
         // TODO check if version is supported
 
         let mut events = IndexedVec(vec![]);
         let map = database
             .all_scores_for_version(version)
-            .map(|score| anyhow::Ok((score.score(), Candidates::new(&mut events, score)?)))
+            .map(|score| {
+                anyhow::Ok((
+                    score.score(),
+                    Candidates::new(&mut events, version, score, distrust_all)?,
+                ))
+            })
             .collect::<Result<_, _>>()?;
 
         Ok(Self {
@@ -640,13 +660,19 @@ pub trait RatingTargetEntryLike<'s> {
 impl<'s> Candidates<'s> {
     fn new<LD, LL>(
         events: &mut IndexedVec<Event<'s, LD, LL>>,
-        // version: MaimaiVersion,
+        version: MaimaiVersion,
         score: OrdinaryScoreForVersionRef<'s>,
+        distrust: bool,
     ) -> anyhow::Result<Candidates<'s>> {
         let mut reasons = vec![];
         let candidates = score
             .level()
             .with_context(|| format!("Missing score level: {score:?}"))?;
+        let candidates = if distrust {
+            InternalScoreLevel::unknown(version, candidates.into_level(version))
+        } else {
+            candidates
+        };
         reasons.push(events.push(Event {
             score: score.score(),
             candidates,
