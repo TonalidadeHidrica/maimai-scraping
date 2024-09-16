@@ -19,6 +19,8 @@ use crate::maimai::{
 
 use super::{Estimator, NewOrOld, RatingTargetEntryLike, RatingTargetListLike, RecordLike};
 
+pub type MultiUserEstimator<'s, 'n> = Estimator<'s, RecordLabel<'n>, RatingTargetLabel<'n>>;
+
 #[derive(Deserialize, Getters)]
 pub struct Config {
     #[getset(get = "pub")]

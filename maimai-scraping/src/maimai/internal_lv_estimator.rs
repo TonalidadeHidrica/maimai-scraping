@@ -200,6 +200,12 @@ impl<'s, LD, LL> Estimator<'s, LD, LL> {
             parent: self,
         })
     }
+    pub fn get_scores<'e: 's>(&'e self) -> impl Iterator<Item = CandidatesRef<'s, 'e, LD, LL>> {
+        self.map.values().map(|candidates| CandidatesRef {
+            candidates,
+            parent: self,
+        })
+    }
 
     pub fn events(&self) -> &[Event<'s, LD, LL>] {
         &self.events.0

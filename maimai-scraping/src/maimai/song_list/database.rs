@@ -312,5 +312,31 @@ pub fn verify_songs(songs: &[Song]) -> anyhow::Result<()> {
         }
     }
 
+    // Score level is never empty.
+    for song in songs {
+        for (generation, scores) in &song.scores {
+            let Some(scores) = scores else { continue };
+            for (difficulty, score) in [
+                (ScoreDifficulty::Basic, Some(&scores.basic)),
+                (ScoreDifficulty::Advanced, Some(&scores.advanced)),
+                (ScoreDifficulty::Expert, Some(&scores.expert)),
+                (ScoreDifficulty::Master, Some(&scores.master)),
+                (ScoreDifficulty::ReMaster, scores.re_master.as_ref()),
+                //
+            ] {
+                let Some(score) = score else { continue };
+                for (version, level) in score.levels {
+                    let Some(level) = level else { continue };
+                    if level.is_empty() {
+                        bail!(
+                            "Empty score level: {} {generation:?} {difficulty:?} {version:?}",
+                            song.latest_song_name().unwrap(),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
 }
