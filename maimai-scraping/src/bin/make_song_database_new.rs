@@ -55,6 +55,10 @@ type InLvCorrectionMap<K = in_lv_kind::Levels> = HashMap<
     SongIcon,
     HashMap<(MaimaiVersion, ScoreGeneration, ScoreDifficulty), [<K as in_lv_kind::Kind>::Value; 2]>,
 >;
+type InLvDataCorrectionMap = HashMap<
+    SongIcon,
+    HashMap<(MaimaiVersion, ScoreGeneration, ScoreDifficulty), [InternalScoreLevel; 2]>,
+>;
 #[derive(Default)]
 /// Collects the resources for the song list.
 struct Resources {
@@ -68,6 +72,7 @@ struct Resources {
     utage_identifier_merge: UtageIdentifierMergeMap,
     version_supplemental: Vec<VersionSupplemental>,
     in_lv_override: InLvCorrectionMap,
+    in_lv_data_override: InLvDataCorrectionMap,
 }
 impl Resources {
     fn load(opts: &Opts) -> anyhow::Result<Self> {
@@ -175,6 +180,28 @@ impl Resources {
             let map = values
                 .into_iter()
                 .map(|(key, [x, y])| anyhow::Ok((key, [x.try_into()?, y.try_into()?])))
+                .collect::<Result<_, _>>()?;
+            anyhow::Ok((icon, map))
+        })
+        .collect::<Result<_, _>>()?;
+
+        // Read `in_lv_data` override map
+        ret.in_lv_data_override = read_json::<
+            _,
+            Vec<(
+                SongIcon,
+                Vec<((MaimaiVersion, ScoreGeneration, ScoreDifficulty), [f64; 2])>,
+            )>,
+        >(opts.database_dir.join("in_lv_data_override.json"))?
+        .into_iter()
+        .map(|(icon, values)| {
+            let map = values
+                .into_iter()
+                .map(|(key, [x, y])| {
+                    let parse =
+                        |x: f64| anyhow::Ok(InternalScoreLevel::from_old(key.0, x.try_into()?));
+                    anyhow::Ok((key, [parse(x)?, parse(y)?]))
+                })
                 .collect::<Result<_, _>>()?;
             anyhow::Ok((icon, map))
         })
@@ -686,7 +713,31 @@ impl Results {
         Ok(())
     }
 
-    fn read_in_lv_data(&mut self, version: MaimaiVersion, data: &InLvData) -> anyhow::Result<()> {
+    fn read_in_lv_data(
+        &mut self,
+        version: MaimaiVersion,
+        data: &InLvData,
+        overrides: &InLvDataCorrectionMap,
+    ) -> anyhow::Result<()> {
+        let try_override =
+            |level: InternalScoreLevel,
+             icon: &Option<SongIcon>,
+             key: (MaimaiVersion, ScoreGeneration, ScoreDifficulty)| {
+                if let Some(&[before, after]) = icon
+                    .as_ref()
+                    .and_then(|icon| overrides.get(icon))
+                    .and_then(|x| x.get(&key))
+                {
+                    if level == before {
+                        Ok(after)
+                    } else {
+                        bail!("Request to override {key:?} from {before:?} to {after:?}, but found {level:?}")
+                    }
+                } else {
+                    Ok(level)
+                }
+            };
+
         // Process unknown songs.
         // Remove entry once process so that no data unprocessed is left.
         let mut unknown: HashMap<_, _> = data.unknown.iter().collect();
@@ -722,7 +773,11 @@ impl Results {
                                 .get_score_mut(difficulty)
                                 .with_context(missing_song)?
                                 .levels[version],
-                            InternalScoreLevel::unknown(version, level),
+                            try_override(
+                                InternalScoreLevel::unknown(version, level),
+                                &song.icon,
+                                (version, entry.entry.generation(), entry.entry.difficulty),
+                            )?,
                             version,
                         )
                         .with_context(|| format!("While processing {entry:?} in {version:?}"))?;
@@ -775,7 +830,11 @@ impl Results {
                             .get_score_mut(entry.difficulty)
                             .with_context(missing_song)?
                             .levels[version],
-                        InternalScoreLevel::known(level),
+                        try_override(
+                            InternalScoreLevel::known(level),
+                            &song.icon,
+                            (version, entry.generation(), entry.difficulty),
+                        )?,
                         version,
                     )
                     .with_context(|| format!("While processing {entry:?} in {version:?}"))?;
@@ -1167,7 +1226,7 @@ fn main() -> anyhow::Result<()> {
     results.read_removed_songs_supplemental(&resources.removed_songs_supplemental)?;
     results.read_additional_abbrevs(&resources.additional_abbrevs)?;
     for (&version, in_lv_data) in &resources.in_lv_data {
-        results.read_in_lv_data(version, in_lv_data)?;
+        results.read_in_lv_data(version, in_lv_data, &resources.in_lv_data_override)?;
     }
     results.read_version_supplental(&resources.version_supplemental)?;
 
