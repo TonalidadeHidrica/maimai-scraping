@@ -27,7 +27,7 @@ use maimai_scraping::{
         rating::{self, ScoreConstant, ScoreLevel},
         schema::latest::{ScoreDifficulty, ScoreGeneration},
         song_list::{
-            database::{OrdinaryScoreRef, OrdinaryScoresRef, SongDatabase},
+            database::{OrdinaryScoreRef, SongDatabase},
             Song,
         },
         Maimai,
@@ -64,6 +64,15 @@ struct Opts {
     #[clap(long)]
     /// Never choose locked scores.  `--locked` and `--no-locked` cannot coexist.
     no_locked: bool,
+
+    #[clap(long)]
+    /// Include nonplayable scores.
+    /// `--include-nonplayable` and `--only-nonplayable` cannot coexist.
+    include_nonplayable: bool,
+    #[clap(long)]
+    /// Only include nonplayable scores.
+    /// `--include-nonplayable` and `--only-nonplayable` cannot coexist.
+    only_nonplayable: bool,
 
     #[clap(long)]
     dry_run: bool,
@@ -140,6 +149,9 @@ async fn main() -> anyhow::Result<()> {
     if opts.locked && opts.no_locked {
         bail!("--locked and --no-locked cannot coexist.")
     }
+    if opts.include_nonplayable && opts.only_nonplayable {
+        bail!("--include-nonplayable and --only-nonplayable cannot coexist.")
+    }
     if opts.dry_run && opts.append {
         bail!("--dry-run and --append cannot coexist.")
     }
@@ -179,13 +191,15 @@ async fn main() -> anyhow::Result<()> {
         let confident = if score.confident { "? " } else { "??" };
         let estimation = format!("[{estimation}]{confident}");
         let estimation = lazy_format!(if opts.hide_current => "" else => "{estimation:8}");
-        let locked = if locked_toml::is_locked(&locked_scores, score.candidates.score().scores()) {
-            '!'
+        let locked = if !locked_scores.is_playable(score.candidates.score().scores()) {
+            "!!"
+        } else if locked_scores.is_locked(score.candidates.score().scores()) {
+            "!"
         } else {
-            ' '
+            ""
         };
         println!(
-            "{i:>4} {history}{estimation} {locked} {}",
+            "{i:>4} {history}{estimation} {locked:2} {}",
             display_score(score.candidates.score(), opts.highlight_difficulty)
         );
     }
@@ -275,7 +289,7 @@ struct ScoreRet<'s, 'e: 's, 'n> {
 
 fn get_matching_scores<'s, 'e, 'n>(
     estimator: &'e MultiUserEstimator<'s, 'n>,
-    locked_scores: &HashSet<OrdinaryScoresRef<'s>>,
+    locked_scores: &locked_toml::LockedScores<'s>,
     opts: &Opts,
 ) -> anyhow::Result<Vec<ScoreRet<'s, 'e, 'n>>> {
     let version = MaimaiVersion::latest();
@@ -350,11 +364,21 @@ fn get_matching_scores<'s, 'e, 'n>(
             if_then(opts.dx_master, dx_master) && if_then(opts.no_dx_master, !dx_master)
         };
         let locked = {
-            let locked = locked_toml::is_locked(locked_scores, candidates.score().scores());
+            let locked = locked_scores.is_locked(candidates.score().scores());
             if_then(opts.locked, locked) && if_then(opts.no_locked, !locked)
         };
+        let playable = {
+            let playable = locked_scores.is_playable(candidates.score().scores());
+            if opts.include_nonplayable {
+                true
+            } else if opts.only_nonplayable {
+                !playable
+            } else {
+                playable
+            }
+        };
         let difficulty = opts.difficulty.map_or(true, |d| difficulty == d);
-        if previous && current && undetermined && dx_master && locked && difficulty {
+        if previous && current && undetermined && dx_master && locked && playable && difficulty {
             ret.push(ScoreRet {
                 candidates,
                 estimation,
@@ -411,7 +435,7 @@ fn if_then(a: bool, b: bool) -> bool {
 
 mod locked_toml {
     use anyhow::bail;
-    use hashbrown::HashSet;
+    use hashbrown::HashMap;
     use maimai_scraping::maimai::{
         load_score_level::MaimaiVersion,
         schema::latest::{ScoreGeneration, SongIcon, SongName},
@@ -430,13 +454,14 @@ mod locked_toml {
         pub generation: ScoreGeneration,
         pub icon: SongIcon,
         pub version: MaimaiVersion,
+        pub playable: bool,
     }
 
-    pub type LockedSet<'s> = HashSet<OrdinaryScoresRef<'s>>;
+    pub struct LockedScores<'s>(HashMap<OrdinaryScoresRef<'s>, bool>);
 
     impl Root {
-        pub fn read<'s>(&self, database: &'s SongDatabase) -> anyhow::Result<LockedSet<'s>> {
-            let mut ret = HashSet::new();
+        pub fn read<'s>(&self, database: &'s SongDatabase) -> anyhow::Result<LockedScores<'s>> {
+            let mut ret = HashMap::new();
             for data in &self.songs {
                 let song = database.song_from_icon(&data.icon)?;
                 if &data.name != song.latest_song_name() {
@@ -448,21 +473,29 @@ mod locked_toml {
                 if scores.scores().version != Some(data.version) {
                     bail!("Version mismtach: {data:?} {scores:?}")
                 }
-                ret.insert(scores);
+                ret.insert(scores, data.playable);
             }
-            Ok(ret)
+            Ok(LockedScores(ret))
         }
     }
 
-    pub fn is_locked(set: &LockedSet, score: OrdinaryScoresRef) -> bool {
-        set.contains(&score)
-            || score
-                .song()
-                .song()
-                .locked_history
-                .values()
-                .copied()
-                .last()
-                .unwrap_or(false)
+    impl LockedScores<'_> {
+        // Whether the score is locked (not playable by new card).
+        pub fn is_locked(&self, score: OrdinaryScoresRef) -> bool {
+            self.0.contains_key(&score)
+                || score
+                    .song()
+                    .song()
+                    .locked_history
+                    .values()
+                    .copied()
+                    .last()
+                    .unwrap_or(false)
+        }
+
+        // Whether the score is playable (by main card).
+        pub fn is_playable(&self, score: OrdinaryScoresRef) -> bool {
+            self.0.get(&score).copied().unwrap_or(true)
+        }
     }
 }
