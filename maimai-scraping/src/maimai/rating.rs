@@ -1,14 +1,14 @@
 use std::{
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, Write},
     iter::successors,
     str::FromStr,
 };
 
 use anyhow::bail;
 use getset::CopyGetters;
-use itertools::iterate;
-use joinery::JoinableIterator;
+use itertools::{chain, iterate, Itertools};
 use serde::{Deserialize, Serialize};
+use smol_str::SmolStrBuilder;
 
 use super::{
     load_score_level::{self, MaimaiVersion},
@@ -80,7 +80,9 @@ impl Display for ScoreConstant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let x = self.0 / 10;
         let y = self.0 % 10;
-        write!(f, "{}.{:01}", x, y)
+        let mut buffer = SmolStrBuilder::new();
+        write!(buffer, "{}.{:01}", x, y)?;
+        f.pad(buffer.finish().as_str())
     }
 }
 
@@ -176,7 +178,9 @@ impl FromStr for ScoreLevel {
 
 impl Display for ScoreLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.level, if self.plus { "+" } else { "" })
+        let mut buffer = SmolStrBuilder::new();
+        write!(buffer, "{}{}", self.level, if self.plus { "+" } else { "" })?;
+        f.pad(buffer.finish().as_str())
     }
 }
 
@@ -215,17 +219,30 @@ pub struct InternalScoreLevel {
 }
 impl Display for InternalScoreLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut buffer = SmolStrBuilder::new();
         if self.mask.empty() {
-            write!(f, "empty")
+            write!(buffer, "empty")?;
         } else {
             let x = u8::from(self.offset);
-            write!(
-                f,
-                "{}.{}",
-                x / 10,
-                self.mask.bits().map(|i| i + x % 10).join_with(","),
-            )
+            write!(buffer, "{}.", x / 10)?;
+            let f = self.mask.bits().map(|i| i + x % 10);
+            let f = chain!([128], f, [128]);
+            for (w, x, y) in f.tuple_windows() {
+                let (wx, xy) = (x.wrapping_sub(w), y.wrapping_sub(x));
+                if wx > 1 {
+                    if w != 128 {
+                        buffer.push(',');
+                    }
+                    write!(buffer, "{x}")?;
+                    if xy == 1 {
+                        buffer.push('-');
+                    }
+                } else if xy > 1 {
+                    write!(buffer, "{x}")?;
+                }
+            }
         }
+        f.pad(buffer.finish().as_str())
     }
 }
 impl InternalScoreLevel {
@@ -553,5 +570,33 @@ mod tests {
             x.in_lv_mask(MaimaiVersion::Buddies),
             CandidateBitmask(0b_1011_000_000)
         );
+    }
+
+    #[test]
+    #[allow(clippy::unusual_byte_groupings)]
+    pub fn test_in_lv_display() {
+        let x = InternalScoreLevel {
+            offset: ScoreConstant(130),
+            mask: CandidateBitmask(0b_110_100),
+        };
+        assert_eq!(x.to_string(), "13.2,4-5");
+
+        let x = InternalScoreLevel {
+            offset: ScoreConstant(60),
+            mask: CandidateBitmask(0b_111_111),
+        };
+        assert_eq!(x.to_string(), "6.0-5");
+
+        let x = InternalScoreLevel {
+            offset: ScoreConstant(60),
+            mask: CandidateBitmask(0b_100_000),
+        };
+        assert_eq!(x.to_string(), "6.5");
+
+        let x = InternalScoreLevel {
+            offset: ScoreConstant(60),
+            mask: CandidateBitmask(0b_010_101),
+        };
+        assert_eq!(x.to_string(), "6.0,2,4");
     }
 }

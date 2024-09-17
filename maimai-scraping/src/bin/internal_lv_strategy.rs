@@ -427,21 +427,25 @@ fn display_score<'s, 'o: 's, 'sr: 's>(
 ) -> impl Display + 's {
     let history = {
         let history = successors(Some(MaimaiVersion::SplashPlus), MaimaiVersion::next)
-            .map(|v| match score.candidates.score().score().levels[v] {
-                None => "".to_owned(),
-                Some(x) => match x.get_if_unique() {
-                    Some(y) => y.to_string(),
-                    _ => x.into_level(v).to_string(),
-                },
+            .map(move |v| {
+                lazy_format!(match (score.candidates.score().score().levels[v]) {
+                    None => ("{:4}", ""),
+                    Some(x) => (
+                        "{}",
+                        lazy_format!(match (x.get_if_unique()) {
+                            Some(y) => "{y:4}",
+                            _ => ("{:4}", x.into_level(v)),
+                        })
+                    ),
+                })
             })
-            .map(|v| lazy_format!("{v:4}"))
             .join_with(" ");
         lazy_format!(if hide_history => "" else => "[{history}] => ")
     };
     let estimation = {
         let estimation = score.estimation;
         let confident = if score.confident { "? " } else { "??" };
-        let estimation = format!("[{estimation}]{confident}");
+        let estimation = format!("{estimation:>8}{confident}");
         lazy_format!(if hide_current => "" else => "{estimation:8}")
     };
     let locked = if !locked_scores.is_playable(score.candidates.score().scores()) {
