@@ -21,6 +21,7 @@ struct Opts {
 
 #[derive(Clone, Copy, ValueEnum)]
 enum ReportFormat {
+    Simple,
     Tsv,
     JsonArray,
 }
@@ -61,6 +62,11 @@ fn main() -> anyhow::Result<()> {
     for score in scores {
         let candidates = estimator.get(score).unwrap();
         match opts.format {
+            Some(ReportFormat::Simple) => {
+                if let Some(lv) = candidates.candidates().get_if_unique() {
+                    println!("{}: {lv}", candidates.score());
+                }
+            }
             Some(ReportFormat::Tsv) => {
                 let lv = lazy_format!(match (candidates.candidates().get_if_unique()) {
                     None => "",
