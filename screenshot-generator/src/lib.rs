@@ -292,10 +292,9 @@ pub fn generate(
                     browser_context_id: None,
                 })?;
 
-                let data = dbg!(
-                    new_tab
-                        .evaluate(
-                            r#"
+                let data = new_tab
+                    .evaluate(
+                        r#"
                                 (() => {
                                     const body = document.querySelector('body');
                                     result = '';
@@ -312,11 +311,10 @@ pub fn generate(
                                     return result;
                                 })();
                             "#,
-                            false,
-                        )?
-                        .value
-                )
-                .context("Test data does not return a value")?;
+                        false,
+                    )?
+                    .value
+                    .context("Test data does not return a value")?;
                 let data = data.as_str().context("Test data is not a string")?;
 
                 let path = img_save_dir.to_owned().join(txt_name);
