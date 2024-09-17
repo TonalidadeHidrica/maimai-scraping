@@ -36,14 +36,19 @@ use scraper::Html;
 
 const TIMESTAMP_FORMAT: &str = "%Y-%m-%d_%H-%M-%S";
 
+pub struct GenerateConfig {
+    pub port: Option<u16>,
+    pub run_tool: bool,
+    pub run_test_data: bool,
+    pub pause_on_error: bool,
+}
+
 pub fn generate(
     img_save_dir: &Path,
     credentials: Credentials,
     user_identifier: UserIdentifier,
     records: Option<Vec<(PlayTime, Idx)>>,
-    port: Option<u16>,
-    run_tool: bool,
-    run_test_data: bool,
+    config: GenerateConfig,
 ) -> anyhow::Result<()> {
     let wait = || sleep(Duration::from_secs(1));
 
@@ -72,7 +77,7 @@ pub fn generate(
     info!("Logging in...");
     let browser = Browser::new(
         LaunchOptionsBuilder::default()
-            .port(port)
+            .port(config.port)
             .window_size(Some((1920, 19200))) // Wow, huge window...
             .build()?,
     )
@@ -194,7 +199,7 @@ pub fn generate(
             info!("Rating target is already saved.");
         }
 
-        if run_tool {
+        if config.run_tool {
             info!("Running the tool.");
             if tab.get_url() != RATING_TARGET_URL {
                 info!("Not in the rating target page!  Navigating there first.");
@@ -262,7 +267,7 @@ pub fn generate(
             }
         }
 
-        if run_test_data {
+        if config.run_test_data {
             let txt_name = format!("{latest_timestamp_fmt}_tool_testdata.txt");
             if !files_existing.contains(&txt_name) {
                 info!("Getting the test data");
@@ -329,8 +334,10 @@ pub fn generate(
         anyhow::Ok(())
     })() {
         log::error!("{ret:#}");
-        log::info!("Press Enter to resume");
-        std::io::stdin().read_line(&mut String::new())?;
+        if config.pause_on_error {
+            log::info!("Press Enter to resume");
+            std::io::stdin().read_line(&mut String::new())?;
+        }
     }
 
     info!("Done.");

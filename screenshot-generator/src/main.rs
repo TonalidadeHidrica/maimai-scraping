@@ -14,7 +14,7 @@ use maimai_scraping::{
     maimai::Maimai,
 };
 use maimai_scraping_utils::fs_json_util::read_json;
-use screenshot_generator::generate;
+use screenshot_generator::{generate, GenerateConfig};
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 use tokio::time::sleep;
@@ -26,6 +26,8 @@ struct Opts {
     run_tool: bool,
     #[arg(long)]
     run_test_data: bool,
+    #[arg(long)]
+    pause_on_error: bool,
 }
 #[derive(Deserialize)]
 struct Config {
@@ -108,9 +110,12 @@ async fn run(opts: &Opts, config: &Config, user_config: &UserConfig) -> anyhow::
         credentials,
         user_config.user_identifier.clone(),
         Some(records),
-        config.remote_debugging_port,
-        opts.run_tool,
-        opts.run_test_data,
+        GenerateConfig {
+            port: config.remote_debugging_port,
+            run_tool: opts.run_tool,
+            run_test_data: opts.run_test_data,
+            pause_on_error: opts.pause_on_error,
+        },
     )?;
     Ok(())
 }
