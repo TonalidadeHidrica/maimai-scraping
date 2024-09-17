@@ -26,10 +26,7 @@ use maimai_scraping::{
         official_song_list::SongKana,
         rating::{self, ScoreConstant, ScoreLevel},
         schema::latest::{ScoreDifficulty, ScoreGeneration},
-        song_list::{
-            database::{OrdinaryScoreRef, SongDatabase},
-            Song,
-        },
+        song_list::{database::SongDatabase, Song},
         Maimai,
     },
 };
@@ -176,31 +173,15 @@ async fn main() -> anyhow::Result<()> {
     let scores = get_matching_scores(&estimator, &locked_scores, &opts)?;
 
     for (i, score) in scores.iter().enumerate() {
-        let history = successors(Some(MaimaiVersion::SplashPlus), MaimaiVersion::next)
-            .map(|v| match score.candidates.score().score().levels[v] {
-                None => "".to_owned(),
-                Some(x) => match x.get_if_unique() {
-                    Some(y) => y.to_string(),
-                    _ => x.into_level(v).to_string(),
-                },
-            })
-            .map(|v| lazy_format!("{v:4}"))
-            .join_with(" ");
-        let history = lazy_format!(if opts.hide_history => "" else => "[{history}] => ");
-        let estimation = score.estimation;
-        let confident = if score.confident { "? " } else { "??" };
-        let estimation = format!("[{estimation}]{confident}");
-        let estimation = lazy_format!(if opts.hide_current => "" else => "{estimation:8}");
-        let locked = if !locked_scores.is_playable(score.candidates.score().scores()) {
-            "!!"
-        } else if locked_scores.is_locked(score.candidates.score().scores()) {
-            "!"
-        } else {
-            ""
-        };
         println!(
-            "{i:>4} {history}{estimation} {locked:2} {}",
-            display_score(score.candidates.score(), opts.highlight_difficulty)
+            "{i:>4} {}",
+            display_score(
+                &opts,
+                opts.hide_history,
+                opts.hide_current,
+                &locked_scores,
+                score
+            )
         );
     }
 
@@ -222,34 +203,19 @@ async fn main() -> anyhow::Result<()> {
                 idxs.insert(&song.idx);
             }
         }
+
         let mut not_all = false;
         let mut skipped = 0;
+        let mut added_scores = vec![];
 
         for score in scores {
             let song = score.candidates.score().scores().song();
+            let category =
+                song.song().category[MaimaiVersion::latest()].context("Category unknown")?;
             let song_name = song.latest_song_name();
-            match &map
-                .get(&(
-                    song.song().category[MaimaiVersion::latest()].context("Category unknown")?,
-                    song_name,
-                ))
-                .map_or(&[][..], |x| &x[..])
-            {
-                [] => println!("Song not found: {}", score.candidates.score(),),
-                [idx] => {
-                    let len = idxs.len();
-                    if let hashbrown::hash_set::Entry::Vacant(entry) = idxs.entry(*idx) {
-                        if len < limit {
-                            if skipped < opts.skip {
-                                skipped += 1;
-                            } else {
-                                entry.insert();
-                            }
-                        } else {
-                            not_all = true;
-                        }
-                    }
-                }
+            let idx = match &map.get(&(category, song_name)).map_or(&[][..], |x| &x[..]) {
+                [] => bail!("Song not found: {}", score.candidates.score(),),
+                [idx] => idx,
                 candidates => {
                     // Now that songs are distinguished by category as well as title,
                     // This should not happen
@@ -258,6 +224,27 @@ async fn main() -> anyhow::Result<()> {
                         score.candidates.score()
                     )
                 }
+            };
+
+            let len = idxs.len();
+            let added = if let hashbrown::hash_set::Entry::Vacant(entry) = idxs.entry(*idx) {
+                if len < limit {
+                    if skipped < opts.skip {
+                        skipped += 1;
+                        false
+                    } else {
+                        entry.insert();
+                        true
+                    }
+                } else {
+                    not_all = true;
+                    false
+                }
+            } else {
+                true
+            };
+            if added {
+                added_scores.push(score);
             }
         }
         if skipped > 0 {
@@ -273,6 +260,14 @@ async fn main() -> anyhow::Result<()> {
             .send(&mut client)
             .await?;
         println!("Favorite songs have been edited.");
+
+        added_scores.sort_by_key(|x| x.name_based_key());
+        for (i, score) in added_scores.iter().enumerate() {
+            println!(
+                "{i:>4} {}",
+                display_score(&opts, true, false, &locked_scores, score)
+            );
+        }
     } else {
         println!("WARNING: DRY-RUN!");
     }
@@ -285,6 +280,16 @@ struct ScoreRet<'s, 'e: 's, 'n> {
     estimation: rating::InternalScoreLevel,
     confident: bool,
     kana: Option<&'s SongKana>,
+}
+
+impl<'s> ScoreRet<'s, '_, '_> {
+    fn name_based_key(&self) -> impl Ord + 's {
+        (
+            self.kana,
+            self.candidates.score().difficulty(),
+            self.candidates.score().scores().generation(),
+        )
+    }
 }
 
 fn get_matching_scores<'s, 'e, 'n>(
@@ -395,11 +400,11 @@ fn get_matching_scores<'s, 'e, 'n>(
     }
 
     if opts.sort_only_by_name {
-        ret.sort_by_key(|x| x.kana);
+        ret.sort_by_key(|x| x.name_based_key());
     } else {
         ret.sort_by_key(|x| {
             (
-                x.estimation.count_candidates(),
+                // x.estimation.count_candidates(),
                 Reverse(x.estimation.candidates().last()),
                 Reverse(x.confident),
                 x.kana,
@@ -413,20 +418,53 @@ fn get_matching_scores<'s, 'e, 'n>(
     Ok(ret)
 }
 
-fn display_score(
-    score: OrdinaryScoreRef,
-    highlight_difficulty: ScoreDifficulty,
-) -> impl Display + '_ {
-    let highlight_if = |b: bool| if b { "`" } else { "" };
-    let song = score.scores().song();
-    let x = highlight_if(song.song().scores.values().flatten().count() == 2);
-    let y = highlight_if(score.difficulty() != highlight_difficulty);
-    lazy_format!(
-        "{} ({x}{}{x} {y}{}{y})",
-        song.latest_song_name(),
-        score.scores().generation().abbrev(),
-        score.difficulty().abbrev(),
-    )
+fn display_score<'s, 'o: 's, 'sr: 's>(
+    opts: &'o Opts,
+    hide_history: bool,
+    hide_current: bool,
+    locked_scores: &locked_toml::LockedScores<'s>,
+    score: &'sr ScoreRet<'s, '_, '_>,
+) -> impl Display + 's {
+    let history = {
+        let history = successors(Some(MaimaiVersion::SplashPlus), MaimaiVersion::next)
+            .map(|v| match score.candidates.score().score().levels[v] {
+                None => "".to_owned(),
+                Some(x) => match x.get_if_unique() {
+                    Some(y) => y.to_string(),
+                    _ => x.into_level(v).to_string(),
+                },
+            })
+            .map(|v| lazy_format!("{v:4}"))
+            .join_with(" ");
+        lazy_format!(if hide_history => "" else => "[{history}] => ")
+    };
+    let estimation = {
+        let estimation = score.estimation;
+        let confident = if score.confident { "? " } else { "??" };
+        let estimation = format!("[{estimation}]{confident}");
+        lazy_format!(if hide_current => "" else => "{estimation:8}")
+    };
+    let locked = if !locked_scores.is_playable(score.candidates.score().scores()) {
+        "!!"
+    } else if locked_scores.is_locked(score.candidates.score().scores()) {
+        "!"
+    } else {
+        ""
+    };
+    let score = {
+        let score = score.candidates.score();
+        let highlight_if = |b: bool| if b { "`" } else { "" };
+        let song = score.scores().song();
+        let x = highlight_if(song.song().scores.values().flatten().count() == 2);
+        let y = highlight_if(score.difficulty() != opts.highlight_difficulty);
+        lazy_format!(
+            "{} ({x}{}{x} {y}{}{y})",
+            song.latest_song_name(),
+            score.scores().generation().abbrev(),
+            score.difficulty().abbrev(),
+        )
+    };
+    lazy_format!("{history}{estimation} {locked:2} {score}")
 }
 
 fn if_then(a: bool, b: bool) -> bool {
