@@ -90,6 +90,7 @@ impl<'s> SongDatabase<'s> {
 #[getset(get_copy = "pub")]
 pub struct SongRef<'s> {
     song: &'s Song,
+    #[getset(get_copy = "")]
     id: usize,
 }
 impl<'s> SongRef<'s> {
@@ -138,15 +139,21 @@ pub enum ScoreForVersionRef<'s> {
 }
 
 /// A reference to a set of scores for a specific version.
-#[derive(Clone, Copy, Debug, CopyGetters)]
+#[derive(Clone, Copy, Debug, CopyGetters, DeriveByKey)]
+#[derive_by_key(key = "key", PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[getset(get_copy = "pub")]
 pub struct OrdinaryScoresRef<'s> {
     song: SongRef<'s>,
     generation: ScoreGeneration,
     scores: &'s OrdinaryScores,
+    #[getset(get_copy = "")]
     id: usize,
 }
 impl<'s> OrdinaryScoresRef<'s> {
+    fn key(self) -> usize {
+        self.id
+    }
+
     pub fn score(self, difficulty: ScoreDifficulty) -> Option<OrdinaryScoreRef<'s>> {
         let score = match difficulty {
             ScoreDifficulty::Basic => &self.scores.basic,
@@ -188,6 +195,7 @@ pub struct OrdinaryScoreRef<'s> {
     scores: OrdinaryScoresRef<'s>,
     difficulty: ScoreDifficulty,
     score: &'s OrdinaryScore,
+    #[getset(get_copy = "")]
     id: usize,
 }
 impl<'s> OrdinaryScoreRef<'s> {

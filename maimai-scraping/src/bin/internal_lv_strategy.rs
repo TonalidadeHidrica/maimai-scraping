@@ -40,6 +40,7 @@ struct Opts {
     credentials_path: PathBuf,
     cookie_store_path: PathBuf,
     database_path: PathBuf,
+    locked_toml: PathBuf,
     config_toml: PathBuf,
 
     // Constraints
@@ -141,6 +142,10 @@ async fn main() -> anyhow::Result<()> {
     let database = SongDatabase::new(&songs)?;
     let mut estimator = Estimator::new(&database, MaimaiVersion::latest())?;
 
+    let locked_songs: locked_toml::Root =
+        toml::from_str(&fs_err::read_to_string(&opts.locked_toml)?)?;
+    let locked_songs = locked_songs.read(&database)?;
+
     let config: internal_lv_estimator::multi_user::Config =
         toml::from_str(&read_to_string(&opts.config_toml)?)?;
     let datas = config.read_all()?;
@@ -164,16 +169,21 @@ async fn main() -> anyhow::Result<()> {
         let confident = if score.confident { "? " } else { "??" };
         let estimation = format!("[{estimation}]{confident}");
         let estimation = lazy_format!(if opts.hide_current => "" else => "{estimation:8}");
-        let locked = if (score.candidates.score().scores().song().song())
-            .locked_history
-            .values()
-            .copied()
-            .last()
-            .unwrap_or(false)
-        {
-            '!'
-        } else {
-            ' '
+        let locked = {
+            let scores = score.candidates.score().scores();
+            let song = scores.song().song();
+            let locked_in_database = song
+                .locked_history
+                .values()
+                .copied()
+                .last()
+                .unwrap_or(false);
+            let locked_additional = locked_songs.contains(&scores);
+            if locked_in_database || locked_additional {
+                '!'
+            } else {
+                ' '
+            }
         };
         println!(
             "{i:>4} {history}{estimation} {locked} {}",
@@ -391,4 +401,51 @@ fn display_score(
 
 fn if_then(a: bool, b: bool) -> bool {
     !a || b
+}
+
+mod locked_toml {
+    use anyhow::bail;
+    use hashbrown::HashSet;
+    use maimai_scraping::maimai::{
+        load_score_level::MaimaiVersion,
+        schema::latest::{ScoreGeneration, SongIcon, SongName},
+        song_list::database::{OrdinaryScoresRef, SongDatabase},
+    };
+    use serde::Deserialize;
+
+    #[derive(Debug, Deserialize)]
+    pub struct Root {
+        pub songs: Vec<Song>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct Song {
+        pub name: SongName,
+        pub generation: ScoreGeneration,
+        pub icon: SongIcon,
+        pub version: MaimaiVersion,
+    }
+
+    impl Root {
+        pub fn read<'s>(
+            &self,
+            database: &'s SongDatabase,
+        ) -> anyhow::Result<HashSet<OrdinaryScoresRef<'s>>> {
+            let mut ret = HashSet::new();
+            for data in &self.songs {
+                let song = database.song_from_icon(&data.icon)?;
+                if &data.name != song.latest_song_name() {
+                    bail!("Song name mismatch: {data:?} {song:?}")
+                }
+                let Some(scores) = song.scores(data.generation) else {
+                    bail!("Scores not found: {data:?}");
+                };
+                if scores.scores().version != Some(data.version) {
+                    bail!("Version mismtach: {data:?} {scores:?}")
+                }
+                ret.insert(scores);
+            }
+            Ok(ret)
+        }
+    }
 }
