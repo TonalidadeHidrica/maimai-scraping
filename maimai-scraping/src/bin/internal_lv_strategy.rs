@@ -27,7 +27,7 @@ use maimai_scraping::{
         rating::{self, ScoreConstant, ScoreLevel},
         schema::latest::{ScoreDifficulty, ScoreGeneration},
         song_list::{
-            database::{OrdinaryScoreRef, SongDatabase},
+            database::{OrdinaryScoreRef, OrdinaryScoresRef, SongDatabase},
             Song,
         },
         Maimai,
@@ -52,11 +52,18 @@ struct Opts {
     /// A hyphen indicates a range, and comma means union
     current: Option<CurrentLevels>,
     #[clap(long)]
-    /// Choose only DX (ReMaster) scores.
+    /// Choose only DX Master/ReMaster scores.  `--dx-master` and `--no-dx-master` cannot coexist.
     dx_master: bool,
     #[clap(long)]
-    /// Never hoose DX (ReMaster) scores.  `--dx-master` and `--no-dx-master` cannot coexist.
+    /// Never choose DX Master/ReMaster scores.  `--dx-master` and `--no-dx-master` cannot coexist.
     no_dx_master: bool,
+
+    #[clap(long)]
+    /// Choose only locked scores.  `--locked` and `--no-locked` cannot coexist.
+    locked: bool,
+    #[clap(long)]
+    /// Never choose locked scores.  `--locked` and `--no-locked` cannot coexist.
+    no_locked: bool,
 
     #[clap(long)]
     dry_run: bool,
@@ -130,6 +137,9 @@ async fn main() -> anyhow::Result<()> {
     if opts.dx_master && opts.no_dx_master {
         bail!("--dx-master and --no-dx-master cannot coexist.")
     }
+    if opts.locked && opts.no_locked {
+        bail!("--locked and --no-locked cannot coexist.")
+    }
     if opts.dry_run && opts.append {
         bail!("--dry-run and --append cannot coexist.")
     }
@@ -142,16 +152,16 @@ async fn main() -> anyhow::Result<()> {
     let database = SongDatabase::new(&songs)?;
     let mut estimator = Estimator::new(&database, MaimaiVersion::latest())?;
 
-    let locked_songs: locked_toml::Root =
+    let locked_scores: locked_toml::Root =
         toml::from_str(&fs_err::read_to_string(&opts.locked_toml)?)?;
-    let locked_songs = locked_songs.read(&database)?;
+    let locked_scores = locked_scores.read(&database)?;
 
     let config: internal_lv_estimator::multi_user::Config =
         toml::from_str(&read_to_string(&opts.config_toml)?)?;
     let datas = config.read_all()?;
     internal_lv_estimator::multi_user::update_all(&database, &datas, &mut estimator)?;
 
-    let scores = get_matching_scores(&estimator, &opts)?;
+    let scores = get_matching_scores(&estimator, &locked_scores, &opts)?;
 
     for (i, score) in scores.iter().enumerate() {
         let history = successors(Some(MaimaiVersion::SplashPlus), MaimaiVersion::next)
@@ -169,21 +179,10 @@ async fn main() -> anyhow::Result<()> {
         let confident = if score.confident { "? " } else { "??" };
         let estimation = format!("[{estimation}]{confident}");
         let estimation = lazy_format!(if opts.hide_current => "" else => "{estimation:8}");
-        let locked = {
-            let scores = score.candidates.score().scores();
-            let song = scores.song().song();
-            let locked_in_database = song
-                .locked_history
-                .values()
-                .copied()
-                .last()
-                .unwrap_or(false);
-            let locked_additional = locked_songs.contains(&scores);
-            if locked_in_database || locked_additional {
-                '!'
-            } else {
-                ' '
-            }
+        let locked = if locked_toml::is_locked(&locked_scores, score.candidates.score().scores()) {
+            '!'
+        } else {
+            ' '
         };
         println!(
             "{i:>4} {history}{estimation} {locked} {}",
@@ -276,6 +275,7 @@ struct ScoreRet<'s, 'e: 's, 'n> {
 
 fn get_matching_scores<'s, 'e, 'n>(
     estimator: &'e MultiUserEstimator<'s, 'n>,
+    locked_scores: &HashSet<OrdinaryScoresRef<'s>>,
     opts: &Opts,
 ) -> anyhow::Result<Vec<ScoreRet<'s, 'e, 'n>>> {
     let version = MaimaiVersion::latest();
@@ -343,12 +343,18 @@ fn get_matching_scores<'s, 'e, 'n>(
         });
         let undetermined = !candidates.candidates().is_unique();
         let difficulty = candidates.score().difficulty();
-        let dx_master = candidates.score().scores().generation() == ScoreGeneration::Deluxe
-            && (difficulty == ScoreDifficulty::Master || difficulty == ScoreDifficulty::ReMaster);
-        let dx_master =
-            if_then(opts.dx_master, dx_master) && if_then(opts.no_dx_master, !dx_master);
+        let dx_master = {
+            let dx_master = candidates.score().scores().generation() == ScoreGeneration::Deluxe
+                && (difficulty == ScoreDifficulty::Master
+                    || difficulty == ScoreDifficulty::ReMaster);
+            if_then(opts.dx_master, dx_master) && if_then(opts.no_dx_master, !dx_master)
+        };
+        let locked = {
+            let locked = locked_toml::is_locked(locked_scores, candidates.score().scores());
+            if_then(opts.locked, locked) && if_then(opts.no_locked, !locked)
+        };
         let difficulty = opts.difficulty.map_or(true, |d| difficulty == d);
-        if previous && current && undetermined && dx_master && difficulty {
+        if previous && current && undetermined && dx_master && locked && difficulty {
             ret.push(ScoreRet {
                 candidates,
                 estimation,
@@ -426,11 +432,10 @@ mod locked_toml {
         pub version: MaimaiVersion,
     }
 
+    pub type LockedSet<'s> = HashSet<OrdinaryScoresRef<'s>>;
+
     impl Root {
-        pub fn read<'s>(
-            &self,
-            database: &'s SongDatabase,
-        ) -> anyhow::Result<HashSet<OrdinaryScoresRef<'s>>> {
+        pub fn read<'s>(&self, database: &'s SongDatabase) -> anyhow::Result<LockedSet<'s>> {
             let mut ret = HashSet::new();
             for data in &self.songs {
                 let song = database.song_from_icon(&data.icon)?;
@@ -447,5 +452,17 @@ mod locked_toml {
             }
             Ok(ret)
         }
+    }
+
+    pub fn is_locked(set: &LockedSet, score: OrdinaryScoresRef) -> bool {
+        set.contains(&score)
+            || score
+                .song()
+                .song()
+                .locked_history
+                .values()
+                .copied()
+                .last()
+                .unwrap_or(false)
     }
 }
