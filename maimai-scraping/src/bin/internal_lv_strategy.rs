@@ -462,14 +462,20 @@ fn get_matching_scores<'s, 'e, 'n>(
     } else {
         ret.sort_by_key(|x| {
             (
-                // x.estimation.count_candidates(),
-                Reverse(x.estimation.candidates().last()),
-                Reverse(x.confident),
-                x.kana,
+                Reverse(x.estimation.into_level(version)),
                 &x.candidates.score().scores().song().song().icon,
                 x.candidates.score().scores().generation(),
                 x.candidates.score().difficulty(),
             )
+            // (
+            //     // x.estimation.count_candidates(),
+            //     Reverse(x.estimation.candidates().last()),
+            //     Reverse(x.confident),
+            //     x.kana,
+            //     &x.candidates.score().scores().song().song().icon,
+            //     x.candidates.score().scores().generation(),
+            //     x.candidates.score().difficulty(),
+            // )
         });
     }
 
