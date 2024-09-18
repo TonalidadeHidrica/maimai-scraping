@@ -250,7 +250,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
 
-            let len = idxs.len();
+            let len = added_scores.len();
             let added = if let hashbrown::hash_set::Entry::Vacant(entry) = idxs.entry(*idx) {
                 if len < limit {
                     if skipped < opts.skip {
@@ -265,7 +265,7 @@ async fn main() -> anyhow::Result<()> {
                     false
                 }
             } else {
-                true
+                len < limit
             };
             if added {
                 added_scores.push(score);
