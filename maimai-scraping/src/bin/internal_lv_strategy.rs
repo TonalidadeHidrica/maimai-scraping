@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
 use clap::Parser;
 use enum_iterator::Sequence;
 use fs_err::read_to_string;
@@ -41,13 +41,14 @@ struct Opts {
     config_toml: PathBuf,
 
     // Constraints
-    // #[clap(long)]
-    // /// Comma-separated list of previous internal levels as integers (e.g. `127,128,129`)
-    // previous: Option<Levels>,
+    #[clap(long)]
+    /// Comma-separated list of previous internal levels as integers (e.g. `127,128,129`)
+    previous: Option<PreviousLevels>,
     #[clap(long)]
     /// Current levels in the ordinary format (e.g. `13+`)
     /// A hyphen indicates a range, and comma means union
     current: Option<CurrentLevels>,
+
     #[clap(long)]
     /// Choose only DX Master/ReMaster scores.  `--dx-master` and `--no-dx-master` cannot coexist.
     dx_master: bool,
@@ -101,39 +102,62 @@ struct Opts {
     #[clap(long)]
     sort_only_by_name: bool,
 }
-// #[derive(Clone)]
-// struct Levels(Vec<ScoreConstant>);
-// impl FromStr for Levels {
-//     type Err = anyhow::Error;
-//     fn from_str(s: &str) -> Result<Self, Self::Err> {
-//         Ok(Self(
-//             s.split(',')
-//                 .map(|s| ScoreConstant::try_from(s.parse::<u8>()?).map_err(|e| anyhow!("Bad: {e}")))
-//                 .collect::<anyhow::Result<Vec<ScoreConstant>>>()?,
-//         ))
-//     }
-// }
+#[derive(Clone)]
+struct PreviousLevels(BTreeSet<ScoreConstant>);
+impl FromStr for PreviousLevels {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_range(s)
+            .map(|x| {
+                let [x, y] = x.into_pair().map(|x| x.parse::<u8>());
+                anyhow::Ok(x?..=y?)
+            })
+            .flatten_ok()
+            .map(|x| {
+                anyhow::Ok(
+                    x?.try_into()
+                        .map_err(|e| anyhow!("Invalid score constant: {e}")),
+                )?
+            })
+            .collect::<anyhow::Result<_>>()
+            .map(Self)
+    }
+}
 
 #[derive(Clone)]
 struct CurrentLevels(BTreeSet<ScoreLevel>);
 impl FromStr for CurrentLevels {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> anyhow::Result<Self> {
-        Ok(Self(
-            s.split(',')
-                .map(|s| {
-                    Ok(match s.split_once('-') {
-                        Some((x, y)) => ScoreLevel::range_inclusive(x.parse()?, y.parse()?),
-                        _ => {
-                            let x = s.parse()?;
-                            ScoreLevel::range_inclusive(x, x)
-                        }
-                    })
-                })
-                .flatten_ok()
-                .collect::<anyhow::Result<_>>()?,
-        ))
+        parse_range(s)
+            .map(|x| {
+                let [x, y] = x.into_pair().map(|x| x.parse());
+                Ok(ScoreLevel::range_inclusive(x?, y?))
+            })
+            .flatten_ok()
+            .collect::<anyhow::Result<_>>()
+            .map(Self)
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum RangeElement<'s> {
+    Single(&'s str),
+    Range([&'s str; 2]),
+}
+impl<'s> RangeElement<'s> {
+    fn into_pair(self) -> [&'s str; 2] {
+        match self {
+            Self::Single(x) => [x, x],
+            Self::Range(x) => x,
+        }
+    }
+}
+fn parse_range(s: &str) -> impl Iterator<Item = RangeElement> {
+    s.split(',').map(|s| match s.split_once('-') {
+        Some((x, y)) => RangeElement::Range([x, y]),
+        _ => RangeElement::Single(s),
+    })
 }
 
 #[tokio::main]
@@ -353,10 +377,12 @@ fn get_matching_scores<'s, 'e, 'n>(
         };
         assert!(!estimation.is_empty());
 
-        // let previous = opts.previous.as_ref().map_or(true, |x| {
-        //     x.0.iter().any(|&x| candidates.iter().any(|&y| x == y))
-        // });
-        let previous = true;
+        let previous = opts.previous.as_ref().map_or(true, |levels| {
+            candidates
+                .candidates()
+                .candidates()
+                .any(|x| levels.0.contains(&x))
+        });
         let current = opts.current.as_ref().map_or(true, |levels| {
             (levels.0).contains(&candidates.candidates().into_level(version))
         });
