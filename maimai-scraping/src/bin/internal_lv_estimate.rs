@@ -17,6 +17,9 @@ struct Opts {
     estimator_config: PathBuf,
     #[arg(long)]
     format: Option<ReportFormat>,
+
+    #[arg(long)]
+    version: Option<MaimaiVersion>,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -37,7 +40,7 @@ fn main() -> anyhow::Result<()> {
         toml::from_str(&fs_err::read_to_string(opts.estimator_config)?)?;
     let datas = config.read_all()?;
 
-    let version = MaimaiVersion::latest();
+    let version = opts.version.unwrap_or(MaimaiVersion::latest());
 
     let mut estimator = Estimator::new(&database, version)?;
     let before_len = estimator.event_len();
