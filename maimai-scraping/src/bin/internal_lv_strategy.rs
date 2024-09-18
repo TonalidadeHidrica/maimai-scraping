@@ -1,6 +1,6 @@
 use std::{
-    cmp::Reverse, collections::BTreeSet, fmt::Display, iter::successors, path::PathBuf,
-    str::FromStr,
+    cmp::Reverse, collections::BTreeSet, fmt::Display, iter::successors, num::ParseIntError,
+    ops::Range, path::PathBuf, str::FromStr,
 };
 
 use anyhow::{anyhow, bail, Context};
@@ -82,12 +82,14 @@ struct Opts {
     #[clap(long)]
     /// Preserve old favorite songs list instead of overwriting.
     append: bool,
+    // #[clap(long)]
+    // /// Maximum songs to be added (existing songs count for `--append`)
+    // limit: Option<usize>,
+    // #[clap(long, default_value = "0")]
+    // /// The number of songs to skip among listed ones
+    // skip: usize,
     #[clap(long)]
-    /// Maximum songs to be added (existing songs count for `--append`)
-    limit: Option<usize>,
-    #[clap(long, default_value = "0")]
-    /// The number of songs to skip among listed ones
-    skip: usize,
+    choose: Option<ChooseScores>,
 
     #[clap(long)]
     hide_history: bool,
@@ -140,6 +142,27 @@ impl FromStr for CurrentLevels {
     }
 }
 
+#[derive(Clone, Debug)]
+struct ChooseScores(Vec<Range<usize>>);
+impl FromStr for ChooseScores {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_range(s)
+            .map(|x| {
+                Ok(match x {
+                    RangeElement::Single(x) => {
+                        let x: usize = x.parse()?;
+                        x..x + 1
+                    }
+                    RangeElement::Range([x, y]) => x.parse()?..y.parse()?,
+                })
+            })
+            .map(|x| x.map_err(|x: ParseIntError| x.into()))
+            .try_collect()
+            .map(Self)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum RangeElement<'s> {
     Single(&'s str),
@@ -176,10 +199,10 @@ async fn main() -> anyhow::Result<()> {
     if opts.dry_run && opts.append {
         bail!("--dry-run and --append cannot coexist.")
     }
-    let limit = opts.limit.unwrap_or(30);
-    if !(1..=30).contains(&limit) {
-        bail!("--limit must be between 1 and 30")
-    }
+    // let limit = opts.limit.unwrap_or(30);
+    // if !(1..=30).contains(&limit) {
+    //     bail!("--limit must be between 1 and 30")
+    // }
 
     let songs: Vec<Song> = read_json(&opts.database_path)?;
     let database = SongDatabase::new(&songs)?;
@@ -220,6 +243,7 @@ async fn main() -> anyhow::Result<()> {
         .await?;
         let page = fetch_favorite_songs_form(&mut client).await?;
         let map = song_name_to_idx_map(&page);
+
         let mut idxs = HashSet::new();
         if opts.append {
             for song in page.songs.iter().filter(|x| x.checked) {
@@ -228,11 +252,20 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
-        let mut not_all = false;
-        let mut skipped = 0;
-        let mut added_scores = vec![];
+        let indices: BTreeSet<_> = match &opts.choose {
+            Some(choose) => {
+                if choose.0.iter().any(|x| x.end > scores.len()) {
+                    bail!("Index out of range: {choose:?}")
+                }
+                choose.0.iter().cloned().flatten().collect()
+            }
+            None => (0..scores.len()).collect(),
+        };
 
-        for score in scores {
+        let mut added_scores = vec![];
+        let mut skipped_scores = vec![];
+
+        for score in indices.into_iter().map(|i| &scores[i]) {
             let song = score.candidates.score().scores().song();
             let category =
                 song.song().category[MaimaiVersion::latest()].context("Category unknown")?;
@@ -250,33 +283,24 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
 
-            let len = added_scores.len();
+            let len = idxs.len();
             let added = if let hashbrown::hash_set::Entry::Vacant(entry) = idxs.entry(*idx) {
-                if len < limit {
-                    if skipped < opts.skip {
-                        skipped += 1;
-                        false
-                    } else {
-                        entry.insert();
-                        true
-                    }
+                if len < 30 {
+                    entry.insert();
+                    true
                 } else {
-                    not_all = true;
                     false
                 }
             } else {
-                len < limit
+                true
             };
             if added {
                 added_scores.push(score);
+            } else {
+                skipped_scores.push(score);
             }
         }
-        if skipped > 0 {
-            println!("Skipped {skipped} songs.");
-        }
-        if not_all {
-            println!("Only the first {limit} of the candidates will be added.");
-        }
+
         SetFavoriteSong::builder()
             .token(&page.token)
             .music(idxs.into_iter().collect())
@@ -285,12 +309,20 @@ async fn main() -> anyhow::Result<()> {
             .await?;
         println!("Favorite songs have been edited.");
 
-        added_scores.sort_by_key(|x| x.name_based_key());
-        for (i, score) in added_scores.iter().enumerate() {
-            println!(
-                "{i:>4} {}",
-                display_score(&opts, true, false, &locked_scores, score)
-            );
+        let mut start = 0;
+        for (label, mut scores) in [("Added", added_scores), ("SKIPPED", skipped_scores)] {
+            if scores.is_empty() {
+                continue;
+            }
+            println!("{label} scores:");
+            scores.sort_by_key(|x| x.name_based_key());
+            for (score, i) in scores.iter().zip(start..) {
+                println!(
+                    "{i:>4} {}",
+                    display_score(&opts, true, false, &locked_scores, score)
+                );
+            }
+            start += scores.len();
         }
     } else {
         println!("WARNING: DRY-RUN!");
