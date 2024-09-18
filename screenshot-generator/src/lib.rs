@@ -336,6 +336,7 @@ pub fn generate(
             log::info!("Press Enter to resume");
             std::io::stdin().read_line(&mut String::new())?;
         }
+        return Err(ret);
     }
 
     info!("Done.");

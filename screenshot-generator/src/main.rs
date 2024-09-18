@@ -4,7 +4,7 @@ use aime_net::{
     api::AimeApi,
     schema::{AccessCode, CardName},
 };
-use anyhow::Context;
+use anyhow::{bail, Context};
 use clap::Parser;
 use env_logger::Env;
 use log::info;
@@ -59,10 +59,15 @@ async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let config: Config = toml::from_str(&fs_err::read_to_string(&opts.config_toml)?)?;
 
+    let mut errors = vec![];
     for user_config in &config.users {
-        run(&opts, &config, user_config)
+        if run(&opts, &config, user_config)
             .await
-            .with_context(|| format!("While saving {:?}", user_config.folder_name))?;
+            .with_context(|| format!("While saving {:?}", user_config.folder_name))
+            .is_err()
+        {
+            errors.push(&user_config.card_name);
+        }
     }
 
     info!("Switching back the paid account");
@@ -73,6 +78,10 @@ async fn main() -> anyhow::Result<()> {
         force_paid: true,
     })
     .await?;
+
+    if !errors.is_empty() {
+        bail!("The following card failed: {errors:?}");
+    }
 
     Ok(())
 }
@@ -116,6 +125,5 @@ async fn run(opts: &Opts, config: &Config, user_config: &UserConfig) -> anyhow::
             run_test_data: opts.run_test_data,
             pause_on_error: opts.pause_on_error,
         },
-    )?;
-    Ok(())
+    )
 }
