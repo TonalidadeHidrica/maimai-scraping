@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use anyhow::Context;
 use clap::Parser;
 use enum_iterator::Sequence;
+use lazy_format::lazy_format;
 use maimai_scraping::maimai::{
     internal_lv_estimator::{multi_user, Estimator},
     load_score_level::MaimaiVersion,
@@ -82,7 +83,11 @@ fn main() -> anyhow::Result<()> {
         println!("{}段階{label}", diff.abs());
         for ((previous, current), mut scores) in scores {
             scores.sort();
-            println!("  - {previous} => {current}");
+            let lv_change = lazy_format!(match ((previous.to_lv(version), current.to_lv(version))) {
+                (x, y) if x != y => " ({x} → {y})",
+                _ => "",
+            });
+            println!("  - {previous} → {current}{lv_change}");
             for score in scores {
                 println!("    - {score}");
             }
