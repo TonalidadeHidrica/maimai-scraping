@@ -302,7 +302,7 @@ pub fn parse_playlog_diff(img: ElementRef) -> anyhow::Result<ScoreDifficulty> {
 }
 
 fn parse_track_index(span: ElementRef) -> anyhow::Result<TrackIndex> {
-    Ok(regex!(r"TRACK 0([1-4])")
+    Ok(regex!(r"TRACK ([0-9]{2})")
         .captures(&span.text().collect::<String>())
         .ok_or_else(|| anyhow!("The format of track index was invalid."))?
         .get(1)

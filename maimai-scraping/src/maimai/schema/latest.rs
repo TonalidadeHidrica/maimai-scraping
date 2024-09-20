@@ -162,7 +162,7 @@ impl TryFrom<u8> for TrackIndex {
     type Error = u8;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            1..=4 => Ok(Self(value)),
+            1.. => Ok(Self(value)),
             _ => Err(value),
         }
     }
