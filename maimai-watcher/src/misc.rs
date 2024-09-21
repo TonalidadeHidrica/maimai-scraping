@@ -2,23 +2,20 @@ use std::path::PathBuf;
 
 use anyhow::bail;
 use joinery::JoinableIterator;
-use log::error;
 use maimai_scraping::{
     data_collector::load_or_create_user_data,
     maimai::{
-        estimate_rating::{EstimatorConfig, ScoreConstantsStore},
-        load_score_level::{self, RemovedSong},
+        associated_user_data,
+        internal_lv_estimator::{multi_user, Estimator},
+        load_score_level::MaimaiVersion,
+        song_list::{database::SongDatabase, Song},
         Maimai,
     },
 };
 use maimai_scraping_utils::fs_json_util::read_json;
 use url::Url;
 
-use crate::{
-    describe_record::{get_song_lvs, make_message},
-    slack::webhook_send,
-    watch::UserId,
-};
+use crate::{describe_record::make_message, slack::webhook_send, watch::UserId};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn recent(
@@ -26,30 +23,52 @@ pub async fn recent(
     slack_post_webhook: &Option<Url>,
     user_id: &UserId,
     user_data_path: &PathBuf,
-    levels_path: &PathBuf,
-    removed_songs_path: &PathBuf,
-    estimator_config: EstimatorConfig,
+    database_path: Option<&PathBuf>,
+    estimator_config_path: Option<&PathBuf>,
     count: usize,
 ) -> Result<(), anyhow::Error> {
-    let data = load_or_create_user_data::<Maimai, _>(user_data_path)?;
-    let levels = load_score_level::load(levels_path)?;
-    let removed_songs: Vec<RemovedSong> = read_json(removed_songs_path)?;
-    let mut levels = ScoreConstantsStore::new(&levels, &removed_songs)?;
     if count > 100 {
         bail!("Too many songs are requested!  (This is a safety guard to avoid a flood of message.  Please contact the author if you want more.)");
     }
-    if let Err(e) = levels.do_everything(
-        estimator_config,
-        None,
-        data.records.values(),
-        &data.rating_targets,
-        &data.idx_to_icon_map,
-    ) {
-        error!("{e:#}");
+
+    let songs: Option<Vec<Song>> = database_path.map(read_json).transpose()?;
+    let database = songs
+        .as_ref()
+        .map(|songs| SongDatabase::new(songs))
+        .transpose()?;
+    let mut estimator = database
+        .as_ref()
+        .map(|database| Estimator::new(database, MaimaiVersion::latest()))
+        .transpose()?;
+    let estimator_config = estimator_config_path
+        .map(|p| {
+            anyhow::Ok(toml::from_str::<multi_user::Config>(
+                &fs_err::read_to_string(p)?,
+            )?)
+        })
+        .transpose()?;
+    if let Some(((database, estimator_config), estimator)) = (database.as_ref())
+        .zip(estimator_config.as_ref())
+        .zip(estimator.as_mut())
+    {
+        multi_user::update_all(database, &estimator_config.read_all()?, estimator)?;
     }
-    let message = (data.records.values().rev().take(count).rev())
-        .map(|record| make_message(record, get_song_lvs(record, &levels)))
-        .join_with("\n");
+
+    let data = load_or_create_user_data::<Maimai, _>(user_data_path)?;
+    let associated = database
+        .map(|database| associated_user_data::UserData::annotate(&database, &data))
+        .transpose()?;
+
+    let message = match associated {
+        Some(records) => (records.records().values().rev().take(count).rev())
+            .map(|record| make_message(record.record(), Some(record)))
+            .join_with("\n")
+            .to_string(),
+        None => (data.records.values().rev().take(count).rev())
+            .map(|record| make_message(record, None))
+            .join_with("\n")
+            .to_string(),
+    };
     webhook_send(
         client,
         slack_post_webhook,

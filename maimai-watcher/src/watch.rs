@@ -20,12 +20,11 @@ use maimai_scraping::{
     maimai::{
         associated_user_data,
         data_collector::update_targets,
-        estimate_rating::{EstimatorConfig, ScoreConstantsStore},
         internal_lv_estimator::{
             multi_user::{self, MultiUserEstimator},
             Estimator,
         },
-        load_score_level::{self, MaimaiVersion, RemovedSong},
+        load_score_level::MaimaiVersion,
         parser::{
             rating_target::{RatingTargetFile, RatingTargetList},
             song_score::ScoreIdx,
@@ -46,10 +45,7 @@ use tokio::{
 };
 use url::Url;
 
-use crate::{
-    describe_record::{describe_score_kind, make_message},
-    slack::webhook_send,
-};
+use crate::{describe_record::make_message, slack::webhook_send};
 
 // TODO use netype instead of alias!
 // #[derive(Clone, PartialEq, Eq, Hash, Deserialize)]
@@ -297,7 +293,7 @@ async fn run_estimator<'s, 'n>(
     if let Some(((estimator, estimator_config), database)) =
         estimator.zip(estimator_config).zip(database)
     {
-        report_error(
+        let _ = report_error(
             &config.slack_post_webhook,
             &config.user_id,
             (|| {
@@ -435,7 +431,7 @@ impl<'c> Runner<'c, '_, '_, '_> {
             self.estimator.as_mut(),
             self.estimator_config,
             self.database,
-            &config,
+            config,
         )
         .await;
 

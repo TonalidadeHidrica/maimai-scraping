@@ -13,7 +13,7 @@ use actix_web::{middleware::Logger, web, App, HttpServer, Responder};
 use anyhow::{bail, Context};
 use clap::Parser;
 use log::{error, info};
-use maimai_scraping::{cookie_store::UserIdentifier, maimai::estimate_rating::EstimatorConfig};
+use maimai_scraping::cookie_store::UserIdentifier;
 use serde::Deserialize;
 use splitty::split_unquoted_whitespace;
 use tokio::sync::Mutex;
@@ -32,13 +32,15 @@ struct Opts {
 }
 
 #[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     port: u16,
     webhook_endpoint: String,
     interval: Duration,
-    levels_path: PathBuf,
-    levels_intl_path: PathBuf,
-    removed_songs_path: PathBuf,
+
+    database_path: Option<PathBuf>,
+    estimator_config_path: Option<PathBuf>,
+
     slack_post_webhook: Option<Url>,
     // TODO make it getter
     pub users: HashMap<UserId, UserConfig>,
@@ -47,13 +49,13 @@ pub struct Config {
     default_users: HashMap<String, UserId>,
 }
 #[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct UserConfig {
     slack_user_ids: Vec<String>,
     credentials_path: PathBuf,
     cookie_store_path: PathBuf,
     user_data_path: PathBuf,
     estimate_internal_levels: bool,
-    estimator_config: EstimatorConfig,
     user_identifier: UserIdentifier,
     #[serde(default)]
     international: bool,
@@ -248,9 +250,8 @@ async fn webhook_impl(
                     &config.slack_post_webhook,
                     &user_id,
                     &user_config.user_data_path,
-                    &config.levels_path,
-                    &config.removed_songs_path,
-                    user_config.estimator_config,
+                    config.database_path.as_ref(),
+                    config.estimator_config_path.as_ref(),
                     sub_args.count,
                 )
                 .await
@@ -317,28 +318,31 @@ pub fn watch_config(
     report_no_updates: bool,
     finish_flag: Option<Arc<AtomicBool>>,
 ) -> watch::Config {
-    let levels_path = if user_config.international {
-        &state_config.levels_intl_path
-    } else {
-        &state_config.levels_path
-    };
+    // let levels_path = if user_config.international {
+    //     &state_config.levels_intl_path
+    // } else {
+    //     &state_config.levels_path
+    // };
+    let database = (!user_config.international)
+        .then_some(state_config.database_path.as_ref())
+        .flatten();
     watch::Config {
         user_id,
         interval: state_config.interval,
         credentials_path: user_config.credentials_path.clone(),
         cookie_store_path: user_config.cookie_store_path.clone(),
         maimai_uesr_data_path: user_config.user_data_path.clone(),
-        levels_path: levels_path.clone(),
-        removed_songs_path: state_config.removed_songs_path.clone(),
         slack_post_webhook: state_config.slack_post_webhook.clone(),
         estimate_internal_levels: user_config.estimate_internal_levels,
         timeout_config,
         report_no_updates,
-        estimator_config: user_config.estimator_config,
         user_identifier: user_config.user_identifier.clone(),
         international: user_config.international,
         force_paid_config: user_config.force_paid_config.clone(),
         aime_switch_config: user_config.aime_switch_config.clone(),
+
+        database_path: database.cloned(),
+        estimator_config_path: state_config.estimator_config_path.clone(),
 
         finish_flag,
     }

@@ -16,20 +16,20 @@ async fn main() -> anyhow::Result<()> {
         interval: Duration::from_secs(30),
         maimai_uesr_data_path: opts.maimai_uesr_data_path,
         slack_post_webhook: None,
-        levels_path: opts.levels_path,
-        removed_songs_path: opts.removed_songs_path,
         credentials_path: PathBuf::from(Maimai::CREDENTIALS_PATH),
         cookie_store_path: PathBuf::from(Maimai::COOKIE_STORE_PATH),
         estimate_internal_levels: true,
         timeout_config: TimeoutConfig::indefinite(),
         report_no_updates: false,
-        estimator_config: opts.estimator_config,
         user_identifier: opts.user_identifier,
         international: opts.international,
         force_paid_config: opts
             .force_paid
             .then_some(ForcePaidConfig { after_use: None }),
         aime_switch_config: None,
+
+        database_path: opts.database_path,
+        estimator_config_path: opts.estimator_config_path,
 
         finish_flag: None,
     })
@@ -50,8 +50,6 @@ async fn main() -> anyhow::Result<()> {
 #[derive(Parser)]
 struct Opts {
     maimai_uesr_data_path: PathBuf,
-    levels_path: PathBuf,
-    removed_songs_path: PathBuf,
     #[clap(flatten)]
     estimator_config: EstimatorConfig,
     #[clap(flatten)]
@@ -60,4 +58,8 @@ struct Opts {
     international: bool,
     #[clap(long)]
     force_paid: bool,
+    #[clap(long)]
+    database_path: Option<PathBuf>,
+    #[clap(long)]
+    estimator_config_path: Option<PathBuf>,
 }
