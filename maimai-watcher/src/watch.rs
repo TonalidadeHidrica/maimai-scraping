@@ -18,14 +18,20 @@ use maimai_scraping::{
     cookie_store::UserIdentifier,
     data_collector::{load_or_create_user_data, update_records},
     maimai::{
+        associated_user_data,
         data_collector::update_targets,
         estimate_rating::{EstimatorConfig, ScoreConstantsStore},
-        load_score_level::{self, MaimaiVersion, RemovedSong, Song},
+        internal_lv_estimator::{
+            multi_user::{self, MultiUserEstimator},
+            Estimator,
+        },
+        load_score_level::{self, MaimaiVersion, RemovedSong},
         parser::{
             rating_target::{RatingTargetFile, RatingTargetList},
             song_score::ScoreIdx,
         },
         schema::latest::{PlayRecord, PlayTime, SongIcon},
+        song_list::{database::SongDatabase, Song},
         Maimai, MaimaiIntl, MaimaiUserData,
     },
     sega_trait::{self, Idx, PlayRecordTrait, PlayedAt, SegaTrait},
@@ -41,7 +47,7 @@ use tokio::{
 use url::Url;
 
 use crate::{
-    describe_record::{describe_score_kind, get_song_lvs, make_message},
+    describe_record::{describe_score_kind, make_message},
     slack::webhook_send,
 };
 
@@ -57,17 +63,17 @@ pub struct Config {
     pub credentials_path: PathBuf,
     pub cookie_store_path: PathBuf,
     pub maimai_uesr_data_path: PathBuf,
-    pub levels_path: PathBuf,
-    pub removed_songs_path: PathBuf,
     pub slack_post_webhook: Option<Url>,
     pub estimate_internal_levels: bool,
     pub timeout_config: TimeoutConfig,
     pub report_no_updates: bool,
-    pub estimator_config: EstimatorConfig,
     pub user_identifier: UserIdentifier,
     pub international: bool,
     pub force_paid_config: Option<ForcePaidConfig>,
     pub aime_switch_config: Option<AimeSwitchConfig>,
+
+    pub database_path: Option<PathBuf>,
+    pub estimator_config_path: Option<PathBuf>,
 
     pub finish_flag: Option<Arc<AtomicBool>>,
 }
@@ -117,20 +123,67 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
 
     let data = load_or_create_user_data::<Maimai, _>(&config.maimai_uesr_data_path)?;
 
-    let levels = load_score_level::load(&config.levels_path)?;
-    let removed_songs: Vec<RemovedSong> = read_json(&config.removed_songs_path)?;
-
     spawn(async move {
-        let Ok(mut runner) = report_error(
-            &config.slack_post_webhook,
-            &config.user_id,
-            Runner::new(&config, data, &levels, &removed_songs)
-                .await
-                .context("Issue in levels or removed_songs"),
+        let songs: Option<Vec<Song>> = match &config.database_path {
+            None => None,
+            Some(database_path) => report_error(
+                &config.slack_post_webhook,
+                &config.user_id,
+                read_json(database_path).context("Failed to load song database"),
+            )
+            .await
+            .ok(),
+        };
+        let database = match &songs {
+            None => None,
+            Some(songs) => report_error(
+                &config.slack_post_webhook,
+                &config.user_id,
+                SongDatabase::new(songs).context("Failed to construct song database"),
+            )
+            .await
+            .ok(),
+        };
+        let mut estimator = match database.as_ref() {
+            None => None,
+            Some(database) => report_error(
+                &config.slack_post_webhook,
+                &config.user_id,
+                Estimator::new(database, MaimaiVersion::latest())
+                    .context("Failed to load estimator"),
+            )
+            .await
+            .ok(),
+        };
+        let estimator_config = match config.estimator_config_path.as_ref() {
+            None => None,
+            Some(path) => report_error(
+                &config.slack_post_webhook,
+                &config.user_id,
+                (|| {
+                    anyhow::Ok(toml::from_str::<multi_user::Config>(
+                        &fs_err::read_to_string(path)?,
+                    )?)
+                })()
+                .context("Failed to read estmiator config"),
+            )
+            .await
+            .ok(),
+        };
+        run_estimator(
+            estimator.as_mut(),
+            estimator_config.as_ref(),
+            database.as_ref(),
+            &config,
         )
-        .await
-        else {
-            return;
+        .await;
+
+        let mut runner = Runner {
+            config: &config,
+            data,
+            database: database.as_ref(),
+            estimator_config: estimator_config.as_ref(),
+            estimator,
         };
 
         let mut last_update_time = Instant::now();
@@ -235,65 +288,36 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
     Ok(WatchHandler(tx))
 }
 
-struct Runner<'c, 's> {
+async fn run_estimator<'s, 'n>(
+    estimator: Option<&mut MultiUserEstimator<'s, 'n>>,
+    estimator_config: Option<&'n multi_user::Config>,
+    database: Option<&SongDatabase<'s>>,
+    config: &Config,
+) {
+    if let Some(((estimator, estimator_config), database)) =
+        estimator.zip(estimator_config).zip(database)
+    {
+        report_error(
+            &config.slack_post_webhook,
+            &config.user_id,
+            (|| {
+                let datas = estimator_config.read_all()?;
+                multi_user::update_all(database, &datas, estimator)?;
+                anyhow::Ok(())
+            })(),
+        )
+        .await;
+    }
+}
+
+struct Runner<'c, 's, 'd, 'ec> {
     config: &'c Config,
     data: MaimaiUserData,
-    levels_actual: ScoreConstantsStore<'s>,
-    levels_naive: ScoreConstantsStore<'s>,
+    database: Option<&'d SongDatabase<'s>>,
+    estimator_config: Option<&'ec multi_user::Config>,
+    estimator: Option<MultiUserEstimator<'s, 'ec>>,
 }
-impl<'c, 's> Runner<'c, 's> {
-    async fn new(
-        config: &'c Config,
-        data: MaimaiUserData,
-        levels: &'s [Song],
-        removed_songs: &'s [RemovedSong],
-    ) -> anyhow::Result<Runner<'c, 's>> {
-        let levels_actual = ScoreConstantsStore::new(levels, removed_songs)?;
-        let levels_naive = ScoreConstantsStore::new(levels, removed_songs)?;
-        let mut ret = Self {
-            config,
-            data,
-            levels_actual,
-            levels_naive,
-        };
-        ret.update_levels().await;
-        Ok(ret)
-    }
-
-    async fn update_levels(&mut self) {
-        if !self.config.estimate_internal_levels {
-            return;
-        }
-        let _ = report_error(
-            &self.config.slack_post_webhook,
-            &self.config.user_id,
-            self.levels_actual
-                .do_everything(
-                    self.config.estimator_config,
-                    None,
-                    self.data.records.values(),
-                    &self.data.rating_targets,
-                    &self.data.idx_to_icon_map,
-                )
-                .context("While estimating levels precisely"),
-        )
-        .await;
-        let _ = report_error(
-            &self.config.slack_post_webhook,
-            &self.config.user_id,
-            self.levels_naive
-                .guess_from_rating_target_order(
-                    MaimaiVersion::latest(),
-                    false,
-                    None,
-                    &self.data.rating_targets,
-                    &self.data.idx_to_icon_map,
-                )
-                .context("While estimating levels roughly"),
-        )
-        .await;
-    }
-
+impl<'c> Runner<'c, '_, '_, '_> {
     async fn run<T>(&mut self) -> anyhow::Result<bool>
     where
         T: MaimaiPossiblyIntl,
@@ -317,6 +341,7 @@ impl<'c, 's> Runner<'c, 's> {
             info!("Switched aime.")
         }
 
+        // Obtain the `force paid` flag (or `()` if international)
         let (force_paid, warn) = T::force_paid(config.force_paid_config.is_some());
         if warn {
             warn!("There is no Standard Course for Maimai International!");
@@ -328,6 +353,8 @@ impl<'c, 's> Runner<'c, 's> {
             )
             .await;
         }
+
+        // Initialize sega client
         let init = SegaClientInitializer {
             credentials_path: &self.config.credentials_path,
             cookie_store_path: &self.config.cookie_store_path,
@@ -335,17 +362,19 @@ impl<'c, 's> Runner<'c, 's> {
             force_paid,
         };
         let (mut client, index) = T::new_client(init).await?;
-        // // 2024-09-12 temporarily add this line for batch run in rush
-        // for rating_targets in self.data.rating_targets.values() {
-        //     T::update_idx(&mut client, rating_targets, &mut self.data.idx_to_icon_map).await?;
-        // }
-        write_json(&config.maimai_uesr_data_path, &self.data)?; // Save twice just in case
+
+        // For safety, we will be saving data over and over again
+        write_json(&config.maimai_uesr_data_path, &self.data)?;
+
+        // Retrieve records
         let last_played = index.first().context("There is no play yet.")?.0;
         let inserted_records = update_records(&mut client, &mut self.data.records, index).await?;
         if inserted_records.is_empty() {
             return Ok(false);
         }
-        write_json(&config.maimai_uesr_data_path, &self.data)?; // Save twice just in case
+        write_json(&config.maimai_uesr_data_path, &self.data)?;
+
+        // Retrieve rating target list
         let update_targets_res = T::update_targets(
             &mut client,
             &mut self.data.rating_targets,
@@ -370,7 +399,7 @@ impl<'c, 's> Runner<'c, 's> {
             .await;
         }
 
-        // Update idx to icon map also
+        // Retrieve idx to icon map
         if let Ok(Some(rating_targets)) = update_targets_res {
             T::update_idx(&mut client, rating_targets, &mut self.data.idx_to_icon_map).await?;
             webhook_send(
@@ -381,38 +410,58 @@ impl<'c, 's> Runner<'c, 's> {
             )
             .await;
         }
+        write_json(&config.maimai_uesr_data_path, &self.data)?;
 
-        write_json(&config.maimai_uesr_data_path, &self.data)?; // Save twice just in case
+        // Retrieval ends here.
 
-        let bef_len = self.levels_actual.events().len();
-        self.update_levels().await;
+        // Try to associate user data with the database.
+        let associated = match &self.database {
+            None => None,
+            Some(database) => report_error(
+                &config.slack_post_webhook,
+                &config.user_id,
+                associated_user_data::UserData::annotate(database, &self.data)
+                    .context("Failed to associate record with database"),
+            )
+            .await
+            .ok(),
+        };
 
+        // Try to update internal level estimator.
+        // HACK: to take all data into account, we read user data again from scratch.
+        // Can we improve it?
+        let before_len = self.estimator.as_ref().map_or(0, |x| x.event_len());
+        run_estimator(
+            self.estimator.as_mut(),
+            self.estimator_config,
+            self.database,
+            &config,
+        )
+        .await;
+
+        // Now the results are reported to Slack.
         for time in inserted_records {
             let record = &self.data.records[&time];
-            let song_lvs = get_song_lvs(record, &self.levels_naive);
+            let associated = associated.as_ref().and_then(|x| x.records().get(&time));
             webhook_send(
                 client.reqwest(),
                 &config.slack_post_webhook,
                 &config.user_id,
-                make_message(record, song_lvs).to_string(),
+                make_message(record, associated).to_string(),
             )
             .await;
         }
 
-        for (key, event) in &self.levels_actual.events()[bef_len..] {
-            let song_name = if let Ok(Some((song, _))) = self.levels_actual.get(*key) {
-                song.song_name().as_ref()
-            } else {
-                "(Error: unknown song name)"
-            };
-            let score_kind = describe_score_kind(key.score_metadata());
-            webhook_send(
-                client.reqwest(),
-                &config.slack_post_webhook,
-                &config.user_id,
-                format! {"★ {song_name} ({score_kind}): {event}"},
-            )
-            .await;
+        if let Some(estimator) = &self.estimator {
+            for event in &estimator.events()[before_len..] {
+                webhook_send(
+                    client.reqwest(),
+                    &config.slack_post_webhook,
+                    &config.user_id,
+                    format!("★ {event}"),
+                )
+                .await;
+            }
         }
 
         Ok(true)

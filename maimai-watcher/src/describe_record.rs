@@ -1,23 +1,27 @@
 use std::fmt::Display;
 
+use either::Either;
 use lazy_format::lazy_format;
 use maimai_scraping::maimai::{
-    estimate_rating::{ScoreConstantsStore, ScoreKey},
-    rating::{ScoreConstant, ScoreLevel},
+    associated_user_data,
+    load_score_level::MaimaiVersion,
     schema::{
         latest::{
             JudgeCount, JudgeCountWithoutCP, JudgeResult, LifeResult, PlayRecord,
-            RatingBorderColor, ScoreMetadata,
+            RatingBorderColor, ScoreDifficulty, ScoreMetadata,
         },
         ver_20210316_2338::RatingValue,
     },
+    song_list::database::ScoreForVersionRef,
 };
 
 pub fn get_song_lvs<'a>(
     record: &'_ PlayRecord,
-    levels: &'a ScoreConstantsStore<'_>,
-) -> &'a [ScoreConstant] {
-    if let Ok(Some((_, candidates))) = levels.get(ScoreKey::from(record)) {
+    levels: &'a maimai_scraping::maimai::estimate_rating::ScoreConstantsStore<'_>,
+) -> &'a [maimai_scraping::maimai::rating::ScoreConstant] {
+    if let Ok(Some((_, candidates))) = levels.get(
+        maimai_scraping::maimai::estimate_rating::ScoreKey::from(record),
+    ) {
         candidates
     } else {
         &[]
@@ -26,16 +30,31 @@ pub fn get_song_lvs<'a>(
 
 pub fn make_message<'a>(
     record: &'a PlayRecord,
-    song_lvs: &'a [ScoreConstant],
+    associated: Option<&associated_user_data::PlayRecord>,
 ) -> impl Display + Send + 'a {
     use maimai_scraping::maimai::schema::latest::{AchievementRank::*, FullComboKind::*};
     let time = (record.played_at().idx().timestamp_jst()).unwrap_or(record.played_at().time());
     let score_kind = describe_score_kind(record.score_metadata());
-    let lv = lazy_format!(match (song_lvs[..]) {
-        [] => "?",
-        [lv] => "{lv}",
-        [lv, ..] => ("{}", ScoreLevel::from(lv)),
+    let lv = associated
+        .and_then(|x| x.score().ok())
+        .and_then(|x| match x {
+            ScoreForVersionRef::Ordinary(score) => {
+                let level = score.level()?;
+                Some(match level.get_if_unique() {
+                    Some(x) => Either::Left(x),
+                    None => Either::Right(level.into_level(MaimaiVersion::latest())),
+                })
+            }
+            ScoreForVersionRef::Utage(score) => Some(Either::Right(score.score().level())),
+        });
+    let lv = lazy_format!(match (lv) {
+        None => "?",
+        Some(x) => "{x}",
     });
+    let lv_question = lazy_format!(
+        if record.utage_metadata().is_some() => "?"
+        else => ""
+    );
     let rank = match record.achievement_result().rank() {
         D => "D",
         C => "C",
@@ -70,7 +89,7 @@ pub fn make_message<'a>(
         String::new()
     };
     let main_line = lazy_format!(
-        "{time}　{title} ({score_kind} Lv.{lv})　{rank}({ach}{ach_new})　{fc}{barely_fc}\n",
+        "{time}　{title} ({score_kind} Lv.{lv}{lv_question})　{rank}({ach}{ach_new})　{fc}{barely_fc}\n",
         title = record.song_metadata().name(),
         ach = record.achievement_result().value(),
     );
@@ -112,20 +131,12 @@ pub fn make_message<'a>(
 }
 
 pub fn describe_score_kind<'a>(metadata: ScoreMetadata) -> impl Display + 'a {
-    use maimai_scraping::maimai::schema::latest::{ScoreDifficulty::*, ScoreGeneration::*};
-    let gen = match metadata.generation() {
-        Standard => "STD",
-        Deluxe => "DX",
-    };
-    let dif = match metadata.difficulty() {
-        Basic => "Bas",
-        Advanced => "Adv",
-        Expert => "Exp",
-        Master => "Mas",
-        ReMaster => "ReMas",
-        Utage => "Utg",
-    };
-    lazy_format!("{gen} {dif}")
+    let gen = metadata.generation().abbrev();
+    let dif = metadata.difficulty().abbrev();
+    lazy_format!(match (metadata.difficulty()) {
+        ScoreDifficulty::Utage => "Utg",
+        _ => "{gen} {dif}",
+    })
 }
 
 pub fn make_barely_fc(judge: JudgeResult, max_combo: u32) -> Option<String> {
