@@ -491,8 +491,8 @@ mod tests {
             mask: CandidateBitmask(0b_101_110),
         };
         let z = InternalScoreLevel {
-            offset: ScoreConstant(131),
-            mask: CandidateBitmask(0b_100_10),
+            offset: ScoreConstant(132),
+            mask: CandidateBitmask(0b_100_1),
         };
         assert_eq!(x.intersection(y), z);
 
