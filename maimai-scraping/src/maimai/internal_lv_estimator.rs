@@ -34,13 +34,14 @@ use super::{
 type CandidateList = InternalScoreLevel;
 
 /// See the [module doc](`self`) for the definition of type parameters `'s` and `L`.
+#[derive(Clone)]
 pub struct Estimator<'s, LD, LL> {
     version: MaimaiVersion,
     map: HashMap<OrdinaryScoreRef<'s>, Candidates<'s>>,
     events: IndexedVec<Event<'s, LD, LL>>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Candidates<'s> {
     #[allow(unused)]
     score: OrdinaryScoreRef<'s>,
@@ -67,6 +68,7 @@ impl<'s, 'e, LD, LL> CandidatesRef<'s, 'e, LD, LL> {
     }
 }
 
+#[derive(Clone)]
 struct IndexedVec<T>(Vec<T>);
 impl<T> IndexedVec<T> {
     fn push(&mut self, element: T) -> usize {
@@ -76,7 +78,7 @@ impl<T> IndexedVec<T> {
 }
 
 /// See the [module doc](`self`) for the definition of type parameters `'s` and `L`.
-#[derive(Getters, CopyGetters)]
+#[derive(Clone, Copy, Getters, CopyGetters)]
 pub struct Event<'s, LD, LL> {
     #[allow(unused)]
     #[getset(get_copy = "pub")]
@@ -107,7 +109,7 @@ where
         Ok(())
     }
 }
-#[derive(Debug, Display)]
+#[derive(Clone, Copy, Debug, Display)]
 #[display(bound = "LD: Display, LL: Display")]
 pub enum Reason<LD, LL> {
     #[display(fmt = "according to the database which stores {_0:?}")]
@@ -118,6 +120,8 @@ pub enum Reason<LD, LL> {
     Delta(AchievementValue, i16, LD),
     #[display(fmt = "by the rating target list (source: {_0})")]
     List(LL),
+    #[display(fmt = "by assumption")]
+    Assumption,
 }
 
 impl<'s, LD, LL> Estimator<'s, LD, LL> {
@@ -212,6 +216,13 @@ impl<'s, LD, LL> Estimator<'s, LD, LL> {
     }
     pub fn event_len(&self) -> usize {
         self.events.0.len()
+    }
+
+    pub fn num_determined_scores(&self) -> usize {
+        self.map
+            .values()
+            .filter(|x| x.candidates.is_unique())
+            .count()
     }
 }
 

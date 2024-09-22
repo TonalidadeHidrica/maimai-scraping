@@ -1,6 +1,6 @@
 use std::{ops::Range, path::PathBuf};
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use chrono::NaiveDateTime;
 use clap::Args;
 use derive_more::{Display, From};
@@ -10,7 +10,8 @@ use serde::Deserialize;
 
 use crate::maimai::{
     associated_user_data::{
-        self, OrdinaryPlayRecordAssociated, RatingTargetEntryAssociated, RatingTargetListAssociated,
+        self, OrdinaryPlayRecordAssociated, RatingTargetEntryAssociated,
+        RatingTargetListAssociated, UserDataOrdinaryAssociated,
     },
     schema::latest::{AchievementValue, PlayTime, RatingValue},
     song_list::database::{OrdinaryScoreRef, SongDatabase},
@@ -51,18 +52,25 @@ pub struct EstimatorConfig {
 #[derive(Clone, PartialEq, Eq, Debug, From, Deserialize, Display)]
 pub struct UserName(String);
 
+pub type DataPair<'c> = (&'c UserConfig, MaimaiUserData);
+
 impl Config {
-    pub fn read_all(&self) -> anyhow::Result<Vec<(&UserConfig, MaimaiUserData)>> {
+    pub fn read_all(&self) -> anyhow::Result<Vec<DataPair>> {
         (self.users.iter())
             .map(|config| anyhow::Ok((config, read_json::<_, MaimaiUserData>(config.data_path())?)))
             .collect()
     }
 }
 
+#[derive(Clone, Copy, Debug, Display)]
+pub enum RecordLabel<'n> {
+    FromData(RecordLabelFromData<'n>),
+    Additional,
+}
 #[derive(Clone, Copy, Debug, Display, CopyGetters)]
 #[display(fmt = "play record played at {play_time} by {user}")]
 #[getset(get_copy = "pub")]
-pub struct RecordLabel<'n> {
+pub struct RecordLabelFromData<'n> {
     play_time: PlayTime,
     user: &'n UserName,
 }
@@ -92,10 +100,10 @@ impl<'c, 'd, 's> RecordLike<'s, RecordLabel<'c>>
         self.1.record().rating_result().delta()
     }
     fn label(&self) -> RecordLabel<'c> {
-        RecordLabel {
+        RecordLabel::FromData(RecordLabelFromData {
             play_time: self.1.record().played_at().time(),
             user: &self.0.name,
-        }
+        })
     }
 }
 impl<'c, 'a, 'd, 's> RatingTargetListLike<'s, RatingTargetLabel<'c>>
@@ -148,34 +156,39 @@ impl<'d, 's> RatingTargetEntryLike<'s> for RatingTargetEntryAssociated<'d, 's> {
     }
 }
 
-pub fn update_all<'s, 'c>(
+pub type AssociatedDataPair<'c, 'd, 's> = (&'c UserConfig, UserDataOrdinaryAssociated<'d, 's>);
+
+pub fn associate_all<'d, 's, 'c>(
     database: &SongDatabase<'s>,
-    datas: &[(&'c UserConfig, MaimaiUserData)],
-    estimator: &mut Estimator<'s, RecordLabel<'c>, RatingTargetLabel<'c>>,
-) -> anyhow::Result<()> {
-    let datas = datas
+    datas: &'d [DataPair<'c>],
+) -> anyhow::Result<Vec<AssociatedDataPair<'c, 'd, 's>>> {
+    datas
         .iter()
         .map(|&(config, ref data)| {
             let data = associated_user_data::UserData::annotate(database, data)?;
-            let ordinary_records = data
-                .records()
-                .values()
-                .filter_map(|r| Some(r.as_ordinary()?.into_associated()))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| anyhow!("{e:#?}"))?;
-            let rating_targets = data
-                .rating_target()
-                .iter()
-                .map(|(&time, r)| Ok((time, r.as_associated()?)))
-                .collect::<Result<Vec<_>, &anyhow::Error>>()
-                .map_err(|e| anyhow!("{e:#?}"))?;
-            anyhow::Ok((config, ordinary_records, rating_targets))
+            let data = data.ordinary_data_associated()?;
+            anyhow::Ok((config, data))
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect()
+}
 
+pub fn update_all<'s, 'c>(
+    database: &SongDatabase<'s>,
+    datas: &[DataPair<'c>],
+    estimator: &mut MultiUserEstimator<'s, 'c>,
+) -> anyhow::Result<()> {
+    let datas = associate_all(database, datas)?;
+    estimate_all(&datas, estimator)
+}
+
+pub fn estimate_all<'s, 'c>(
+    datas: &[AssociatedDataPair<'c, '_, 's>],
+    estimator: &mut MultiUserEstimator<'s, 'c>,
+) -> anyhow::Result<()> {
     // It never happens that once "determine by delta" fails,
     // but succeeds afterwards due to additionally determined internal levels.
-    for &(config, ref ordinary_records, _) in &datas {
+    for &(config, ref data) in datas {
+        let ordinary_records = data.ordinary_records();
         if config.estimator_config.new_songs_are_complete {
             estimator
                 .determine_by_delta(ordinary_records.iter().map(|&r| (config, r)), NewOrOld::New)?;
@@ -188,7 +201,8 @@ pub fn update_all<'s, 'c>(
 
     for i in 0.. {
         let before_len = estimator.event_len();
-        for &(config, _, ref rating_targets) in &datas {
+        for &(config, ref data) in datas {
+            let rating_targets = data.rating_target();
             estimator.guess_from_rating_target_order(
                 rating_targets
                     .iter()

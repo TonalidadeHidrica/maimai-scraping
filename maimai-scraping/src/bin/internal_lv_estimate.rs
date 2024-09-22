@@ -5,7 +5,11 @@ use hashbrown::HashSet;
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use maimai_scraping::maimai::{
-    internal_lv_estimator::{self, multi_user::update_all, Estimator, Reason},
+    internal_lv_estimator::{
+        self,
+        multi_user::{update_all, RecordLabel},
+        Estimator, Reason,
+    },
     load_score_level::MaimaiVersion,
     song_list::{self, database::SongDatabase},
 };
@@ -88,17 +92,22 @@ fn main() -> anyhow::Result<()> {
                     .map(|e| {
                         let reason = lazy_format!(match (e.reason()) {
                             Reason::Database(_) => "既知データより",
-                            Reason::Delta(a, d, x) => (
-                                "カード {} での {} のプレイで達成率 {a}、単曲レート {d} より",
-                                x.user(),
-                                x.play_time()
-                            ),
+                            Reason::Delta(a, d, x) =>
+                                ("{}", lazy_format!(match (x) {
+                                    RecordLabel::FromData(x) => (
+                                        "カード {} での {} のプレイで達成率 {a}、単曲レート {d} より",
+                                        x.user(),
+                                        x.play_time()
+                                    ),
+                                    RecordLabel::Additional => "追加データより"
+                                })),
                             Reason::List(x) => (
                                 "カード {} での {} 時点のベスト枠 ({}周目) より",
                                 x.user(),
                                 x.timestamp(),
                                 x.iteration() + 1,
                             ),
+                            Reason::Assumption => "追加データより"
                         });
                         lazy_format!(
                             "{reason} {} に{}",

@@ -246,7 +246,7 @@ impl Display for InternalScoreLevel {
     }
 }
 impl InternalScoreLevel {
-    fn empty() -> Self {
+    pub fn empty() -> Self {
         Self {
             offset: ScoreConstant(10),
             mask: CandidateBitmask(0),

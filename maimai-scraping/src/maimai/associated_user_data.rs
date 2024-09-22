@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
 use chrono::NaiveDateTime;
 use getset::{CopyGetters, Getters};
 use itertools::Itertools;
@@ -20,6 +20,33 @@ use super::{
 pub struct UserData<'d, 's> {
     records: BTreeMap<PlayTime, PlayRecord<'d, 's>>,
     rating_target: BTreeMap<PlayTime, RatingTargetList<'d, 's>>,
+}
+impl<'d, 's> UserData<'d, 's> {
+    pub fn ordinary_data_associated(&self) -> anyhow::Result<UserDataOrdinaryAssociated<'d, 's>> {
+        let ordinary_records = self
+            .records()
+            .values()
+            .filter_map(|r| Some(r.as_ordinary()?.into_associated()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| anyhow!("{e:#?}"))?;
+        let rating_target = self
+            .rating_target()
+            .iter()
+            .map(|(&time, r)| Ok((time, r.as_associated()?)))
+            .collect::<Result<Vec<_>, &anyhow::Error>>()
+            .map_err(|e| anyhow!("{e:#?}"))?;
+        Ok(UserDataOrdinaryAssociated {
+            ordinary_records,
+            rating_target,
+        })
+    }
+}
+
+#[derive(Getters)]
+#[getset(get = "pub")]
+pub struct UserDataOrdinaryAssociated<'d, 's> {
+    ordinary_records: Vec<OrdinaryPlayRecordAssociated<'d, 's>>,
+    rating_target: Vec<(PlayTime, RatingTargetListAssociated<'d, 's>)>,
 }
 
 #[derive(CopyGetters)]
