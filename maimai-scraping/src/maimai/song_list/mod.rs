@@ -17,6 +17,8 @@ use super::{
 };
 
 pub mod database;
+pub mod in_lv;
+pub mod official;
 
 /// A song has zero or one standard score, zero or one deluxe score,
 /// and zero or more utage scores.

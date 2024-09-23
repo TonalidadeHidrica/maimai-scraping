@@ -8,10 +8,12 @@ use anyhow::{bail, Context};
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::maimai::{
-    load_score_level::{self, in_lv_kind, SongRaw},
-    official_song_list,
     rating::ScoreLevel,
     schema::latest::{SongIcon, SongName},
+    song_list::{
+        in_lv::{self, in_lv_kind, SongRaw},
+        official,
+    },
     version::MaimaiVersion,
 };
 use maimai_scraping_utils::fs_json_util::{read_json, write_json};
@@ -31,7 +33,7 @@ struct Args {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let mut songs: Vec<official_song_list::SongRaw> = read_json(args.songs_json)?;
+    let mut songs: Vec<official::SongRaw> = read_json(args.songs_json)?;
     songs.sort_by_key(|song| song.sort);
 
     let mut res = vec![];
@@ -97,7 +99,7 @@ fn main() -> anyhow::Result<()> {
             kana: &'a str,
         }
 
-        let levels = load_score_level::load(levels_json)?;
+        let levels = in_lv::load(levels_json)?;
         let mut icon_to_name = HashMap::new();
         for song in levels {
             icon_to_name.insert(song.icon().clone(), song);
@@ -123,7 +125,7 @@ fn main() -> anyhow::Result<()> {
 
     let official_songs = songs
         .into_iter()
-        .map(official_song_list::Song::try_from)
+        .map(official::Song::try_from)
         .collect::<Result<Vec<_>, _>>()?;
     let chars: BTreeSet<_> = official_songs
         .iter()

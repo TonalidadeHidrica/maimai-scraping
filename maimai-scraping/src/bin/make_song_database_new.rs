@@ -18,13 +18,13 @@ use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::info;
 use maimai_scraping::maimai::{
-    load_score_level::{self, in_lv_kind, Song as InLvSong, SongRaw},
-    official_song_list::{self, ScoreDetails},
     rating::{InternalScoreLevel, ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::{
-        database::SongDatabase, OrdinaryScore, OrdinaryScores, RemoveState, Song, SongAbbreviation,
-        UtageIdentifier,
+        database::SongDatabase,
+        in_lv::{self, in_lv_kind, Song as InLvSong, SongRaw},
+        official::{self, ScoreDetails},
+        OrdinaryScore, OrdinaryScores, RemoveState, Song, SongAbbreviation, UtageIdentifier,
     },
     version::MaimaiVersion,
 };
@@ -87,7 +87,7 @@ impl Resources {
                 continue;
             }
             let path = format!("{}.json", i8::from(version));
-            let levels = load_score_level::load(opts.in_lv_dir.join(path))?;
+            let levels = in_lv::load(opts.in_lv_dir.join(path))?;
             assert!(ret.in_lv.insert(version, levels).is_none());
         }
 
@@ -97,7 +97,7 @@ impl Resources {
                 continue;
             }
             let path = format!("{}.json", i8::from(version));
-            let levels = load_score_level::load_mask(opts.in_lv_bitmask_dir.join(path))?;
+            let levels = in_lv::load_mask(opts.in_lv_bitmask_dir.join(path))?;
             assert!(ret.in_lv_bitmask.insert(version, levels).is_none());
         }
 
@@ -140,7 +140,7 @@ impl Resources {
                 .transpose()?
                 .unwrap_or_else(|| NaiveTime::from_hms_opt(12, 0, 0).unwrap());
             let timestamp = date.and_time(time);
-            let songs: Vec<official_song_list::SongRaw> = read_json(path)?;
+            let songs: Vec<official::SongRaw> = read_json(path)?;
             let list = OfficialSongList {
                 timestamp,
                 songs: songs.into_iter().map(TryInto::try_into).try_collect()?,
@@ -955,7 +955,7 @@ impl Results {
                     let level_ok =
                         |x: ScoreLevel| move |y: InternalScoreLevel| x == y.into_level(version);
                     let ok = |generation: ScoreGeneration| {
-                        move |levels: official_song_list::Levels| {
+                        move |levels: official::Levels| {
                             Some(match &collected.scores[generation] {
                                 None => "Missing score",
                                 Some(collected) => {
@@ -1591,7 +1591,7 @@ pub struct RemovedSongSupplemental {
 #[derive(PartialEq, Eq, Debug)]
 pub struct OfficialSongList {
     timestamp: NaiveDateTime,
-    songs: Vec<official_song_list::Song>,
+    songs: Vec<official::Song>,
 }
 
 #[derive(Deserialize)]

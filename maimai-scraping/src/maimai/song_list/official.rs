@@ -9,7 +9,7 @@ use maimai_scraping_utils::fs_json_util::read_json;
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 
-use super::{
+use crate::maimai::{
     rating::ScoreLevel,
     schema::latest::{ArtistName, Category, SongIcon, SongName},
     song_list::{SongKana, UtageScore},

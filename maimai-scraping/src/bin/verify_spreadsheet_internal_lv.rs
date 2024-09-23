@@ -4,7 +4,6 @@ use clap::Parser;
 use fs_err::File;
 use itertools::Itertools;
 use maimai_scraping::maimai::{
-    load_score_level,
     rating::{rank_coef, single_song_rating, RankCoefficient, ScoreConstant},
     schema::{
         latest::{ScoreDifficulty, ScoreGeneration, SongName},
@@ -15,17 +14,20 @@ use serde::Deserialize;
 
 #[derive(Parser)]
 struct Opts {
-    levels_path: PathBuf,
+    // levels_path: PathBuf,
     tsv_path: PathBuf,
 }
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    #[allow(unused)]
-    let levels = load_score_level::load(&opts.levels_path)?;
+    // 2024-09-24 commenting out.
+    // We want to avoid using `load_score_level` (a.k.a. `song_list::in_lv`) as much as possible.
+    // This line is supposed to be replaced with `database` when used.
+    // #[allow(unused)]
+    // let levels = load_score_level::load(&opts.levels_path)?;
     let table = csv::ReaderBuilder::new()
         .delimiter(b'\t')
-        .from_reader(File::open(&opts.tsv_path)?)
+        .from_reader(File::open(opts.tsv_path)?)
         .into_deserialize::<Record>();
     for record in table {
         let record = record?;
@@ -67,7 +69,6 @@ struct Record {
 
 mod de {
     use maimai_scraping::maimai::{
-        load_score_level::InternalScoreLevel,
         rating::{RankCoefficient, ScoreConstant},
         schema::{
             latest::{ScoreDifficulty, ScoreGeneration},
@@ -116,11 +117,10 @@ mod de {
     }
 
     pub(super) fn internal_lv<'de, D: Deserializer<'de>>(d: D) -> Result<ScoreConstant, D::Error> {
-        let v = de_f64(d)?;
-        // TODO misuse!
-        match InternalScoreLevel::try_from(v) {
-            Ok(InternalScoreLevel::Known(v)) => Ok(v),
-            _ => Err(D::Error::custom(format!("Invalid internal lv: {v:?}"))),
-        }
+        let value = de_f64(d)?;
+        // TODO duplicate code in `in_lv::InternalScoreLevel`?
+        ((value.abs() * 10.).round() as u8)
+            .try_into()
+            .map_err(|_| D::Error::custom(format!("Invalid internal lv: {value:?}")))
     }
 }

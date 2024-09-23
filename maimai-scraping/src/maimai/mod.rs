@@ -2,8 +2,6 @@ pub mod associated_user_data;
 pub mod data_collector;
 pub mod favorite_songs;
 pub mod internal_lv_estimator;
-pub mod load_score_level;
-pub mod official_song_list;
 pub mod parser;
 pub mod rating;
 pub mod schema;

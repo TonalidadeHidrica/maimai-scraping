@@ -4,10 +4,13 @@ use anyhow::{bail, Context};
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::maimai::{
-    load_score_level::{in_lv_kind, SongRaw},
     rating::ScoreLevel,
     schema::latest::ScoreGeneration,
-    song_list::{database::SongDatabase, Song},
+    song_list::{
+        database::SongDatabase,
+        in_lv::{in_lv_kind, SongRaw},
+        Song,
+    },
     version::MaimaiVersion,
 };
 use maimai_scraping_utils::fs_json_util::{read_json, write_json};

@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use smol_str::SmolStrBuilder;
 
 use super::{
-    load_score_level,
     schema::latest::{AchievementValue, RatingValue},
+    song_list::in_lv,
     version::MaimaiVersion,
 };
 
@@ -279,8 +279,9 @@ impl InternalScoreLevel {
             mask: CandidateBitmask((1 << count) - 1),
         }
     }
-    pub fn from_old(version: MaimaiVersion, value: load_score_level::InternalScoreLevel) -> Self {
-        use load_score_level::InternalScoreLevel::*;
+    /// Convert `InternalScoreLevel` in `in_lv` to myself.
+    pub fn from_old(version: MaimaiVersion, value: in_lv::InternalScoreLevel) -> Self {
+        use in_lv::InternalScoreLevel::*;
         match value {
             Unknown(x) => Self::unknown(version, x),
             Known(x) => Self::known(x),

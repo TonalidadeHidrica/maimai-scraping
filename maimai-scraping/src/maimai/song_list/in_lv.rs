@@ -9,7 +9,7 @@ use maimai_scraping_utils::fs_json_util::read_json;
 use serde::{Deserialize, Deserializer, Serialize};
 use url::Url;
 
-use super::{
+use crate::maimai::{
     rating::{ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     version::MaimaiVersion,
