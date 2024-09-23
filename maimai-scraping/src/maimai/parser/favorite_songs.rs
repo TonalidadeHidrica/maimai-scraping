@@ -5,7 +5,7 @@ use maimai_scraping_utils::selector;
 use scraper::ElementRef;
 use serde::Serialize;
 
-use crate::maimai::{official_song_list::Category, schema::latest::SongName};
+use crate::maimai::schema::latest::{Category, SongName};
 
 pub fn parse(html: &scraper::Html) -> anyhow::Result<Page> {
     let token = html

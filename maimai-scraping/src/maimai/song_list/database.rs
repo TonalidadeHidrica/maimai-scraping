@@ -7,14 +7,13 @@ use hashbrown::HashMap;
 use itertools::Itertools;
 
 use crate::maimai::{
-    official_song_list::UtageScore,
     rating::InternalScoreLevel,
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::RemoveState,
     version::MaimaiVersion,
 };
 
-use super::{OrdinaryScore, OrdinaryScores, Song};
+use super::{OrdinaryScore, OrdinaryScores, Song, UtageScore};
 
 #[derive(Getters)]
 #[getset(get = "pub")]

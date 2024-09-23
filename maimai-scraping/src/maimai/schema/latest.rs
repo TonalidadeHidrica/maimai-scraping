@@ -682,6 +682,32 @@ impl From<UtageKind> for UtageKindRaw {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
+pub enum Category {
+    GamesVariety,
+    PopsAnime,
+    MaimaiOriginal,
+    NiconicoVocaloid,
+    OngekiChunithm,
+    TouhouProject,
+}
+
+#[derive(
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    derive_more::From,
+    derive_more::AsRef,
+    derive_more::FromStr,
+    derive_more::Display,
+    Serialize,
+    Deserialize,
+)]
+#[as_ref(forward)]
+pub struct ArtistName(String);
+
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDate;

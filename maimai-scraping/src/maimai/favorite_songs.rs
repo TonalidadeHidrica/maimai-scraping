@@ -12,9 +12,8 @@ use crate::{
 };
 
 use super::{
-    official_song_list::Category,
     parser::favorite_songs::{Idx, Page},
-    schema::latest::SongName,
+    schema::latest::{Category, SongName},
 };
 
 pub async fn fetch_favorite_songs_form(

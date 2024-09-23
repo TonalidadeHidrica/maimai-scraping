@@ -1,18 +1,18 @@
-use std::{borrow::Cow, cmp::Ordering, path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 
 use anyhow::{bail, Context};
 use chrono::NaiveDate;
 use deranged::RangedU8;
-use derive_more::{AsRef, Display, From, FromStr};
+use derive_more::From;
 use getset::{CopyGetters, Getters};
-use itertools::Itertools;
 use maimai_scraping_utils::fs_json_util::read_json;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 
 use super::{
     rating::ScoreLevel,
-    schema::latest::{SongIcon, SongName, UtageKindRaw},
+    schema::latest::{ArtistName, Category, SongIcon, SongName},
+    song_list::{SongKana, UtageScore},
     version::MaimaiVersion,
 };
 
@@ -89,17 +89,6 @@ pub struct Song {
     details: ScoreDetails,
 }
 
-#[derive(Clone, Debug, From, AsRef, FromStr, Display, Serialize, Deserialize)]
-// FIXME: Commenting out because otherwise `.as_ref()` seems to require explicit target type
-// #[as_ref(forward)]
-pub struct SongKana(String);
-
-#[derive(
-    Clone, PartialEq, Eq, Hash, Debug, From, AsRef, FromStr, Display, Serialize, Deserialize,
-)]
-#[as_ref(forward)]
-pub struct ArtistName(String);
-
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, From)]
 pub struct SortIndex(u64);
 
@@ -125,16 +114,6 @@ pub struct OrdinaryScore {
     deluxe: Option<Levels>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
-pub enum Category {
-    GamesVariety,
-    PopsAnime,
-    MaimaiOriginal,
-    NiconicoVocaloid,
-    OngekiChunithm,
-    TouhouProject,
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct Levels {
@@ -144,38 +123,6 @@ pub struct Levels {
     master: ScoreLevel,
     re_master: Option<ScoreLevel>,
 }
-
-#[derive(Clone, PartialEq, Eq, Debug, Getters, CopyGetters, Serialize, Deserialize)]
-pub struct UtageScore {
-    #[getset(get_copy = "pub")]
-    level: ScoreLevel,
-    #[getset(get = "pub")]
-    comment: UtageComment,
-    #[getset(get = "pub")]
-    kanji: UtageKindRaw,
-    #[getset(get_copy = "pub")]
-    buddy: bool,
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Deserialize)]
-pub struct UtageIdentifier<'a>(Cow<'a, UtageKindRaw>, ScoreLevel);
-impl<'a> UtageIdentifier<'a> {
-    pub fn to_owned(&self) -> UtageIdentifier<'static> {
-        let e: UtageKindRaw = self.0.as_ref().clone();
-        UtageIdentifier(Cow::Owned(e), self.1)
-    }
-}
-
-impl UtageScore {
-    /// For now, we assume that this uniquely specifies an utage score in a song.
-    /// Otherwise, how on earth can we determine the score???
-    pub fn identifier(&self) -> UtageIdentifier {
-        UtageIdentifier(Cow::Borrowed(&self.kanji), self.level)
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Debug, From, AsRef, Serialize, Deserialize)]
-pub struct UtageComment(String);
 
 impl TryFrom<SongRaw> for Song {
     type Error = anyhow::Error;
@@ -200,7 +147,7 @@ impl TryFrom<SongRaw> for Song {
             None => false,
             _ => bail!("Unexpected `buddy`: {:?}", song.buddy),
         };
-        let utage = UtageScore::parse(song.lev_utage, song.comment, song.kanji, buddy)?;
+        let utage = parse_utage_score(song.lev_utage, song.comment, song.kanji, buddy)?;
         let details = if standard.is_none() && deluxe.is_none() {
             match (&song.catcode[..], utage) {
                 ("宴会場", Some(utage)) => ScoreDetails::Utage(utage),
@@ -326,79 +273,32 @@ impl Levels {
     }
 }
 
-impl UtageScore {
-    fn parse(
-        lev_utage: Option<String>,
-        comment: Option<String>,
-        kanji: Option<String>,
-        buddy: bool,
-    ) -> anyhow::Result<Option<Self>> {
-        Ok(match (lev_utage, comment, kanji) {
-            (Some(level), Some(comment), Some(kanji)) => Some(Self {
-                level: level
-                    .strip_suffix('?')
-                    .with_context(|| format!("Utage level does not end with `？`: {level:?}"))?
-                    .parse()?,
-                comment: comment.into(),
-                kanji: kanji.into(),
-                buddy,
-            }),
-            (None, None, None) => None,
-            x => bail!("Unexpected type of song: {x:?}"),
-        })
-    }
+fn parse_utage_score(
+    lev_utage: Option<String>,
+    comment: Option<String>,
+    kanji: Option<String>,
+    buddy: bool,
+) -> anyhow::Result<Option<UtageScore>> {
+    Ok(match (lev_utage, comment, kanji) {
+        (Some(level), Some(comment), Some(kanji)) => Some(
+            UtageScore::builder()
+                .level(
+                    level
+                        .strip_suffix('?')
+                        .with_context(|| format!("Utage level does not end with `？`: {level:?}"))?
+                        .parse()?,
+                )
+                .comment(comment.into())
+                .kanji(kanji.into())
+                .buddy(buddy)
+                .build(),
+        ),
+        (None, None, None) => None,
+        x => bail!("Unexpected type of song: {x:?}"),
+    })
 }
 
 pub fn load(path: impl Into<PathBuf>) -> anyhow::Result<Vec<Song>> {
     let official_songs: Vec<SongRaw> = read_json(path.into())?;
     official_songs.into_iter().map(TryInto::try_into).collect()
-}
-
-impl PartialEq for SongKana {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other).is_eq()
-    }
-}
-impl Eq for SongKana {}
-impl PartialOrd for SongKana {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for SongKana {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        use Ordering::*;
-        self.0
-            .chars()
-            .zip_longest(other.0.chars())
-            .map(|x| match x {
-                itertools::EitherOrBoth::Both(x, y) => {
-                    maimai_char_order(x).cmp(&maimai_char_order(y))
-                }
-                itertools::EitherOrBoth::Left(_) => Greater,
-                itertools::EitherOrBoth::Right(_) => Less,
-            })
-            .find(|x| x.is_ne())
-            .unwrap_or(Equal)
-    }
-}
-fn maimai_char_order(c: char) -> (u8, char) {
-    match c {
-        'ア'..='ン' => (0, c),
-        'A'..='Z' => (1, c),
-        '0'..='9' => (2, c),
-        _ => (3, c),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::SongKana;
-
-    #[test]
-    fn test_song_kana_cmp() {
-        let [x, y]: [SongKana; 2] =
-            ["ソウキユウフカク", "YETANOTHERDRIZZLYRAIN"].map(|x| x.to_owned().into());
-        assert!(x < y);
-    }
 }

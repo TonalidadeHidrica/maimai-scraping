@@ -19,11 +19,12 @@ use lazy_format::lazy_format;
 use log::info;
 use maimai_scraping::maimai::{
     load_score_level::{self, in_lv_kind, Song as InLvSong, SongRaw},
-    official_song_list::{self, ScoreDetails, UtageIdentifier},
+    official_song_list::{self, ScoreDetails},
     rating::{InternalScoreLevel, ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::{
         database::SongDatabase, OrdinaryScore, OrdinaryScores, RemoveState, Song, SongAbbreviation,
+        UtageIdentifier,
     },
     version::MaimaiVersion,
 };
