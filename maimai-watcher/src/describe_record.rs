@@ -15,19 +15,6 @@ use maimai_scraping::maimai::{
     song_list::database::ScoreForVersionRef,
 };
 
-pub fn get_song_lvs<'a>(
-    record: &'_ PlayRecord,
-    levels: &'a maimai_scraping::maimai::estimate_rating::ScoreConstantsStore<'_>,
-) -> &'a [maimai_scraping::maimai::rating::ScoreConstant] {
-    if let Ok(Some((_, candidates))) = levels.get(
-        maimai_scraping::maimai::estimate_rating::ScoreKey::from(record),
-    ) {
-        candidates
-    } else {
-        &[]
-    }
-}
-
 pub fn make_message<'a>(
     record: &'a PlayRecord,
     associated: Option<&associated_user_data::PlayRecord>,

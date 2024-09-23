@@ -1,11 +1,7 @@
 use std::{path::PathBuf, sync::mpsc, time::Duration};
 
 use clap::Parser;
-use maimai_scraping::{
-    cookie_store::UserIdentifier,
-    maimai::{estimate_rating::EstimatorConfig, Maimai},
-    sega_trait::SegaTrait,
-};
+use maimai_scraping::{cookie_store::UserIdentifier, maimai::Maimai, sega_trait::SegaTrait};
 use maimai_watcher::watch::{self, ForcePaidConfig, TimeoutConfig};
 
 #[tokio::main]
@@ -50,8 +46,6 @@ async fn main() -> anyhow::Result<()> {
 #[derive(Parser)]
 struct Opts {
     maimai_uesr_data_path: PathBuf,
-    #[clap(flatten)]
-    estimator_config: EstimatorConfig,
     #[clap(flatten)]
     user_identifier: UserIdentifier,
     #[clap(long)]

@@ -15,7 +15,6 @@ use maimai_scraping::{
     api::{SegaClient, SegaClientInitializer},
     cookie_store::UserIdentifier,
     maimai::{
-        estimate_rating::EstimatorConfig,
         favorite_songs::{fetch_favorite_songs_form, song_name_to_idx_map, SetFavoriteSong},
         internal_lv_estimator::{
             self,
@@ -74,8 +73,6 @@ struct Opts {
 
     #[clap(long)]
     dry_run: bool,
-    #[clap(flatten)]
-    estimator_config: EstimatorConfig,
     #[clap(flatten)]
     user_identifier: UserIdentifier,
 
