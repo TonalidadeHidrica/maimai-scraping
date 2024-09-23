@@ -3,7 +3,9 @@ use std::{collections::BTreeMap, path::PathBuf};
 use clap::Parser;
 use itertools::Itertools;
 use lazy_format::lazy_format;
-use maimai_scraping::maimai::{estimator_config_multiuser, rating::ScoreLevel, MaimaiUserData};
+use maimai_scraping::maimai::{
+    internal_lv_estimator::multi_user, rating::ScoreLevel, MaimaiUserData,
+};
 use maimai_scraping_utils::fs_json_util::read_json;
 
 #[derive(Parser)]
@@ -30,7 +32,7 @@ fn main() -> anyhow::Result<()> {
             .join(" ")
     );
 
-    let config: estimator_config_multiuser::Root =
+    let config: multi_user::Config =
         toml::from_str(&fs_err::read_to_string(opts.estimator_config)?)?;
     for user in config.users() {
         let user_data: MaimaiUserData = read_json(user.data_path())?;
