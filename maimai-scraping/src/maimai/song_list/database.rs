@@ -122,7 +122,12 @@ impl<'s> SongRef<'s> {
         self.song
             .utage_scores
             .iter()
-            .map(move |score| UtageScoreRef { song: self, score })
+            .zip(self.id + 10..)
+            .map(move |(score, id)| UtageScoreRef {
+                song: self,
+                score,
+                id,
+            })
     }
 
     pub fn latest_song_name(&self) -> &'s SongName {
@@ -133,10 +138,19 @@ impl<'s> SongRef<'s> {
 
 /// A reference to a score for a specific version.
 #[derive(Clone, Copy, Debug)]
+// #[derive_by_key(key = "key", PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ScoreForVersionRef<'s> {
     Ordinary(OrdinaryScoreForVersionRef<'s>),
     Utage(UtageScoreRef<'s>),
 }
+// impl ScoreForVersionRef<'_> {
+//     fn key(self) -> usize {
+//         match self {
+//             Self::Ordinary(x) => x.score().id,
+//             Self::Utage(x) => (x.id, None),
+//         }
+//     }
+// }
 
 /// A reference to a set of scores for a specific version.
 #[derive(Clone, Copy, Debug, CopyGetters, DeriveByKey)]
@@ -247,11 +261,18 @@ pub struct OrdinaryScoreForVersionRef<'s> {
 }
 
 /// A refegence to an utage score.
-#[derive(Clone, Copy, Debug, CopyGetters)]
+#[derive(Clone, Copy, Debug, CopyGetters, DeriveByKey)]
+#[derive_by_key(key = "key", PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[getset(get_copy = "pub")]
 pub struct UtageScoreRef<'s> {
     song: SongRef<'s>,
     score: &'s UtageScore,
+    id: usize,
+}
+impl UtageScoreRef<'_> {
+    fn key(self) -> usize {
+        self.id
+    }
 }
 
 pub fn verify_songs(songs: &[Song]) -> anyhow::Result<()> {
