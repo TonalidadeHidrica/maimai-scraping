@@ -1,9 +1,10 @@
+use std::convert::TryFrom;
+
 use anyhow::bail;
 use chrono::naive::NaiveDateTime;
 use derive_more::{AsRef, Display, From, FromStr, Into};
 use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
 use strum::EnumIter;
 use typed_builder::TypedBuilder;
 use url::Url;

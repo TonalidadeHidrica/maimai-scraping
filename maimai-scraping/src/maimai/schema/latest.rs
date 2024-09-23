@@ -1,4 +1,4 @@
-use std::hash::Hash;
+use std::{convert::TryFrom, hash::Hash, num::ParseIntError};
 
 use anyhow::bail;
 use chrono::naive::NaiveDateTime;
@@ -9,8 +9,6 @@ use getset::{CopyGetters, Getters};
 use log::warn;
 use maimai_scraping_utils::regex;
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
-use std::num::ParseIntError;
 use strum::EnumIter;
 use thiserror::Error;
 use typed_builder::TypedBuilder;
