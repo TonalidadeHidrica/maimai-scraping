@@ -12,7 +12,6 @@ use smol_str::SmolStrBuilder;
 
 use super::{
     schema::latest::{AchievementValue, RatingValue},
-    song_list::in_lv,
     version::MaimaiVersion,
 };
 
@@ -277,14 +276,6 @@ impl InternalScoreLevel {
         Self {
             offset: ScoreConstant::try_from(offset).unwrap(),
             mask: CandidateBitmask((1 << count) - 1),
-        }
-    }
-    /// Convert `InternalScoreLevel` in `in_lv` to myself.
-    pub fn from_old(version: MaimaiVersion, value: in_lv::InternalScoreLevel) -> Self {
-        use in_lv::InternalScoreLevel::*;
-        match value {
-            Unknown(x) => Self::unknown(version, x),
-            Known(x) => Self::known(x),
         }
     }
 

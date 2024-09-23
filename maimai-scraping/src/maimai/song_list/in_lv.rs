@@ -10,7 +10,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use url::Url;
 
 use crate::maimai::{
-    rating::{ScoreConstant, ScoreLevel},
+    rating::{InternalScoreLevel as NewInternalScoreLevel, ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     version::MaimaiVersion,
 };
@@ -233,9 +233,8 @@ impl TryFrom<f64> for InternalScoreLevel {
 impl InternalScoreLevel {
     pub fn get_if_unique(self) -> Option<ScoreConstant> {
         match self {
-            InternalScoreLevel::Unknown(_) => None,
-            // InternalScoreLevel::Candidates(..) => None,
-            InternalScoreLevel::Known(x) => Some(x),
+            Self::Unknown(_) => None,
+            Self::Known(x) => Some(x),
         }
     }
 
@@ -245,9 +244,16 @@ impl InternalScoreLevel {
 
     pub fn into_level(self, version: MaimaiVersion) -> ScoreLevel {
         match self {
-            InternalScoreLevel::Unknown(v) => v,
-            // InternalScoreLevel::Candidates(v) => v.level.to_lv(version),
-            InternalScoreLevel::Known(v) => v.to_lv(version),
+            Self::Unknown(v) => v,
+            Self::Known(v) => v.to_lv(version),
+        }
+    }
+
+    /// Convert `InternalScoreLevel` in `in_lv` to myself.
+    pub fn into_new(self, version: MaimaiVersion) -> NewInternalScoreLevel {
+        match self {
+            Self::Unknown(x) => NewInternalScoreLevel::unknown(version, x),
+            Self::Known(x) => NewInternalScoreLevel::known(x),
         }
     }
 }

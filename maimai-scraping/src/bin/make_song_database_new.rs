@@ -223,8 +223,9 @@ impl Resources {
             let map = values
                 .into_iter()
                 .map(|(key, [x, y])| {
-                    let parse =
-                        |x: f64| anyhow::Ok(InternalScoreLevel::from_old(key.0, x.try_into()?));
+                    let parse = |x: f64| {
+                        anyhow::Ok(in_lv::InternalScoreLevel::try_from(x)?.into_new(key.0))
+                    };
                     anyhow::Ok((key, [parse(x)?, parse(y)?]))
                 })
                 .collect::<Result<_, _>>()?;
@@ -417,11 +418,7 @@ impl InLvKind for in_lv::kind::Levels {
         value: Self::Value,
         version: MaimaiVersion,
     ) -> anyhow::Result<()> {
-        merge_levels(
-            levels,
-            InternalScoreLevel::from_old(version, value),
-            version,
-        )
+        merge_levels(levels, value.into_new(version), version)
     }
 }
 impl InLvKind for in_lv::kind::Bitmask {
