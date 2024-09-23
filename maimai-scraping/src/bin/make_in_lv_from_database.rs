@@ -8,7 +8,7 @@ use maimai_scraping::maimai::{
     schema::latest::ScoreGeneration,
     song_list::{
         database::SongDatabase,
-        in_lv::{in_lv_kind, SongRaw},
+        in_lv::{self, SongRaw},
         Song,
     },
     version::MaimaiVersion,
@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
         // let version = if song_name == "ジングルベル" &&
         //     i8::from(convert_version(&song.version)?) * negate_version;
         let song_raw = |dx, lv, v| {
-            anyhow::Ok(SongRaw::<in_lv_kind::Levels> {
+            anyhow::Ok(SongRaw::<in_lv::kind::Levels> {
                 dx,
                 v,
                 lv,

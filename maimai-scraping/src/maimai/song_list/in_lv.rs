@@ -18,14 +18,10 @@ use crate::maimai::{
 pub fn load(path: impl Into<PathBuf> + Debug) -> anyhow::Result<Vec<Song>> {
     load_impl(path)
 }
-pub fn load_mask(
-    path: impl Into<PathBuf> + Debug,
-) -> anyhow::Result<Vec<Song<in_lv_kind::Bitmask>>> {
+pub fn load_mask(path: impl Into<PathBuf> + Debug) -> anyhow::Result<Vec<Song<kind::Bitmask>>> {
     load_impl(path)
 }
-fn load_impl<K: in_lv_kind::Kind>(
-    path: impl Into<PathBuf> + Debug,
-) -> anyhow::Result<Vec<Song<K>>> {
+fn load_impl<K: kind::Kind>(path: impl Into<PathBuf> + Debug) -> anyhow::Result<Vec<Song<K>>> {
     let songs: Vec<SongRaw<K>> = read_json(path)?;
     songs.into_iter().map(Song::<K>::try_from).collect()
 }
@@ -58,7 +54,7 @@ where
     map
 }
 
-pub mod in_lv_kind {
+pub mod kind {
     use std::{convert::Infallible, fmt::Debug, hash::Hash};
 
     use sealed::sealed;
@@ -83,10 +79,10 @@ pub mod in_lv_kind {
         type Value = CandidateBitmask;
     }
 }
-pub use in_lv_kind::Kind as InLvKind;
+pub use kind::Kind as InLvKind;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SongRaw<K = in_lv_kind::Levels> {
+pub struct SongRaw<K = kind::Levels> {
     pub dx: u8,
     pub v: i8,
     pub lv: Vec<f64>,
@@ -99,7 +95,7 @@ pub struct SongRaw<K = in_lv_kind::Levels> {
 
 #[allow(unused)]
 #[derive(Debug, PartialEq, Eq, Getters, CopyGetters)]
-pub struct Song<K: InLvKind = in_lv_kind::Levels> {
+pub struct Song<K: InLvKind = kind::Levels> {
     #[getset(get_copy = "pub")]
     generation: ScoreGeneration,
     #[getset(get_copy = "pub")]
@@ -156,7 +152,7 @@ impl<K: InLvKind> TryFrom<SongRaw<K>> for Song<K> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters)]
-pub struct ScoreLevels<K: InLvKind = in_lv_kind::Levels> {
+pub struct ScoreLevels<K: InLvKind = kind::Levels> {
     basic: InternalScoreLevelEntry<K>,
     advanced: InternalScoreLevelEntry<K>,
     expert: InternalScoreLevelEntry<K>,
@@ -193,7 +189,7 @@ impl<K: InLvKind> ScoreLevels<K> {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters)]
 #[getset(get_copy = "pub")]
-pub struct InternalScoreLevelEntry<K: InLvKind = in_lv_kind::Levels> {
+pub struct InternalScoreLevelEntry<K: InLvKind = kind::Levels> {
     value: <K as InLvKind>::Value,
     index: usize,
 }

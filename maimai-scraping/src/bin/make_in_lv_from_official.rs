@@ -11,7 +11,7 @@ use maimai_scraping::maimai::{
     rating::ScoreLevel,
     schema::latest::{SongIcon, SongName},
     song_list::{
-        in_lv::{self, in_lv_kind, SongRaw},
+        in_lv::{self, SongRaw},
         official,
     },
     version::MaimaiVersion,
@@ -47,7 +47,7 @@ fn main() -> anyhow::Result<()> {
             .with_context(|| format!("Url does not end with .png: {:?}", song.image_url))?
             .to_owned();
 
-        let song_raw = |dx, lv| SongRaw::<in_lv_kind::Levels> {
+        let song_raw = |dx, lv| SongRaw::<in_lv::kind::Levels> {
             dx,
             v: version,
             lv,

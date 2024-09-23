@@ -22,7 +22,7 @@ use maimai_scraping::maimai::{
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::{
         database::SongDatabase,
-        in_lv::{self, in_lv_kind, Song as InLvSong, SongRaw},
+        in_lv::{self, Song as InLvSong, SongRaw},
         official::{self, ScoreDetails},
         OrdinaryScore, OrdinaryScores, RemoveState, Song, SongAbbreviation, UtageIdentifier,
     },
@@ -50,12 +50,15 @@ struct Opts {
     skip_latest_in_lv_data: bool,
 }
 
-type InLvSongMask = InLvSong<in_lv_kind::Bitmask>;
+type InLvSongMask = InLvSong<in_lv::kind::Bitmask>;
 type UtageIdentifierMergeMap =
     HashMap<(SongIcon, UtageIdentifier<'static>), UtageIdentifier<'static>>;
-type InLvCorrectionMap<K = in_lv_kind::Levels> = HashMap<
+type InLvCorrectionMap<K = in_lv::kind::Levels> = HashMap<
     SongIcon,
-    HashMap<(MaimaiVersion, ScoreGeneration, ScoreDifficulty), [<K as in_lv_kind::Kind>::Value; 2]>,
+    HashMap<
+        (MaimaiVersion, ScoreGeneration, ScoreDifficulty),
+        [<K as in_lv::kind::Kind>::Value; 2],
+    >,
 >;
 type InLvDataCorrectionMap = HashMap<
     SongIcon,
@@ -74,7 +77,7 @@ struct Resources {
     utage_identifier_merge: UtageIdentifierMergeMap,
     version_supplemental: Vec<VersionSupplemental>,
     in_lv_override: InLvCorrectionMap,
-    in_lv_bitmask_override: InLvCorrectionMap<in_lv_kind::Bitmask>,
+    in_lv_bitmask_override: InLvCorrectionMap<in_lv::kind::Bitmask>,
     in_lv_data_override: InLvDataCorrectionMap,
 }
 impl Resources {
@@ -401,14 +404,14 @@ impl Results {
     }
 }
 
-trait InLvKind: in_lv_kind::Kind {
+trait InLvKind: in_lv::kind::Kind {
     fn merge_levels(
         levels: &mut Option<InternalScoreLevel>,
         value: Self::Value,
         version: MaimaiVersion,
     ) -> anyhow::Result<()>;
 }
-impl InLvKind for in_lv_kind::Levels {
+impl InLvKind for in_lv::kind::Levels {
     fn merge_levels(
         levels: &mut Option<InternalScoreLevel>,
         value: Self::Value,
@@ -421,7 +424,7 @@ impl InLvKind for in_lv_kind::Levels {
         )
     }
 }
-impl InLvKind for in_lv_kind::Bitmask {
+impl InLvKind for in_lv::kind::Bitmask {
     fn merge_levels(
         levels: &mut Option<InternalScoreLevel>,
         value: Self::Value,
