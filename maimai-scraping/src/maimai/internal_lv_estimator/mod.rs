@@ -5,11 +5,7 @@
 
 pub mod multi_user;
 
-use std::{
-    collections::BTreeSet,
-    fmt::{Debug, Display},
-    ops::Range,
-};
+use std::{collections::BTreeSet, fmt::Debug, ops::Range};
 
 use anyhow::{bail, Context};
 use chrono::{NaiveDateTime, NaiveTime};
@@ -112,17 +108,17 @@ where
     }
 }
 #[derive(Clone, Copy, Debug, Display)]
-#[display(bound = "LD: Display, LL: Display")]
+#[display(bound(LD: Display, LL: Display))]
 pub enum Reason<LD, LL> {
-    #[display(fmt = "according to the database which stores {_0:?}")]
+    #[display("according to the database which stores {_0:?}")]
     Database(InternalScoreLevel),
     #[display(
-        fmt = "because the record achieving {_0} determines the single-song rating to be {_1} (source: {_2})"
+        "because the record achieving {_0} determines the single-song rating to be {_1} (source: {_2})"
     )]
     Delta(AchievementValue, i16, LD),
-    #[display(fmt = "by the rating target list (source: {_0})")]
+    #[display("by the rating target list (source: {_0})")]
     List(LL),
-    #[display(fmt = "by assumption")]
+    #[display("by assumption")]
     Assumption,
 }
 

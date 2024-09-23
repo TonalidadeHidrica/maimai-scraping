@@ -4,7 +4,6 @@ use derive_more::{AsRef, Display, From, FromStr, Into};
 use getset::{CopyGetters, Getters};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
-use std::str::FromStr;
 use strum::EnumIter;
 use typed_builder::TypedBuilder;
 use url::Url;

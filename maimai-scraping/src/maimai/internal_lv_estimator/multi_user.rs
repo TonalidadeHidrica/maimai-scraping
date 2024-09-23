@@ -68,14 +68,14 @@ pub enum RecordLabel<'n> {
     Additional,
 }
 #[derive(Clone, Copy, Debug, Display, CopyGetters)]
-#[display(fmt = "play record played at {play_time} by {user}")]
+#[display("play record played at {play_time} by {user}")]
 #[getset(get_copy = "pub")]
 pub struct RecordLabelFromData<'n> {
     play_time: PlayTime,
     user: &'n UserName,
 }
 #[derive(Clone, Copy, Debug, Display, CopyGetters)]
-#[display(fmt = "rating target recorded at {timestamp} by {user} (iteration {iteration})")]
+#[display("rating target recorded at {timestamp} by {user} (iteration {iteration})")]
 #[getset(get_copy = "pub")]
 pub struct RatingTargetLabel<'n> {
     timestamp: PlayTime,

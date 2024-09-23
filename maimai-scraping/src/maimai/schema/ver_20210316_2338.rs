@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, fmt::Display, fmt::Write};
+use std::{convert::TryFrom, fmt::Write};
 
 use chrono::naive::NaiveDateTime;
 use derive_more::{Display, From};
