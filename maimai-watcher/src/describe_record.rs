@@ -5,6 +5,7 @@ use lazy_format::lazy_format;
 use maimai_scraping::maimai::{
     associated_user_data,
     load_score_level::MaimaiVersion,
+    rating::{rank_coef, single_song_rating_precise},
     schema::{
         latest::{
             JudgeCount, JudgeCountWithoutCP, JudgeResult, LifeResult, PlayRecord,
@@ -22,7 +23,7 @@ pub fn make_message<'a>(
     use maimai_scraping::maimai::schema::latest::{AchievementRank::*, FullComboKind::*};
     let time = (record.played_at().idx().timestamp_jst()).unwrap_or(record.played_at().time());
     let score_kind = describe_score_kind(record.score_metadata());
-    let lv = associated
+    let level = associated
         .and_then(|x| x.score().ok())
         .and_then(|x| match x {
             ScoreForVersionRef::Ordinary(score) => {
@@ -34,7 +35,7 @@ pub fn make_message<'a>(
             }
             ScoreForVersionRef::Utage(score) => Some(Either::Right(score.score().level())),
         });
-    let lv = lazy_format!(match (lv) {
+    let lv = lazy_format!(match (level) {
         None => "?",
         Some(x) => "{x}",
     });
@@ -75,8 +76,22 @@ pub fn make_message<'a>(
     } else {
         String::new()
     };
+    let rating_value = {
+        let value = match level {
+            Some(Either::Left(lv)) => {
+                let a = record.achievement_result().value();
+                let result = single_song_rating_precise(lv, a, rank_coef(a)) / 1_000_000;
+                Some(lazy_format!("{}.{:02}", result / 100, result % 100))
+            }
+            _ => None,
+        };
+        lazy_format!(match (value) {
+            Some(x) => "{x}",
+            None => "",
+        })
+    };
     let main_line = lazy_format!(
-        "{time}　{title} ({score_kind} Lv.{lv}{lv_question})　{rank}({ach}{ach_new})　{fc}{barely_fc}\n",
+        "{time}　{title} ({score_kind} Lv.{lv}{lv_question})　{rank}({ach}{ach_new}) {rating_value}　{fc}{barely_fc}\n",
         title = record.song_metadata().name(),
         ach = record.achievement_result().value(),
     );
