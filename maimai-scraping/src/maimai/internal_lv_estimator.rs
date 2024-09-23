@@ -16,12 +16,14 @@ use chrono::{NaiveDateTime, NaiveTime};
 use derive_more::Display;
 use getset::{CopyGetters, Getters};
 use hashbrown::HashMap;
-use itertools::Itertools;
+use itertools::{repeat_n, Itertools};
 use joinery::JoinableIterator;
+use lazy_format::lazy_format;
 
 use crate::algorithm::possibilties_from_sum_and_ordering;
 
 use super::{
+    associated_user_data,
     load_score_level::MaimaiVersion,
     rating::{rank_coef, single_song_rating, InternalScoreLevel, ScoreConstant},
     schema::latest::{AchievementValue, PlayTime, RatingValue},
@@ -746,4 +748,47 @@ impl<'s> Candidates<'s> {
             reasons,
         })
     }
+}
+
+pub fn visualize_rating_target<'est, 'd, 's: 'est + 'd, 'ent: 'd, 'e, LD: 'est, LL: 'est>(
+    estimator: impl Into<Option<&'est Estimator<'s, LD, LL>>>,
+    entry: &'ent associated_user_data::RatingTargetEntry<'d, 's>,
+) -> impl Display + 'd + 'ent {
+    let estimator = estimator.into();
+
+    let level = entry.data().level();
+    let possible_lvs = InternalScoreLevel::unknown(entry.version(), level);
+    let lvs = estimator
+        .and_then(|estimator| Some(estimator.get(entry.score().ok()?.score())?.candidates()))
+        .unwrap_or(possible_lvs);
+
+    let a = entry.data().achievement();
+
+    let fill = repeat_n(None, 6usize.saturating_sub(possible_lvs.count_candidates()));
+    let candidates = (possible_lvs.candidates().map(Some).chain(fill))
+        .map(move |constant| {
+            let value = constant.map(|lv| {
+                lvs.contains(lv)
+                    .then(|| single_song_rating(lv, a, rank_coef(a)).get() as usize)
+            });
+            lazy_format!(match (value) {
+                Some(Some(value)) => ("[{:>3}]", value),
+                Some(_) => "[   ]",
+                None => "     ",
+            })
+        })
+        .join_with(" ");
+
+    entry.data().score_metadata().generation();
+    let achievement = entry.data().achievement();
+    let score = lazy_format!(match (entry.score()) {
+        Ok(score) => ("{}", score.score()),
+        Err(_) => (
+            "{} ({:?} {:?}) [*]",
+            entry.data().song_name(),
+            entry.data().score_metadata().generation(),
+            entry.data().score_metadata().difficulty(),
+        ),
+    });
+    lazy_format!("{level:<3} {candidates} {achievement:>9} {score}")
 }

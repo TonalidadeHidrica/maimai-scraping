@@ -302,7 +302,7 @@ impl InternalScoreLevel {
         self.offset.to_lv(version)
     }
 
-    pub fn candidates(self) -> impl Iterator<Item = ScoreConstant> {
+    pub fn candidates(self) -> impl Iterator<Item = ScoreConstant> + Clone {
         self.mask
             .bits()
             .map(move |x| ScoreConstant(self.offset.0 + x))
@@ -373,6 +373,12 @@ impl InternalScoreLevel {
         let level = self.into_level(version);
         let (offset, _) = offset_and_count(version, level);
         CandidateBitmask(self.mask.0 << (self.offset.0 - offset))
+    }
+
+    pub fn contains(self, level: ScoreConstant) -> bool {
+        (level.0)
+            .checked_sub(self.offset.0)
+            .is_some_and(|diff| self.mask.has(diff))
     }
 }
 

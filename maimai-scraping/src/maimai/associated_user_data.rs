@@ -114,6 +114,8 @@ pub struct RatingTargetList<'d, 's> {
     candidates_new: Vec<RatingTargetEntry<'d, 's>>,
     #[getset(get = "pub")]
     candidates_old: Vec<RatingTargetEntry<'d, 's>>,
+    #[getset(get_copy = "pub")]
+    version: MaimaiVersion,
 }
 impl<'d, 's> RatingTargetList<'d, 's> {
     pub fn as_associated<'p>(
@@ -130,6 +132,7 @@ impl<'d, 's> RatingTargetList<'d, 's> {
             target_old: convert(&self.target_old)?,
             candidates_new: convert(&self.candidates_new)?,
             candidates_old: convert(&self.candidates_old)?,
+            version: self.version,
         })
     }
 }
@@ -146,6 +149,8 @@ pub struct RatingTargetListAssociated<'d, 's> {
     candidates_new: Vec<RatingTargetEntryAssociated<'d, 's>>,
     #[getset(get = "pub")]
     candidates_old: Vec<RatingTargetEntryAssociated<'d, 's>>,
+    #[getset(get_copy = "pub")]
+    version: MaimaiVersion,
 }
 
 #[derive(CopyGetters)]
@@ -153,6 +158,8 @@ pub struct RatingTargetEntry<'d, 's> {
     #[getset(get_copy = "pub")]
     data: &'d rating_target::RatingTargetEntry,
     score: anyhow::Result<OrdinaryScoreForVersionRef<'s>>,
+    #[getset(get_copy = "pub")]
+    version: MaimaiVersion,
 }
 impl<'d, 's> RatingTargetEntry<'d, 's> {
     pub fn score(&self) -> Result<OrdinaryScoreForVersionRef<'s>, &anyhow::Error> {
@@ -166,6 +173,7 @@ impl<'d, 's> RatingTargetEntry<'d, 's> {
             &Ok(score) => Ok(RatingTargetEntryAssociated {
                 data: self.data,
                 score,
+                version: self.version,
             }),
             Err(e) => Err(e),
         }
@@ -177,6 +185,8 @@ impl<'d, 's> RatingTargetEntry<'d, 's> {
 pub struct RatingTargetEntryAssociated<'d, 's> {
     data: &'d rating_target::RatingTargetEntry,
     score: OrdinaryScoreForVersionRef<'s>,
+    #[getset(get_copy = "pub")]
+    version: MaimaiVersion,
 }
 
 impl<'d, 's> UserData<'d, 's> {
@@ -272,6 +282,7 @@ impl<'d, 's> RatingTargetList<'d, 's> {
             target_old: parse(list.target_old())?,
             candidates_new: parse(list.candidates_new())?,
             candidates_old: parse(list.candidates_old())?,
+            version,
         })
     }
 }
@@ -314,6 +325,10 @@ impl<'d, 's> RatingTargetEntry<'d, 's> {
             })?;
             Ok(score)
         })();
-        Ok(Self { data, score })
+        Ok(Self {
+            data,
+            score,
+            version,
+        })
     }
 }
