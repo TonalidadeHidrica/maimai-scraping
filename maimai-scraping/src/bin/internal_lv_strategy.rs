@@ -218,7 +218,7 @@ async fn main() -> anyhow::Result<()> {
 
     for (i, score) in scores.iter().enumerate() {
         println!(
-            "{i:>4} {}",
+            "{i:>5} {}",
             display_score(
                 &opts,
                 opts.hide_history,
@@ -228,6 +228,7 @@ async fn main() -> anyhow::Result<()> {
             )
         );
     }
+    println!("({:>4} songs in total)", scores.len());
 
     if !opts.dry_run {
         let (mut client, _) = SegaClient::<Maimai>::new(SegaClientInitializer {
