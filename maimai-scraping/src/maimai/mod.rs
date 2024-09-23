@@ -8,6 +8,7 @@ pub mod parser;
 pub mod rating;
 pub mod schema;
 pub mod song_list;
+pub mod version;
 
 use hashbrown::HashMap;
 use maimai_scraping_utils::selector;

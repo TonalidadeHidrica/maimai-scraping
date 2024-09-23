@@ -8,10 +8,10 @@ use itertools::Itertools;
 use crate::maimai::schema::latest::UtageKindRaw;
 
 use super::{
-    load_score_level::MaimaiVersion,
     parser::rating_target,
     schema::latest::{self as schema, PlayTime},
     song_list::database::{OrdinaryScoreForVersionRef, ScoreForVersionRef, SongDatabase},
+    version::MaimaiVersion,
     IdxToIconMap, MaimaiUserData,
 };
 

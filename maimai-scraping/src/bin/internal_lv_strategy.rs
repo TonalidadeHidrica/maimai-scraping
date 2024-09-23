@@ -20,11 +20,11 @@ use maimai_scraping::{
             multi_user::{MultiUserEstimator, RatingTargetLabel, RecordLabel},
             CandidatesRef, Estimator,
         },
-        load_score_level::MaimaiVersion,
         official_song_list::SongKana,
         rating::{self, ScoreConstant, ScoreLevel},
         schema::latest::{ScoreDifficulty, ScoreGeneration},
         song_list::{database::SongDatabase, Song},
+        version::MaimaiVersion,
         Maimai,
     },
 };
@@ -544,9 +544,9 @@ mod locked_toml {
     use anyhow::bail;
     use hashbrown::HashMap;
     use maimai_scraping::maimai::{
-        load_score_level::MaimaiVersion,
         schema::latest::{ScoreGeneration, SongIcon, SongName},
         song_list::database::{OrdinaryScoresRef, SongDatabase},
+        version::MaimaiVersion,
     };
     use serde::Deserialize;
 

@@ -18,13 +18,14 @@ use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::info;
 use maimai_scraping::maimai::{
-    load_score_level::{self, in_lv_kind, MaimaiVersion, Song as InLvSong, SongRaw},
+    load_score_level::{self, in_lv_kind, Song as InLvSong, SongRaw},
     official_song_list::{self, ScoreDetails, UtageIdentifier},
     rating::{InternalScoreLevel, ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::{
         database::SongDatabase, OrdinaryScore, OrdinaryScores, RemoveState, Song, SongAbbreviation,
     },
+    version::MaimaiVersion,
 };
 use maimai_scraping_utils::{
     fs_json_util::{read_json, write_json},

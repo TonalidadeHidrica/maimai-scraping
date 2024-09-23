@@ -8,9 +8,9 @@ use lazy_format::lazy_format;
 use maimai_scraping::maimai::{
     associated_user_data::{self, OrdinaryPlayRecordAssociated},
     internal_lv_estimator::{multi_user, Estimator},
-    load_score_level::MaimaiVersion,
     rating::{rank_coef, single_song_rating, InternalScoreLevel},
     song_list::{database::SongDatabase, Song},
+    version::MaimaiVersion,
     MaimaiUserData,
 };
 use maimai_scraping_utils::fs_json_util::{read_json, read_toml};

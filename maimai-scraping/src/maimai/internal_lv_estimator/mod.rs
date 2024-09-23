@@ -24,13 +24,13 @@ use crate::algorithm::possibilties_from_sum_and_ordering;
 
 use super::{
     associated_user_data,
-    load_score_level::MaimaiVersion,
     rating::{rank_coef, single_song_rating, InternalScoreLevel, ScoreConstant},
     schema::latest::{AchievementValue, PlayTime, RatingValue},
     song_list::{
         database::{OrdinaryScoreForVersionRef, OrdinaryScoreRef, SongDatabase},
         RemoveState,
     },
+    version::MaimaiVersion,
 };
 
 type CandidateList = InternalScoreLevel;

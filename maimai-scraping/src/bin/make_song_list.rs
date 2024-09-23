@@ -8,10 +8,11 @@ use anyhow::{bail, Context};
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::maimai::{
-    load_score_level::{self, in_lv_kind, MaimaiVersion, SongRaw},
+    load_score_level::{self, in_lv_kind, SongRaw},
     official_song_list,
     rating::ScoreLevel,
     schema::latest::{SongIcon, SongName},
+    version::MaimaiVersion,
 };
 use maimai_scraping_utils::fs_json_util::{read_json, write_json};
 use serde::Serialize;

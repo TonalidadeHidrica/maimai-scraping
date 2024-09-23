@@ -11,13 +11,13 @@ use maimai_scraping::maimai::{
         multi_user::{self, MultiUserEstimator, RecordLabel},
         Estimator,
     },
-    load_score_level::MaimaiVersion,
     rating::InternalScoreLevel,
     schema::latest::{AchievementValue, ScoreDifficulty, ScoreGeneration},
     song_list::{
         database::{OrdinaryScoreRef, SongDatabase},
         Song,
     },
+    version::MaimaiVersion,
 };
 use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 use ordered_float::OrderedFloat;

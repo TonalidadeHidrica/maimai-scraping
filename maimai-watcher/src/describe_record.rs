@@ -4,7 +4,6 @@ use either::Either;
 use lazy_format::lazy_format;
 use maimai_scraping::maimai::{
     associated_user_data,
-    load_score_level::MaimaiVersion,
     rating::{rank_coef, single_song_rating_precise},
     schema::{
         latest::{
@@ -14,6 +13,7 @@ use maimai_scraping::maimai::{
         ver_20210316_2338::RatingValue,
     },
     song_list::database::ScoreForVersionRef,
+    version::MaimaiVersion,
 };
 
 pub fn make_message<'a>(

@@ -4,8 +4,8 @@ use anyhow::Context;
 use clap::Parser;
 use maimai_scraping::maimai::{
     internal_lv_estimator::{self, multi_user::update_all, Estimator},
-    load_score_level::MaimaiVersion,
     song_list::{self, database::SongDatabase},
+    version::MaimaiVersion,
 };
 use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 

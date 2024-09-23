@@ -7,8 +7,8 @@ use maimai_scraping::{
     maimai::{
         associated_user_data,
         internal_lv_estimator::{multi_user, Estimator},
-        load_score_level::MaimaiVersion,
         song_list::{database::SongDatabase, Song},
+        version::MaimaiVersion,
         Maimai,
     },
 };

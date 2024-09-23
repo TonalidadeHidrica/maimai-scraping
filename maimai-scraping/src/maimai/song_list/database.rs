@@ -7,11 +7,11 @@ use hashbrown::HashMap;
 use itertools::Itertools;
 
 use crate::maimai::{
-    load_score_level::MaimaiVersion,
     official_song_list::UtageScore,
     rating::InternalScoreLevel,
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::RemoveState,
+    version::MaimaiVersion,
 };
 
 use super::{OrdinaryScore, OrdinaryScores, Song};

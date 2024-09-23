@@ -10,8 +10,8 @@ use maimai_scraping::maimai::{
         multi_user::{update_all, RecordLabel},
         Estimator, Reason,
     },
-    load_score_level::MaimaiVersion,
     song_list::{self, database::SongDatabase},
+    version::MaimaiVersion,
 };
 use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 

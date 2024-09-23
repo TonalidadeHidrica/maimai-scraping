@@ -7,12 +7,12 @@ use hashbrown::HashSet;
 use itertools::Itertools;
 use maimai_scraping::maimai::{
     associated_user_data,
-    load_score_level::MaimaiVersion,
     schema::latest::PlayTime,
     song_list::{
         database::{ScoreForVersionRef, SongDatabase},
         Song,
     },
+    version::MaimaiVersion,
     MaimaiUserData,
 };
 use maimai_scraping_utils::fs_json_util::read_json;

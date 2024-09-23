@@ -6,9 +6,9 @@ use enum_iterator::Sequence;
 use lazy_format::lazy_format;
 use maimai_scraping::maimai::{
     internal_lv_estimator::{multi_user, Estimator},
-    load_score_level::MaimaiVersion,
     rating::ScoreLevel,
     song_list::{database::SongDatabase, Song},
+    version::MaimaiVersion,
 };
 use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 

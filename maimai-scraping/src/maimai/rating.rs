@@ -11,8 +11,9 @@ use serde::{Deserialize, Serialize};
 use smol_str::SmolStrBuilder;
 
 use super::{
-    load_score_level::{self, MaimaiVersion},
+    load_score_level,
     schema::latest::{AchievementValue, RatingValue},
+    version::MaimaiVersion,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
@@ -455,7 +456,7 @@ mod tests {
     use itertools::Itertools;
     use rand::{thread_rng, Rng};
 
-    use crate::maimai::load_score_level::MaimaiVersion;
+    use crate::maimai::version::MaimaiVersion;
 
     use super::{CandidateBitmask, InternalScoreLevel, ScoreConstant, ScoreLevel};
 

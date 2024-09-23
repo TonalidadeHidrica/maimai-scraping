@@ -11,9 +11,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 
 use super::{
-    load_score_level::MaimaiVersion,
     rating::ScoreLevel,
     schema::latest::{SongIcon, SongName, UtageKindRaw},
+    version::MaimaiVersion,
 };
 
 #[serde_as]
