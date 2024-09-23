@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
                 (a, single_song_rating(score_constant, a, rank_coef(a)))
             })
             .collect_vec();
-        for (val, range) in &v.iter().group_by(|x| x.1) {
+        for (val, range) in &v.iter().chunk_by(|x| x.1) {
             let mut range = range.peekable();
             let start = range.peek().unwrap().0;
             let end = AchievementValue::try_from((range.last().unwrap().0.get() + 1).min(101_0000))

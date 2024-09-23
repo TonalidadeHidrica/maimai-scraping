@@ -102,7 +102,7 @@ fn main() -> anyhow::Result<()> {
     for (date, chunks) in &filtered
         .iter()
         .enumerate()
-        .group_by(|x| x.1.played_at().time().get().date())
+        .chunk_by(|x| x.1.played_at().time().get().date())
     {
         let mut count = 0;
         let mut sum = 0.0;
