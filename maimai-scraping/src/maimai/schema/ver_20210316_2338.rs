@@ -1,7 +1,9 @@
+use std::{convert::TryFrom, fmt::Display, fmt::Write};
+
 use chrono::naive::NaiveDateTime;
 use getset::Getters;
 use serde::{Deserialize, Serialize};
-use std::{convert::TryFrom, fmt::Display};
+use smol_str::SmolStrBuilder;
 use typed_builder::TypedBuilder;
 use url::Url;
 
@@ -98,9 +100,11 @@ impl TryFrom<u32> for AchievementValue {
 
 impl Display for AchievementValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut buffer = SmolStrBuilder::new();
         let x = self.0 / 10000;
         let y = self.0 % 10000;
-        write!(f, "{}.{:04}%", x, y)
+        write!(buffer, "{}.{:04}%", x, y)?;
+        f.pad(buffer.finish().as_str())
     }
 }
 
