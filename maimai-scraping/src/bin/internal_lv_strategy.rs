@@ -100,6 +100,9 @@ struct Opts {
 
     #[clap(long)]
     sort_only_by_name: bool,
+
+    #[clap(long)]
+    newline_after: Option<usize>,
 }
 #[derive(Clone)]
 struct PreviousLevels(BTreeSet<ScoreConstant>);
@@ -315,6 +318,9 @@ async fn main() -> anyhow::Result<()> {
             println!("{label} scores:");
             scores.sort_by_key(|x| x.name_based_key());
             for (score, i) in scores.iter().zip(start..) {
+                if (opts.newline_after).is_some_and(|x| i >= x && (i - x) % 3 == 0) {
+                    println!();
+                }
                 println!(
                     "{i:>4} {}",
                     display_score(&opts, true, false, &locked_scores, score)
