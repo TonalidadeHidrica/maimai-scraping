@@ -6,7 +6,7 @@ use lazy_format::lazy_format;
 use maimai_scraping::maimai::{
     internal_lv_estimator::multi_user, rating::ScoreLevel, MaimaiUserData,
 };
-use maimai_scraping_utils::fs_json_util::read_json;
+use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 
 #[derive(Parser)]
 struct Opts {
@@ -32,8 +32,7 @@ fn main() -> anyhow::Result<()> {
             .join(" ")
     );
 
-    let config: multi_user::Config =
-        toml::from_str(&fs_err::read_to_string(opts.estimator_config)?)?;
+    let config: multi_user::Config = read_toml(opts.estimator_config)?;
     for user in config.users() {
         let user_data: MaimaiUserData = read_json(user.data_path())?;
         if let Some((date, list)) = user_data.rating_targets.last_key_value() {

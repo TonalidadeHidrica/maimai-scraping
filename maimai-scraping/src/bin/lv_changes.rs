@@ -10,7 +10,7 @@ use maimai_scraping::maimai::{
     rating::ScoreLevel,
     song_list::{database::SongDatabase, Song},
 };
-use maimai_scraping_utils::fs_json_util::read_json;
+use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 
 #[derive(Parser)]
 struct Opts {
@@ -32,8 +32,7 @@ fn main() -> anyhow::Result<()> {
         .context("Given version has no previous version")?;
 
     let mut estimator = Estimator::new(&database, version)?;
-    let estimator_config: multi_user::Config =
-        toml::from_str(&fs_err::read_to_string(opts.estimator_config)?)?;
+    let estimator_config: multi_user::Config = read_toml(opts.estimator_config)?;
     let datas = estimator_config.read_all()?;
     multi_user::update_all(&database, &datas, &mut estimator)?;
 

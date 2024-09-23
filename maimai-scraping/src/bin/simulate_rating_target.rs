@@ -13,7 +13,7 @@ use maimai_scraping::maimai::{
     song_list::{database::SongDatabase, Song},
     MaimaiUserData,
 };
-use maimai_scraping_utils::fs_json_util::read_json;
+use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 
 #[derive(Parser)]
 struct Opts {
@@ -31,7 +31,7 @@ fn main() -> anyhow::Result<()> {
     let songs: Vec<Song> = read_json(opts.database_path)?;
     let database = SongDatabase::new(&songs)?;
 
-    let config: multi_user::Config = toml::from_str(&fs_err::read_to_string(opts.config_path)?)?;
+    let config: multi_user::Config = read_toml(opts.config_path)?;
     let datas = config.read_all()?;
 
     let version = opts.version.unwrap_or_else(MaimaiVersion::latest);

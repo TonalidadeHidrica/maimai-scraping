@@ -13,7 +13,7 @@ use maimai_scraping::{
     cookie_store::UserIdentifier,
     maimai::Maimai,
 };
-use maimai_scraping_utils::fs_json_util::read_json;
+use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 use screenshot_generator::{generate, GenerateConfig};
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .init();
     let opts = Opts::parse();
-    let config: Config = toml::from_str(&fs_err::read_to_string(&opts.config_toml)?)?;
+    let config: Config = read_toml(&opts.config_toml)?;
 
     let mut errors = vec![];
     for user_config in &config.users {

@@ -26,3 +26,17 @@ pub fn write_json<P: Into<PathBuf>, T: Serialize>(path: P, value: &T) -> anyhow:
         value,
     )?)
 }
+
+pub fn read_toml<P: Into<PathBuf> + Debug, T: for<'de> Deserialize<'de>>(
+    path: P,
+) -> anyhow::Result<T> {
+    let path = path.into();
+    (|| toml::from_str(&fs_err::read_to_string(&path)?).map_err(anyhow::Error::new))().with_context(
+        || {
+            format!(
+                "While trying to parse {path:?} as {}",
+                std::any::type_name::<T>()
+            )
+        },
+    )
+}

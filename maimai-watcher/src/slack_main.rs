@@ -14,6 +14,7 @@ use anyhow::{bail, Context};
 use clap::Parser;
 use log::{error, info};
 use maimai_scraping::cookie_store::UserIdentifier;
+use maimai_scraping_utils::fs_json_util::read_toml;
 use serde::Deserialize;
 use splitty::split_unquoted_whitespace;
 use tokio::sync::Mutex;
@@ -69,7 +70,7 @@ pub async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let opts = Opts::parse();
-    let config: Config = toml::from_str(&fs_err::read_to_string(opts.config_path)?)?;
+    let config: Config = read_toml(opts.config_path)?;
     let port = config.port;
     let route = config.webhook_endpoint.clone();
 

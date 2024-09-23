@@ -7,7 +7,7 @@ use maimai_scraping::maimai::{
     load_score_level::MaimaiVersion,
     song_list::{self, database::SongDatabase},
 };
-use maimai_scraping_utils::fs_json_util::read_json;
+use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 
 #[derive(Parser)]
 struct Opts {
@@ -22,8 +22,7 @@ fn main() -> anyhow::Result<()> {
     let songs: Vec<song_list::Song> = read_json(opts.database)?;
     let database = SongDatabase::new(&songs)?;
 
-    let config: internal_lv_estimator::multi_user::Config =
-        toml::from_str(&fs_err::read_to_string(opts.estimator_config)?)?;
+    let config: internal_lv_estimator::multi_user::Config = read_toml(opts.estimator_config)?;
     let datas = config.read_all()?;
 
     let mut estimator = Estimator::new_distrust_all(&database, MaimaiVersion::latest())?;

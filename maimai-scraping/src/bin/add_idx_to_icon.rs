@@ -1,14 +1,13 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use clap::Parser;
-use fs_err::read_to_string;
 use log::info;
 use maimai_scraping::{
     api::{SegaClient, SegaClientInitializer},
     cookie_store::UserIdentifier,
     maimai::{data_collector::update_idx, Maimai, MaimaiUserData},
 };
-use maimai_scraping_utils::fs_json_util::read_json;
+use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 use serde::Deserialize;
 
 #[derive(Parser)]
@@ -35,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
     env_logger::builder().format_timestamp_nanos().init();
     let opts = Opts::parse();
 
-    let config: Config = toml::from_str(&read_to_string(opts.config_path)?)?;
+    let config: Config = read_toml(opts.config_path)?;
 
     for (user, config) in config.users {
         info!("Processing {user:?}");

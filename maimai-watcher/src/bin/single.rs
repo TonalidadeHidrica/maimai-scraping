@@ -6,6 +6,7 @@ use std::{
 use anyhow::Context;
 use clap::Parser;
 use log::info;
+use maimai_scraping_utils::fs_json_util::read_toml;
 use maimai_watcher::{
     slack_main::{watch_config, Config},
     watch::{self, TimeoutConfig, UserId},
@@ -23,7 +24,7 @@ struct Opts {
 async fn main() -> anyhow::Result<()> {
     env_logger::builder().format_timestamp_nanos().init();
     let opts = Opts::parse();
-    let config: Config = toml::from_str(&fs_err::read_to_string(opts.config_path)?)?;
+    let config: Config = read_toml(opts.config_path)?;
     let user_config = config
         .users
         .get(&opts.user_id)

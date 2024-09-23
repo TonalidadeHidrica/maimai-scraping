@@ -19,7 +19,7 @@ use maimai_scraping::maimai::{
         Song,
     },
 };
-use maimai_scraping_utils::fs_json_util::read_json;
+use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 use ordered_float::OrderedFloat;
 
 #[derive(Parser)]
@@ -48,7 +48,7 @@ fn main() -> anyhow::Result<()> {
     let database = SongDatabase::new(&songs)?;
     let mut estimator = Estimator::new(&database, MaimaiVersion::latest())?;
 
-    let config: multi_user::Config = toml::from_str(&fs_err::read_to_string(&opts.config)?)?;
+    let config: multi_user::Config = read_toml(&opts.config)?;
     let datas = config.read_all()?;
     let datas = multi_user::associate_all(&database, &datas)?;
     multi_user::estimate_all(&datas, &mut estimator)?;

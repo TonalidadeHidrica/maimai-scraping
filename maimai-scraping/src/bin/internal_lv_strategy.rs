@@ -6,7 +6,6 @@ use std::{
 use anyhow::{anyhow, bail, Context};
 use clap::Parser;
 use enum_iterator::Sequence;
-use fs_err::read_to_string;
 use hashbrown::HashSet;
 use itertools::Itertools;
 use joinery::JoinableIterator;
@@ -29,7 +28,7 @@ use maimai_scraping::{
         Maimai,
     },
 };
-use maimai_scraping_utils::fs_json_util::read_json;
+use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 
 #[derive(Parser)]
 struct Opts {
@@ -208,12 +207,10 @@ async fn main() -> anyhow::Result<()> {
     let database = SongDatabase::new(&songs)?;
     let mut estimator = Estimator::new(&database, MaimaiVersion::latest())?;
 
-    let locked_scores: locked_toml::Root =
-        toml::from_str(&fs_err::read_to_string(&opts.locked_toml)?)?;
+    let locked_scores: locked_toml::Root = read_toml(&opts.locked_toml)?;
     let locked_scores = locked_scores.read(&database)?;
 
-    let config: internal_lv_estimator::multi_user::Config =
-        toml::from_str(&read_to_string(&opts.config_toml)?)?;
+    let config: internal_lv_estimator::multi_user::Config = read_toml(&opts.config_toml)?;
     let datas = config.read_all()?;
     internal_lv_estimator::multi_user::update_all(&database, &datas, &mut estimator)?;
 

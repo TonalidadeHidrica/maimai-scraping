@@ -35,7 +35,7 @@ use maimai_scraping::{
     },
     sega_trait::{self, Idx, PlayRecordTrait, PlayedAt, SegaTrait},
 };
-use maimai_scraping_utils::fs_json_util::{read_json, write_json};
+use maimai_scraping_utils::fs_json_util::{read_json, read_toml, write_json};
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 use tokio::{
@@ -156,12 +156,7 @@ pub async fn watch(config: Config) -> anyhow::Result<WatchHandler> {
             Some(path) => report_error(
                 &config.slack_post_webhook,
                 &config.user_id,
-                (|| {
-                    anyhow::Ok(toml::from_str::<multi_user::Config>(
-                        &fs_err::read_to_string(path)?,
-                    )?)
-                })()
-                .context("Failed to read estmiator config"),
+                read_toml::<_, multi_user::Config>(path).context("Failed to read estmiator config"),
             )
             .await
             .ok(),

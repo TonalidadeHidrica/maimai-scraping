@@ -12,7 +12,7 @@ use maimai_scraping::{
         Maimai,
     },
 };
-use maimai_scraping_utils::fs_json_util::read_json;
+use maimai_scraping_utils::fs_json_util::{read_json, read_toml};
 use url::Url;
 
 use crate::{describe_record::make_message, slack::webhook_send, watch::UserId};
@@ -41,11 +41,7 @@ pub async fn recent(
         .map(|database| Estimator::new(database, MaimaiVersion::latest()))
         .transpose()?;
     let estimator_config = estimator_config_path
-        .map(|p| {
-            anyhow::Ok(toml::from_str::<multi_user::Config>(
-                &fs_err::read_to_string(p)?,
-            )?)
-        })
+        .map(read_toml::<_, multi_user::Config>)
         .transpose()?;
     if let Some(((database, estimator_config), estimator)) = (database.as_ref())
         .zip(estimator_config.as_ref())
