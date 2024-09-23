@@ -6,11 +6,12 @@ use hashbrown::HashMap;
 use itertools::Itertools;
 use lazy_format::lazy_format;
 use maimai_scraping::maimai::{
-    associated_user_data::OrdinaryPlayRecordAssociated,
+    associated_user_data::{self, OrdinaryPlayRecordAssociated},
     internal_lv_estimator::{multi_user, Estimator},
     load_score_level::MaimaiVersion,
     rating::{rank_coef, single_song_rating, InternalScoreLevel},
     song_list::{database::SongDatabase, Song},
+    MaimaiUserData,
 };
 use maimai_scraping_utils::fs_json_util::read_json;
 
@@ -18,11 +19,8 @@ use maimai_scraping_utils::fs_json_util::read_json;
 struct Opts {
     database_path: PathBuf,
     config_path: PathBuf,
-    user_name: multi_user::UserName,
-
-    // levels_json: PathBuf,
-    // config: PathBuf,
-    // user_name: estimator_config_multiuser::UserName,
+    data_path: PathBuf,
+    #[arg(long)]
     version: Option<MaimaiVersion>,
 }
 
@@ -35,21 +33,14 @@ fn main() -> anyhow::Result<()> {
 
     let config: multi_user::Config = toml::from_str(&fs_err::read_to_string(opts.config_path)?)?;
     let datas = config.read_all()?;
-    let datas = multi_user::associate_all(&database, &datas)?;
 
     let version = opts.version.unwrap_or_else(MaimaiVersion::latest);
     let mut estimator = Estimator::new(&database, version)?;
-    multi_user::estimate_all(&datas, &mut estimator)?;
+    multi_user::update_all(&database, &datas, &mut estimator)?;
 
-    let (_, data) = datas
-        .iter()
-        .find(|x| x.0.name() == &opts.user_name)
-        .with_context(|| {
-            format!(
-                "User name {:?} not found in estimator config",
-                opts.user_name
-            )
-        })?;
+    let data: MaimaiUserData = read_json(opts.data_path)?;
+    let data =
+        associated_user_data::UserData::annotate(&database, &data)?.ordinary_data_associated()?;
 
     let mut best = HashMap::new();
     for record in data.ordinary_records() {
