@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::bail;
+use derive_more::{From, Into};
 use getset::CopyGetters;
 use itertools::{chain, iterate, Itertools};
 use serde::{Deserialize, Serialize};
@@ -15,7 +16,7 @@ use super::{
     version::MaimaiVersion,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, From, Serialize, Deserialize)]
 pub struct RankCoefficient(pub u64);
 
 impl Display for RankCoefficient {
@@ -59,9 +60,7 @@ pub fn rank_coef(achievement_value: AchievementValue) -> RankCoefficient {
     ret.into()
 }
 
-#[derive(
-    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, derive_more::Into, Serialize, Deserialize,
-)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Into, Serialize, Deserialize)]
 pub struct ScoreConstant(u8);
 
 impl TryFrom<u8> for ScoreConstant {

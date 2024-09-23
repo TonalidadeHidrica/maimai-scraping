@@ -1,4 +1,5 @@
 use anyhow::{bail, Context};
+use derive_more::{Display, From};
 use itertools::Itertools;
 use maimai_scraping_utils::selector;
 use scraper::ElementRef;
@@ -214,15 +215,5 @@ pub struct ScoreResult {
     full_combo_kind: FullComboKind,
     full_sync_kind: FullSyncKind,
 }
-#[derive(
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    Debug,
-    derive_more::From,
-    derive_more::Display,
-    Serialize,
-    Deserialize,
-)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, From, Display, Serialize, Deserialize)]
 pub struct ScoreIdx(String);

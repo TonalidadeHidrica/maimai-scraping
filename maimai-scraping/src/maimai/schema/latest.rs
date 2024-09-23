@@ -3,6 +3,7 @@ use std::hash::Hash;
 use anyhow::bail;
 use chrono::naive::NaiveDateTime;
 use chrono::FixedOffset;
+use derive_more::{AsRef, Display, From, FromStr, Into};
 use enum_map::Enum;
 use getset::{CopyGetters, Getters};
 use log::warn;
@@ -130,10 +131,10 @@ impl Display for Idx {
     PartialOrd,
     Ord,
     Debug,
-    derive_more::From,
-    derive_more::Into,
-    derive_more::FromStr,
-    derive_more::Display,
+    From,
+    Into,
+    FromStr,
+    Display,
     Serialize,
     Deserialize,
 )]
@@ -152,7 +153,7 @@ impl PlayTime {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, From, Serialize, Deserialize)]
 pub struct PlaceName(String);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -183,19 +184,17 @@ pub struct SongMetadata {
     Ord,
     Hash,
     Debug,
-    derive_more::From,
-    derive_more::AsRef,
-    derive_more::FromStr,
-    derive_more::Display,
+    From,
+    AsRef,
+    FromStr,
+    Display,
     Serialize,
     Deserialize,
 )]
 #[as_ref(forward)]
 pub struct SongName(String);
 
-#[derive(
-    Clone, derive_more::From, derive_more::FromStr, derive_more::Display, Serialize, Deserialize,
-)]
+#[derive(Clone, From, FromStr, Display, Serialize, Deserialize)]
 pub struct SongIcon(Url);
 
 impl SongIcon {
@@ -410,7 +409,7 @@ pub struct RatingResult {
 
 pub use super::ver_20210316_2338::RatingValue;
 
-// #[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
+// #[derive(PartialEq, Eq, Debug, From, Serialize, Deserialize)]
 // pub struct GradeIcon(Url);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -460,7 +459,7 @@ pub struct TourMember {
     level: u32,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, derive_more::FromStr, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, FromStr, Serialize, Deserialize)]
 pub struct TourMemberIcon(Url);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, CopyGetters, Serialize, Deserialize)]
@@ -542,7 +541,7 @@ pub enum FullSyncKind {
     FullSyncDxPlus,
 }
 
-#[derive(PartialEq, Eq, Debug, derive_more::AsRef, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, AsRef, Serialize, Deserialize)]
 #[as_ref(forward)]
 pub struct OtherPlayersList(Vec<OtherPlayer>);
 
@@ -564,9 +563,7 @@ pub struct OtherPlayer {
     user_name: UserName,
 }
 
-#[derive(
-    Clone, PartialEq, Eq, PartialOrd, Ord, Debug, derive_more::From, Serialize, Deserialize,
-)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, From, Serialize, Deserialize)]
 pub struct UserName(String);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -651,17 +648,7 @@ pub enum UtageKind {
 }
 
 #[derive(
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Debug,
-    derive_more::From,
-    derive_more::Display,
-    Serialize,
-    Deserialize,
+    Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, From, Display, Serialize, Deserialize,
 )]
 pub struct UtageKindRaw(String);
 impl From<UtageKind> for UtageKindRaw {
@@ -693,17 +680,7 @@ pub enum Category {
 }
 
 #[derive(
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    Debug,
-    derive_more::From,
-    derive_more::AsRef,
-    derive_more::FromStr,
-    derive_more::Display,
-    Serialize,
-    Deserialize,
+    Clone, PartialEq, Eq, Hash, Debug, From, AsRef, FromStr, Display, Serialize, Deserialize,
 )]
 #[as_ref(forward)]
 pub struct ArtistName(String);

@@ -1,6 +1,7 @@
 use std::{convert::TryFrom, fmt::Display, fmt::Write};
 
 use chrono::naive::NaiveDateTime;
+use derive_more::{Display, From};
 use getset::Getters;
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStrBuilder;
@@ -166,7 +167,7 @@ pub enum FullComboKind {
     AllPerfectPlus,
 }
 
-#[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, From, Serialize, Deserialize)]
 pub struct PerfectChallengeResult(ValueWithMax<u32>);
 
 #[derive(PartialEq, Eq, Debug, TypedBuilder, Getters, Serialize, Deserialize)]
@@ -180,17 +181,7 @@ pub struct RatingResult {
 }
 
 #[derive(
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Debug,
-    derive_more::From,
-    derive_more::Display,
-    Serialize,
-    Deserialize,
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, From, Display, Serialize, Deserialize,
 )]
 pub struct RatingValue(u16);
 
@@ -200,7 +191,7 @@ impl RatingValue {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, derive_more::From, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, From, Serialize, Deserialize)]
 pub struct GradeIcon(Url);
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
