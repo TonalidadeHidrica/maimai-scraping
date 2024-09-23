@@ -3,9 +3,11 @@ use std::cmp::Ordering;
 use itertools::Itertools;
 
 /// Consider a sequence `b[i]` of length `n` such that:
+///
 /// - `b[i]` is one of `a(i)`;
 /// - `b[i]` is sorted in an ascending order w.r.t. `cmp`;
 /// - Sum of `b[i].0` is `sum`.
+///
 /// Can `a(i).nth(j)` be `b[i]`?
 ///
 /// # Constraints

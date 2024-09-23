@@ -108,7 +108,7 @@ impl TimeoutConfig {
     }
     pub fn indefinite() -> Self {
         Self {
-            max_count: usize::max_value(),
+            max_count: usize::MAX,
             max_duration: Duration::MAX,
         }
     }
