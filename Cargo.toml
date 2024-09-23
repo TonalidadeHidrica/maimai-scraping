@@ -2,8 +2,13 @@
 resolver = "2"
 
 members = [
-	"aime-net", "derive_by_key",
-	"edit-rating-analyzer-js", "generate-config",
+	"aime-net",
+	"derive_by_key",
+# 2024-09-24 Temporarily disable this crate, as we are not currently using
+# To use it again, we need to support bitmask in_lv format and kaleidxscope
+# Mapping to the source should presumably be done in make_song_list
+# "edit-rating-analyzer-js",
+	"generate-config",
 	"maimai-scraping",
 	"maimai-scraping-utils",
 	"maimai-watcher",
