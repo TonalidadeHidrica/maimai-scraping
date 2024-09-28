@@ -20,6 +20,8 @@ struct Opts {
     database: PathBuf,
     estimator_config: PathBuf,
     #[arg(long)]
+    distrust: bool,
+    #[arg(long)]
     format: Option<ReportFormat>,
 
     #[arg(long)]
@@ -45,7 +47,11 @@ fn main() -> anyhow::Result<()> {
 
     let version = opts.version.unwrap_or(MaimaiVersion::latest());
 
-    let mut estimator = Estimator::new(&database, version)?;
+    let mut estimator = if opts.distrust {
+        Estimator::new_distrust_all(&database, version)?
+    } else {
+        Estimator::new(&database, version)?
+    };
     let before_len = estimator.event_len();
     update_all(&database, &datas, &mut estimator)?;
 
