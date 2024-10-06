@@ -609,6 +609,7 @@ pub enum LifeResult {
     Nothing,
     PerfectChallengeResult(ValueWithMax<u32>),
     CourseResult(ValueWithMax<u32>),
+    KaleidoscopeResult(ValueWithMax<u32>),
 }
 
 #[derive(

@@ -1539,6 +1539,9 @@ fn parse_life_block(div: ElementRef) -> anyhow::Result<LifeResult> {
         [Some("https://maimaidx.jp/maimai-mobile/img/course/icon_course_life.png"), Some("https://maimaidx.jp/maimai-mobile/img/course/icon_course.png")] => {
             Ok(CourseResult(life_value))
         }
+        [Some("https://maimaidx.jp/maimai-mobile/img/icon_life.png"), Some("https://maimaidx.jp/maimai-mobile/img/icon_kaleidxscope.png")] => {
+            Ok(KaleidoscopeResult(life_value))
+        }
         // International
         [Some("https://maimaidx-eng.com/maimai-mobile/img/icon_life.png"), Some("https://maimaidx-eng.com/maimai-mobile/img/icon_perfectchallenge.png")] => {
             Ok(PerfectChallengeResult(life_value))

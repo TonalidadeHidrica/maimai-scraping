@@ -126,6 +126,7 @@ pub fn make_message<'a>(
         LifeResult::Nothing => None,
         LifeResult::PerfectChallengeResult(res) => Some(("Perfect challenge", res)),
         LifeResult::CourseResult(res) => Some(("Course", res)),
+        LifeResult::KaleidoscopeResult(res) => Some(("KALEIDXSCOPE", res)),
     }
     .map(|(name, res)| lazy_format!("{name} life: {}/{}\n", res.value(), res.max()));
     let life_line = lazy_format!(if let Some(x) = life_line => "{x}" else => "");
