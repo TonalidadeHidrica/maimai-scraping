@@ -4,7 +4,6 @@ use chrono::{NaiveDate, NaiveDateTime};
 use derive_more::{AsRef, Display, From, FromStr};
 use enum_map::EnumMap;
 use getset::{CopyGetters, Getters};
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
@@ -179,22 +178,19 @@ impl PartialOrd for SongKana {
 }
 impl Ord for SongKana {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        use Ordering::*;
-        self.0
-            .chars()
-            .zip_longest(other.0.chars())
-            .map(|x| match x {
-                itertools::EitherOrBoth::Both(x, y) => {
-                    maimai_char_order(x).cmp(&maimai_char_order(y))
-                }
-                itertools::EitherOrBoth::Left(_) => Greater,
-                itertools::EitherOrBoth::Right(_) => Less,
+        let [x, y] = [&self.0, &other.0];
+        (x.is_empty().cmp(&y.is_empty()))
+            .then_with(|| {
+                let [x, y] = [x, y].map(|x| maimai_char_order(x.chars().next().unwrap()));
+                x.cmp(&y)
             })
-            .find(|x| x.is_ne())
-            .unwrap_or(Equal)
+            .then_with(|| {
+                let [u, v] = [x, y].map(|x| &x[(1..).find(|&i| x.is_char_boundary(i)).unwrap()..]);
+                u.cmp(v)
+            })
     }
 }
-fn maimai_char_order(c: char) -> (u8, char) {
+pub fn maimai_char_order(c: char) -> (u8, char) {
     match c {
         'ア'..='ン' => (0, c),
         'A'..='Z' => (1, c),
@@ -209,8 +205,18 @@ mod tests {
 
     #[test]
     fn test_song_kana_cmp() {
-        let [x, y]: [SongKana; 2] =
-            ["ソウキユウフカク", "YETANOTHERDRIZZLYRAIN"].map(|x| x.to_owned().into());
-        assert!(x < y);
+        for [x, y] in [
+            ["ソウキユウフカク", "YETANOTHERDRIZZLYRAIN"],
+            ["L4TS2018FEATアヒルアントケイタ", "LUNATICVIBES"],
+            [
+                "MAIMAIチヤンノテエマ",
+                "MAIムMAIムFEATシユウカンシヨウネンマカシン",
+            ],
+        ]
+        .map(|x| x.map::<_, SongKana>(|x| x.to_owned().into()))
+        {
+            assert!(x < y);
+            assert!(y > x);
+        }
     }
 }
