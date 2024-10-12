@@ -152,7 +152,7 @@ impl PlayTime {
 #[derive(Clone, PartialEq, Eq, Debug, From, Serialize, Deserialize)]
 pub struct PlaceName(String);
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Into, Serialize, Deserialize)]
 pub struct TrackIndex(u8);
 
 impl TryFrom<u8> for TrackIndex {
