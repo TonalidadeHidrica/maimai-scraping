@@ -47,7 +47,7 @@ struct Opts {
     current: Option<ScoreLevels>,
     #[clap(long)]
     /// Current internnal score levels as integers (e.g. `127,128,129`)
-    /// Specifying this would include DETERMINED songs!!!
+    /// Specifying this would include DETERMINED scores!!!
     include_determined: Option<InternalLevels>,
     /// Exclude undetermined scores.
     /// If specified, `--include_determined` must be specified.
@@ -85,12 +85,6 @@ struct Opts {
     #[clap(long)]
     /// Preserve old favorite songs list instead of overwriting.
     append: bool,
-    // #[clap(long)]
-    // /// Maximum songs to be added (existing songs count for `--append`)
-    // limit: Option<usize>,
-    // #[clap(long, default_value = "0")]
-    // /// The number of songs to skip among listed ones
-    // skip: usize,
     #[clap(long)]
     choose: Option<ChooseScores>,
 
@@ -208,10 +202,6 @@ async fn main() -> anyhow::Result<()> {
     if opts.no_undetermined && opts.include_determined.is_none() {
         bail!("When --no-undetermined is specified, --include-determined is necessary.")
     }
-    // let limit = opts.limit.unwrap_or(30);
-    // if !(1..=30).contains(&limit) {
-    //     bail!("--limit must be between 1 and 30")
-    // }
 
     let songs: Vec<Song> = read_json(&opts.database_path)?;
     let database = SongDatabase::new(&songs)?;
@@ -238,7 +228,7 @@ async fn main() -> anyhow::Result<()> {
             )
         );
     }
-    println!("({:>4} songs in total)", scores.len());
+    println!("({:>4} scores in total)", scores.len());
 
     if !opts.dry_run {
         let (mut client, _) = SegaClient::<Maimai>::new(SegaClientInitializer {
