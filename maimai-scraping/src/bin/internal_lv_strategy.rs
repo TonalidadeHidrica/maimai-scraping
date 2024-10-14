@@ -40,11 +40,19 @@ struct Opts {
     // Constraints
     #[clap(long)]
     /// Comma-separated list of previous internal levels as integers (e.g. `127,128,129`)
-    previous: Option<PreviousLevels>,
+    previous: Option<InternalLevels>,
     #[clap(long)]
-    /// Current levels in the ordinary format (e.g. `13+`)
+    /// Current levels in the ordinary format (e.g. `12+`)
     /// A hyphen indicates a range, and comma means union
-    current: Option<CurrentLevels>,
+    current: Option<ScoreLevels>,
+    #[clap(long)]
+    /// Current internnal score levels as integers (e.g. `127,128,129`)
+    /// Specifying this would include DETERMINED songs!!!
+    include_determined: Option<InternalLevels>,
+    /// Exclude undetermined scores.
+    /// If specified, `--include_determined` must be specified.
+    #[clap(long)]
+    no_undetermined: bool,
 
     #[clap(long)]
     /// Choose only DX Master/ReMaster scores.  `--dx-master` and `--no-dx-master` cannot coexist.
@@ -103,8 +111,8 @@ struct Opts {
     newline_after: Option<usize>,
 }
 #[derive(Clone)]
-struct PreviousLevels(BTreeSet<ScoreConstant>);
-impl FromStr for PreviousLevels {
+struct InternalLevels(BTreeSet<ScoreConstant>);
+impl FromStr for InternalLevels {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         parse_range(s)
@@ -125,8 +133,8 @@ impl FromStr for PreviousLevels {
 }
 
 #[derive(Clone)]
-struct CurrentLevels(BTreeSet<ScoreLevel>);
-impl FromStr for CurrentLevels {
+struct ScoreLevels(BTreeSet<ScoreLevel>);
+impl FromStr for ScoreLevels {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> anyhow::Result<Self> {
         parse_range(s)
@@ -196,6 +204,9 @@ async fn main() -> anyhow::Result<()> {
     }
     if opts.dry_run && opts.append {
         bail!("--dry-run and --append cannot coexist.")
+    }
+    if opts.no_undetermined && opts.include_determined.is_none() {
+        bail!("When --no-undetermined is specified, --include-determined is necessary.")
     }
     // let limit = opts.limit.unwrap_or(30);
     // if !(1..=30).contains(&limit) {
@@ -418,7 +429,15 @@ fn get_matching_scores<'s, 'e, 'n>(
         let current = opts.current.as_ref().map_or(true, |levels| {
             (levels.0).contains(&candidates.candidates().into_level(version))
         });
-        let undetermined = !candidates.candidates().is_unique();
+        let undetermined =
+            candidates
+                .candidates()
+                .get_if_unique()
+                .map_or(!opts.no_undetermined, |x| {
+                    opts.include_determined
+                        .as_ref()
+                        .is_some_and(|y| y.0.contains(&x))
+                });
         let difficulty = candidates.score().difficulty();
         let dx_master = {
             let dx_master = candidates.score().scores().generation() == ScoreGeneration::Deluxe
@@ -508,7 +527,13 @@ fn display_score<'s, 'o: 's, 'sr: 's>(
     };
     let estimation = {
         let estimation = score.estimation;
-        let confident = if score.confident { "? " } else { "??" };
+        let confident = if score.candidates.candidates().is_unique() {
+            "  "
+        } else if score.confident {
+            "? "
+        } else {
+            "??"
+        };
         let estimation = format!("{estimation:>8}{confident}");
         lazy_format!(if hide_current => "" else => "{estimation:8}")
     };
