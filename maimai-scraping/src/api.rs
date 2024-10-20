@@ -476,7 +476,7 @@ pub fn find_aime_idx<'p>(
     let expected = player_name.into();
     match aime_list
         .iter()
-        .filter(|entry| expected.map_or(true, |expected| &entry.player_name == expected))
+        .filter(|entry| expected.is_none_or(|expected| &entry.player_name == expected))
         .collect_vec()[..]
     {
         [aime] => Ok(aime),

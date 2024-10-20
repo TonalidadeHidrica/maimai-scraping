@@ -410,15 +410,14 @@ fn get_matching_scores<'s, 'e, 'n>(
         };
         assert!(!estimation.is_empty());
 
-        let previous = opts.previous.as_ref().map_or(true, |levels| {
+        let previous = opts.previous.as_ref().is_none_or(|levels| {
             candidates
                 .candidates()
                 .candidates()
                 .any(|x| levels.0.contains(&x))
         });
-        let current = opts.current.as_ref().map_or(true, |levels| {
-            (levels.0).contains(&candidates.candidates().into_level(version))
-        });
+        let current = (opts.current.as_ref())
+            .is_none_or(|levels| (levels.0).contains(&candidates.candidates().into_level(version)));
         let undetermined =
             candidates
                 .candidates()
@@ -449,7 +448,7 @@ fn get_matching_scores<'s, 'e, 'n>(
                 playable
             }
         };
-        let difficulty = opts.difficulty.map_or(true, |d| difficulty == d);
+        let difficulty = opts.difficulty.is_none_or(|d| difficulty == d);
         if previous && current && undetermined && dx_master && locked && playable && difficulty {
             ret.push(ScoreRet {
                 candidates,

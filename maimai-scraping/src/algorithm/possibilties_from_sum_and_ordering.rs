@@ -102,7 +102,7 @@ where
                     let new_sum = prev_sum + (this_score - min_score);
                     if prev
                         .as_ref()
-                        .map_or(true, |prev| cmp(prev, &(this_score, this)).is_lt())
+                        .is_none_or(|prev| cmp(prev, &(this_score, this)).is_lt())
                         && new_sum <= sum
                     {
                         new[new_sum][j] = true;

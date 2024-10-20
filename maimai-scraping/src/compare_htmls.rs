@@ -38,7 +38,7 @@ fn to_show(element: ElementRef) -> impl Iterator<Item = (bool, &Node)> + '_ {
             Edge::Close(e) => (false, e),
         })
         .map(|(x, y)| (x, y.value()))
-        .filter(|x| x.1.as_text().map_or(true, |x| !x.trim().is_empty()))
+        .filter(|x| x.1.as_text().is_none_or(|x| !x.trim().is_empty()))
 }
 
 fn same(a: &Node, b: &Node) -> anyhow::Result<()> {

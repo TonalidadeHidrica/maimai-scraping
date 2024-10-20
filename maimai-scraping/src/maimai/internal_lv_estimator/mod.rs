@@ -393,7 +393,7 @@ where
             .filter(|p| p.played_within(start_time..end_time))
         {
             let rating_sum_is_reliable =
-                removal_time.map_or(true, |removal_time| list.play_time() < removal_time);
+                removal_time.is_none_or(|removal_time| list.play_time() < removal_time);
             // println!("{rating_sum_is_reliable}");
             let mut sub_list = vec![];
             #[derive(Clone, Copy)]
