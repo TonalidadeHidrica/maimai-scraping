@@ -15,6 +15,7 @@ use hashbrown::HashMap;
 use itertools::{repeat_n, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
+use log::trace;
 
 use crate::algorithm::possibilties_from_sum_and_ordering;
 
@@ -175,11 +176,13 @@ impl<'s, LD, LL> Estimator<'s, LD, LL> {
         let old_len = candidates.candidates.count_candidates();
         candidates.candidates.retain(predicate);
         if candidates.candidates.count_candidates() < old_len {
-            candidates.reasons.push(self.events.push(Event {
+            let event = Event {
                 score,
                 candidates: candidates.candidates,
                 reason,
-            }));
+            };
+            trace!("{event}");
+            candidates.reasons.push(self.events.push(event));
         }
         if candidates.candidates.is_empty() {
             bail!(

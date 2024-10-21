@@ -5,7 +5,7 @@ use itertools::Itertools;
 /// Consider a sequence `b[i]` of length `n` such that:
 ///
 /// - `b[i]` is one of `a(i)`;
-/// - `b[i]` is sorted in an ascending order w.r.t. `cmp`;
+/// - `b[i]` is sorted in (weakly) ascending order w.r.t. `cmp`;
 /// - Sum of `b[i].0` is `sum`.
 ///
 /// Can `a(i).nth(j)` be `b[i]`?
@@ -25,13 +25,16 @@ use itertools::Itertools;
 /// (because (`sum` in `solve_partial`) = `O(n Δa)`)
 pub fn solve<T, F, I, C>(n: usize, a: F, cmp: C, sum: usize) -> Vec<Vec<(usize, T)>>
 where
+    // T: std::fmt::Debug,
     F: Fn(usize) -> I,
     I: Iterator<Item = (usize, T)>,
     C: Fn(&(usize, T), &(usize, T)) -> Ordering,
 {
-    // println!(
-    //     "solve({n}, {:?}, .., {sum})",
-    //     (0..n).map(|i| a(i).collect_vec()).collect_vec(),
+    // use lazy_format::lazy_format;
+    // let aa = &a;
+    // log::trace!(
+    //     "solve(\n    {n},\n    [\n{}    ],\n    ..,\n    {sum}\n)",
+    //     lazy_format!("       {x:?},\n" for x in (0..n).map(|i| aa(i).collect_vec())),
     // );
 
     if n == 0 {
@@ -102,7 +105,7 @@ where
                     let new_sum = prev_sum + (this_score - min_score);
                     if prev
                         .as_ref()
-                        .is_none_or(|prev| cmp(prev, &(this_score, this)).is_lt())
+                        .is_none_or(|prev| cmp(prev, &(this_score, this)).is_le())
                         && new_sum <= sum
                     {
                         new[new_sum][j] = true;
@@ -195,6 +198,17 @@ mod tests {
             vec![(210, 985146), (212, 985146)],
             vec![(208, 975132), (210, 975132)],
         ];
+        assert_eq!(res, expected);
+
+        let a = [vec![210, 212], vec![207, 210]];
+        let b = &[802110, 802110];
+        let res = solve(
+            2,
+            |i| a[i].iter().map(move |&a| (a, b[i])),
+            |x, y| x.0.cmp(&y.0).then_with(|| x.1.cmp(&y.1)).reverse(),
+            420,
+        );
+        let expected = vec![vec![(210, 802110)], vec![(210, 802110)]];
         assert_eq!(res, expected);
     }
 }
