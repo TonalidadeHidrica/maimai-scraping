@@ -291,6 +291,7 @@ fn parse_utage_score(
                 .comment(comment.into())
                 .kanji(kanji.into())
                 .buddy(buddy)
+                .name_overwrite(None)
                 .build(),
         ),
         (None, None, None) => None,

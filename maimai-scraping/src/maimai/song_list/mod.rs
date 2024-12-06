@@ -138,6 +138,8 @@ pub struct UtageScore {
     kanji: UtageKindRaw,
     #[getset(get_copy = "pub")]
     buddy: bool,
+    #[getset(get = "pub")]
+    name_overwrite: Option<SongName>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Deserialize)]
@@ -154,6 +156,21 @@ impl UtageScore {
     /// Otherwise, how on earth can we determine the score???
     pub fn identifier(&self) -> UtageIdentifier {
         UtageIdentifier(Cow::Borrowed(&self.kanji), self.level)
+    }
+
+    pub fn with_name_overwrite(self, name_overwrite: Option<SongName>) -> Self {
+        Self {
+            name_overwrite,
+            ..self
+        }
+    }
+
+    pub fn eq_without_name_overwrite(&self, other: &Self) -> bool {
+        self.comparator() == other.comparator()
+    }
+
+    fn comparator(&self) -> impl std::cmp::Eq + use<'_> {
+        (self.level, &self.comment, &self.kanji, self.buddy)
     }
 }
 

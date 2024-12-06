@@ -275,23 +275,33 @@ impl Results {
                 })?;
 
                 // Song name
-                let song_name: SongName = match data.details() {
-                    ScoreDetails::Ordinary(_) => data.title().clone(),
-                    ScoreDetails::Utage(u) => {
-                        let name: &str = data.title().as_ref();
-                        name.strip_prefix(&format!("[{}]", u.kanji()))
-                            .context("Utage score not starting with speicified kanji")?
-                            .to_owned()
-                            .into()
-                        // if let Some(name) = &song.name[version] {
-                        //     if format!("[{}]{name}", u.kanji()) != data.title().as_ref() {
-                        //         bail!("Unexpected title");
-                        //     }
-                        // } else {
-                        //     self.
-                        // }
-                    }
-                };
+                let (song_name, utage_song_name_overwrite): (SongName, Option<SongName>) =
+                    match data.details() {
+                        ScoreDetails::Ordinary(_) => (data.title().clone(), None),
+                        ScoreDetails::Utage(u) => {
+                            let (name, overwrite) = {
+                                let name: &str = data.title().as_ref();
+                                match name.strip_prefix(&format!("[{}]", u.kanji())) {
+                                    Some(name) => (name, None),
+                                    None => {
+                                        let name = name
+                                            .split_once(']')
+                                            .context("Utage score does not contain `]`")?
+                                            .1;
+                                        (name, Some(data.title().to_owned()))
+                                    }
+                                }
+                            };
+                            (name.to_owned().into(), overwrite)
+                            // if let Some(name) = &song.name[version] {
+                            //     if format!("[{}]{name}", u.kanji()) != data.title().as_ref() {
+                            //         bail!("Unexpected title");
+                            //     }
+                            // } else {
+                            //     self.
+                            // }
+                        }
+                    };
                 merge_options(&mut song.name[version], Some(&song_name))?;
                 self.name_to_song
                     .entry(song_name)
@@ -392,7 +402,10 @@ impl Results {
                                 }
                             }
                             None => {
-                                song.utage_scores.push(utage_data.clone());
+                                let utage_data = utage_data
+                                    .clone()
+                                    .with_name_overwrite(utage_song_name_overwrite);
+                                song.utage_scores.push(utage_data);
                             }
                         }
                     }
@@ -1073,8 +1086,13 @@ impl Results {
                     let wrong = [
                         (
                             collected.name[version].as_ref().is_some_and(|name| {
-                                format!("[{}]{name}", x.kanji())
-                                    == AsRef::<str>::as_ref(song.title())
+                                match x.name_overwrite() {
+                                    None => {
+                                        format!("[{}]{name}", x.kanji())
+                                            == AsRef::<str>::as_ref(song.title())
+                                    }
+                                    Some(name) => name == song.title(),
+                                }
                             }),
                             "song name",
                         ),
@@ -1086,7 +1104,7 @@ impl Results {
                             collected.artist[version].as_ref() == Some(song.artist()),
                             "artist",
                         ),
-                        (x == y, "utage score"),
+                        (x.eq_without_name_overwrite(&y), "utage score"),
                     ]
                     .into_iter()
                     .filter_map(|(x, y)| (!x).then_some(y))
