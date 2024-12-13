@@ -395,7 +395,7 @@ impl Results {
                             .find(|u| u.identifier() == identifier)
                         {
                             Some(u) => {
-                                if u != utage_data {
+                                if !u.eq_without_name_overwrite(utage_data) {
                                     bail!(
                                         "Utage score conflict: stored {u:?}, found {utage_data:?}",
                                     );
