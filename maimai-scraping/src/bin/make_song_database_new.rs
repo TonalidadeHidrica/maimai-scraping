@@ -434,7 +434,9 @@ impl InLvKind for in_lv::kind::Levels {
     ) -> anyhow::Result<()> {
         merge_levels(levels, value.into_new(version), version)
     }
-    fn desc() -> &'static str { "levels" }
+    fn desc() -> &'static str {
+        "levels"
+    }
 }
 impl InLvKind for in_lv::kind::Bitmask {
     fn merge_levels(
@@ -448,7 +450,9 @@ impl InLvKind for in_lv::kind::Bitmask {
         let new = InternalScoreLevel::new(version, level.into_level(version), value)?;
         merge_levels(levels, new, version)
     }
-    fn desc() -> &'static str { "bitmask" }
+    fn desc() -> &'static str {
+        "bitmask"
+    }
 }
 
 impl Results {
