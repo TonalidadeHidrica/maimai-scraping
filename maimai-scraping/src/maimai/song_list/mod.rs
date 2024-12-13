@@ -2,8 +2,8 @@ use std::{borrow::Cow, cmp::Ordering, collections::BTreeMap};
 
 use chrono::{NaiveDate, NaiveDateTime};
 use derive_more::{AsRef, Display, From, FromStr};
-use enum_map::EnumMap;
 use getset::{CopyGetters, Getters};
+use optional_enum_map::OptionalEnumMap;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
@@ -19,16 +19,64 @@ pub mod database;
 pub mod in_lv;
 pub mod official;
 
+pub mod optional_enum_map {
+    use std::fmt::Debug;
+
+    use derive_more::{Deref, DerefMut, From, IntoIterator};
+    use enum_map::{EnumArray, EnumMap};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Deref, DerefMut, From, IntoIterator, Serialize, Deserialize)]
+    pub struct OptionalEnumMap<K: EnumArray<Option<V>> + EnumArray<Option<Option<V>>>, V>(
+        #[into_iterator(owned, ref, ref_mut)] EnumMap<K, Option<V>>,
+    );
+    impl<K, V> Clone for OptionalEnumMap<K, V>
+    where
+        K: EnumArray<Option<V>> + EnumArray<Option<Option<V>>>,
+        <K as EnumArray<Option<V>>>::Array: Clone,
+    {
+        fn clone(&self) -> Self {
+            Self(self.0.clone())
+        }
+    }
+    impl<K, V> Copy for OptionalEnumMap<K, V>
+    where
+        K: EnumArray<Option<V>> + EnumArray<Option<Option<V>>>,
+        <K as EnumArray<Option<V>>>::Array: Copy,
+    {
+    }
+
+    impl<K, V> Default for OptionalEnumMap<K, V>
+    where
+        K: EnumArray<Option<V>> + EnumArray<Option<Option<V>>>,
+    {
+        fn default() -> Self {
+            Self(Default::default())
+        }
+    }
+    impl<K, V> Debug for OptionalEnumMap<K, V>
+    where
+        K: EnumArray<Option<V>> + EnumArray<Option<Option<V>>> + Debug,
+        V: Debug,
+    {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_map()
+                .entries(self.0.iter().filter_map(|(k, v)| Some((k, v.as_ref()?))))
+                .finish()
+        }
+    }
+}
+
 /// A song has zero or one standard score, zero or one deluxe score,
 /// and zero or more utage scores.
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Song {
-    pub name: EnumMap<MaimaiVersion, Option<SongName>>,
-    pub category: EnumMap<MaimaiVersion, Option<Category>>,
-    pub artist: EnumMap<MaimaiVersion, Option<ArtistName>>,
+    pub name: OptionalEnumMap<MaimaiVersion, SongName>,
+    pub category: OptionalEnumMap<MaimaiVersion, Category>,
+    pub artist: OptionalEnumMap<MaimaiVersion, ArtistName>,
     pub pronunciation: Option<SongKana>,
-    pub abbreviation: EnumMap<MaimaiVersion, Option<SongAbbreviation>>,
-    pub scores: EnumMap<ScoreGeneration, Option<OrdinaryScores>>,
+    pub abbreviation: OptionalEnumMap<MaimaiVersion, SongAbbreviation>,
+    pub scores: OptionalEnumMap<ScoreGeneration, OrdinaryScores>,
     pub utage_scores: Vec<UtageScore>,
     pub icon: Option<SongIcon>,
     pub remove_state: RemoveState,
@@ -76,7 +124,7 @@ impl OrdinaryScores {
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct OrdinaryScore {
-    pub levels: EnumMap<MaimaiVersion, Option<InternalScoreLevel>>,
+    pub levels: OptionalEnumMap<MaimaiVersion, InternalScoreLevel>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

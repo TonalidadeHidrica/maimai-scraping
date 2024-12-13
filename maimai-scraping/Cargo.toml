@@ -13,7 +13,7 @@ clap = { version = "4.4.5", features = ["derive", "wrap_help"] }
 csv = "1.2.2"
 deranged = { version = "0.3.8", features = ["serde"] }
 derive_by_key = { version = "0.1.0", path = "../derive_by_key" }
-derive_more = { version = "1.0.0", features = ["as_ref", "display", "from", "from_str", "into"] }
+derive_more = { version = "1.0.0", features = ["as_ref", "deref", "deref_mut", "display", "from", "from_str", "into", "into_iterator"] }
 ego-tree = "0.6.2"
 either = "1.8.1"
 enum-iterator = "2.0.0"

@@ -687,7 +687,7 @@ impl Results {
                             last_version
                         };
                         map[version] = Some(InternalScoreLevel::unknown(version, level));
-                        OrdinaryScore { levels: map }
+                        OrdinaryScore { levels: map.into() }
                     })
                 };
                 song.scores[generation].get_or_insert_with(|| OrdinaryScores {
