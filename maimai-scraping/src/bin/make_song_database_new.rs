@@ -1111,7 +1111,7 @@ impl Results {
                             collected.artist[version].as_ref() == Some(song.artist()),
                             "artist",
                         ),
-                        (x.eq_without_name_overwrite(&y), "utage score"),
+                        (x.eq_without_name_overwrite(y), "utage score"),
                     ]
                     .into_iter()
                     .filter_map(|(x, y)| (!x).then_some(y))
