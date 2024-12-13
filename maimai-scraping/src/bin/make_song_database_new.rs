@@ -424,6 +424,7 @@ trait InLvKind: in_lv::kind::Kind {
         value: Self::Value,
         version: MaimaiVersion,
     ) -> anyhow::Result<()>;
+    fn desc() -> &'static str;
 }
 impl InLvKind for in_lv::kind::Levels {
     fn merge_levels(
@@ -433,6 +434,7 @@ impl InLvKind for in_lv::kind::Levels {
     ) -> anyhow::Result<()> {
         merge_levels(levels, value.into_new(version), version)
     }
+    fn desc() -> &'static str { "levels" }
 }
 impl InLvKind for in_lv::kind::Bitmask {
     fn merge_levels(
@@ -446,6 +448,7 @@ impl InLvKind for in_lv::kind::Bitmask {
         let new = InternalScoreLevel::new(version, level.into_level(version), value)?;
         merge_levels(levels, new, version)
     }
+    fn desc() -> &'static str { "bitmask" }
 }
 
 impl Results {
@@ -587,7 +590,7 @@ impl Results {
             anyhow::Ok(())
         })()
         .with_context(|| {
-            format!("While incorporating {data:?} of in_lv version {version:?} into {song:?}")
+            format!("While incorporating {data:?} of in_lv {} version {version:?} into {song:?}", K::desc())
         })
     }
 }
