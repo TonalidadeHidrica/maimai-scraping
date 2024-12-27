@@ -18,7 +18,6 @@ use maimai_scraping_utils::fs_json_util::read_json;
 struct Opts {
     database_path: PathBuf,
     user_data_path: PathBuf,
-    list_path: PathBuf,
     inner_lv: u8,
 }
 
