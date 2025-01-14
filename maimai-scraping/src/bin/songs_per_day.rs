@@ -12,6 +12,8 @@ use maimai_scraping_utils::fs_json_util::read_json;
 #[derive(Parser)]
 struct Opts {
     input_file: PathBuf,
+    #[clap(long)]
+    sort_by_date: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -21,7 +23,7 @@ fn main() -> anyhow::Result<()> {
     for record in data.records.values() {
         let time = record.played_at().time();
         let date = (time.get() - Duration::hours(5)).date();
-        println!("{time} {date}");
+        // println!("{time} {date}");
         let (count, players) = count.entry(date).or_default();
         *count += 1;
         players.extend(record.matching_result().iter().flat_map(|x| {
@@ -30,7 +32,9 @@ fn main() -> anyhow::Result<()> {
         }));
     }
     let mut count = count.iter().map(|(x, y)| (y, x)).collect_vec();
-    count.sort_by_key(|x| x.0 .0);
+    if !opts.sort_by_date {
+        count.sort_by_key(|x| x.0 .0);
+    }
     for ((count, names), date) in count {
         println!("{count:3}  {date} with {names:?}");
     }
