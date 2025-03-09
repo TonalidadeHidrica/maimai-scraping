@@ -245,7 +245,7 @@ pub fn generate(
                 sleep(Duration::from_secs(3)); // Very safe sleep
 
                 let new_tab = WaitForNewTabHandle::new(&browser)?;
-                tab.wait_for_xpath(r#"//button[text()='豪華版']"#)?
+                tab.wait_for_xpath(r#"//button[text()='全データ版']"#)?
                     .click()?;
                 let new_tab = new_tab.wait(&browser)?;
                 let img = new_tab.wait_for_element("#best_pic_Best")?;
