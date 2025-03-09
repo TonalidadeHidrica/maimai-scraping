@@ -1,18 +1,46 @@
+use std::path::PathBuf;
+
 use aime_net::schema::AccessCode;
 use anyhow::anyhow;
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 use deranged::RangedU16;
 use itertools::Itertools;
 
 #[derive(Parser)]
 struct Opts {
+    #[clap(subcommand)]
+    pub sub: Sub,
+}
+#[derive(Subcommand)]
+enum Sub {
+    Row(Row),
+    FromFile(FromFile),
+}
+#[derive(Args)]
+struct Row {
     row: String,
+}
+#[derive(Args)]
+struct FromFile {
+    path: PathBuf,
 }
 
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let [index, _, aime, _, friend] = opts
-        .row
+    match opts.sub {
+        Sub::Row(sub) => process(&sub.row)?,
+        Sub::FromFile(sub) => {
+            for line in fs_err::read_to_string(&sub.path)?.lines() {
+                process(line)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn process(row: &str) -> anyhow::Result<()> {
+    let [index, _, aime, _, friend] = row
         .split('\t')
         .collect_vec()
         .try_into()
