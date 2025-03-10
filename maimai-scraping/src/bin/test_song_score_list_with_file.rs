@@ -9,7 +9,7 @@ fn main() -> anyhow::Result<()> {
     let html = Html::parse_document(&fs_err::read_to_string(opts.input_file)?);
     let res = maimai::parser::song_score::parse(&html, opts.difficulty)?;
     for entry in res {
-        println!("{entry:?}");
+        println!("{entry:#?}");
     }
     Ok(())
 }
