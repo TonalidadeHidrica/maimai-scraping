@@ -22,7 +22,7 @@ use maimai_scraping::maimai::{
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
     song_list::{
         database::SongDatabase,
-        in_lv::{self, Song as InLvSong, SongRaw},
+        in_lv::{self, kind::Bitmask, Song as InLvSong, SongRaw},
         official::{self, ScoreDetails},
         song_score::SongScoreList,
         OrdinaryScore, OrdinaryScores, RemoveState, Song, SongAbbreviation, UtageIdentifier,
@@ -863,6 +863,24 @@ impl Results {
                 let data = InLvSong::try_from(levels.clone())?;
                 // Before calling `read_in_lv_song`, we need to merge those fields not covered by that function.
                 // According to the implementation of `read_in_lv`, `icon` and `song_name` qualify.
+                merge_options(&mut song.name[version], Some(data.song_name()))?;
+                merge_options(&mut song.icon, Some(data.icon()))?;
+
+                // Now we can leave the rest to this function.
+                Self::read_in_lv_song(
+                    &mut self.name_to_song,
+                    &mut self.abbrev_to_song,
+                    index,
+                    song,
+                    version,
+                    &data,
+                    None,
+                )?;
+            }
+
+            // Register bitmasks
+            for &(version, ref levels) in &data.bitmasks {
+                let data = InLvSong::<Bitmask>::try_from(levels.clone())?;
                 merge_options(&mut song.name[version], Some(data.song_name()))?;
                 merge_options(&mut song.icon, Some(data.icon()))?;
 
@@ -1748,6 +1766,8 @@ pub struct RemovedSongSupplemental {
     abbrev: Option<SongAbbreviation>,
     #[serde(default)]
     levels: Vec<(MaimaiVersion, SongRaw)>,
+    #[serde(default)]
+    bitmasks: Vec<(MaimaiVersion, SongRaw<Bitmask>)>,
 }
 
 #[derive(PartialEq, Eq, Debug)]
