@@ -142,7 +142,7 @@ impl MaimaiVersion {
             Buddies => NaiveDate::from_ymd_opt(2023, 9, 14).unwrap(),
             BuddiesPlus => NaiveDate::from_ymd_opt(2024, 3, 21).unwrap(),
             Prism => NaiveDate::from_ymd_opt(2024, 9, 12).unwrap(),
-            PrismPlus => NaiveDate::from_ymd_opt(2024, 3, 13).unwrap(),
+            PrismPlus => NaiveDate::from_ymd_opt(2025, 3, 13).unwrap(),
         }
     }
     pub fn start_time(self) -> NaiveDateTime {
