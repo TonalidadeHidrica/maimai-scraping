@@ -87,17 +87,25 @@ pub async fn update_idx(
     {
         let idx = entry.idx();
         trace!("Processing {idx:?}");
-        let idx_str = idx.to_string();
-        let idx_str = urlencoding::encode(&idx_str);
-        let url = Url::parse(&format!(
-            "https://maimaidx.jp/maimai-mobile/record/musicDetail/?idx={idx_str}"
-        ))?;
-        trace!("Accessing {url}");
-        let res = client.fetch_authenticated(url).await?;
-        let res = parser::music_detail::parse(&Html::parse_document(&res.0.text().await?))?;
-        let icon = res.icon();
+        let icon = get_icon_for_idx(client, idx).await?;
         info!("{idx:?} was associated to {icon:?}");
-        map.insert(idx.clone(), res.icon().clone());
+        map.insert(idx.clone(), icon);
     }
     Ok(())
+}
+
+pub async fn get_icon_for_idx(
+    client: &mut SegaClient<'_, Maimai>,
+    idx: &ScoreIdx,
+) -> anyhow::Result<SongIcon> {
+    let idx_str = idx.to_string();
+    let idx_str = urlencoding::encode(&idx_str);
+    let url = Url::parse(&format!(
+        "https://maimaidx.jp/maimai-mobile/record/musicDetail/?idx={idx_str}"
+    ))?;
+    trace!("Accessing {url}");
+    let res = client.fetch_authenticated(url).await?;
+    let res = parser::music_detail::parse(&Html::parse_document(&res.0.text().await?))?;
+    let icon = res.into();
+    Ok(icon)
 }
