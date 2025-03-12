@@ -30,7 +30,7 @@ use maimai_scraping::maimai::{
     version::MaimaiVersion,
 };
 use maimai_scraping_utils::{
-    fs_json_util::{read_json, write_json},
+    fs_json_util::{read_json, read_toml, write_json},
     regex,
 };
 use serde::Deserialize;
@@ -54,7 +54,7 @@ struct Opts {
     skip_official_song_verification: bool,
 
     #[arg(long)]
-    song_score_list: Option<PathBuf>,
+    song_score_list_config: Option<PathBuf>,
 }
 
 type InLvSongMask = InLvSong<in_lv::kind::Bitmask>;
@@ -87,8 +87,15 @@ struct Resources {
     in_lv_bitmask_override: InLvCorrectionMap<in_lv::kind::Bitmask>,
     in_lv_data_override: InLvDataCorrectionMap,
 
-    song_score_list: Option<SongScoreList>,
+    song_score_list: Option<(SongScoreListConfig, SongScoreList)>,
 }
+#[derive(Deserialize)]
+struct SongScoreListConfig {
+    list_path: PathBuf,
+    allow_missing_level: Vec<SongIcon>,
+    song_name_override: HashMap<SongName, SongName>,
+}
+
 impl Resources {
     fn load(opts: &Opts) -> anyhow::Result<Self> {
         let mut ret = Resources::default();
@@ -242,8 +249,10 @@ impl Resources {
         })
         .collect::<Result<_, _>>()?;
 
-        if let Some(path) = &opts.song_score_list {
-            ret.song_score_list = Some(read_json(path)?);
+        if let Some(path) = &opts.song_score_list_config {
+            let config: SongScoreListConfig = read_toml(path)?;
+            let data = read_json(&config.list_path)?;
+            ret.song_score_list = Some((config, data));
         }
 
         Ok(ret)
@@ -430,7 +439,11 @@ impl Results {
         Ok(())
     }
 
-    fn read_song_score_list(&mut self, song_score: &SongScoreList) -> anyhow::Result<()> {
+    fn read_song_score_list(
+        &mut self,
+        config: &SongScoreListConfig,
+        song_score: &SongScoreList,
+    ) -> anyhow::Result<()> {
         let version = MaimaiVersion::latest();
 
         for entries in song_score.entries.values() {
@@ -442,7 +455,9 @@ impl Results {
                         .context("Disambiguated song must exist")?;
                     self.songs.get_mut(index)
                 } else {
-                    match self.name_to_song.entry(entry.song_name().clone()) {
+                    let name = entry.song_name();
+                    let name = config.song_name_override.get(name).unwrap_or(name).clone();
+                    match self.name_to_song.entry(name) {
                         HEntry::Occupied(e) => {
                             let indices = e.get();
                             if indices.len() != 1 {
@@ -498,6 +513,13 @@ impl Results {
         // All unremoved songs should have levels associated
         for song in &self.songs.0 {
             if song.removed() {
+                continue;
+            }
+            if (song.icon.as_ref()).is_some_and(|icon| config.allow_missing_level.contains(icon)) {
+                warn!(
+                    "Skipping missing-level check for {:?}",
+                    song.latest_song_name()
+                );
                 continue;
             }
             for (generation, scores) in &song.scores {
@@ -1387,8 +1409,8 @@ fn main() -> anyhow::Result<()> {
         results.read_in_lv_data(version, in_lv_data, &resources.in_lv_data_override)?;
     }
     results.read_version_supplental(&resources.version_supplemental)?;
-    if let Some(song_score) = &resources.song_score_list {
-        results.read_song_score_list(song_score)?;
+    if let Some((config, song_score)) = &resources.song_score_list {
+        results.read_song_score_list(config, song_score)?;
     }
 
     if !opts.skip_official_song_verification {
