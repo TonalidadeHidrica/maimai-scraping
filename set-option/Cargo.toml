@@ -18,4 +18,3 @@ reqwest = "0.12.13"
 scraper = "0.23.1"
 serde_html_form = "0.2.7"
 tokio = { version = "1.44.0", features = ["macros", "rt", "rt-multi-thread"] }
-url = "2.5.4"

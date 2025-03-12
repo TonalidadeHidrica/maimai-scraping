@@ -15,7 +15,6 @@ use maimai_scraping_utils::{fs_json_util::read_json, selector};
 use reqwest::header::{HeaderValue, CONTENT_TYPE};
 use scraper::Html;
 use tokio::time::sleep;
-use url::Url;
 
 #[derive(Parser)]
 struct Opts {
