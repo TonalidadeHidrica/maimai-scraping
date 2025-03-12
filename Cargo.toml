@@ -14,4 +14,5 @@ members = [
 	"maimai-watcher",
 	"rating-target-viewer",
 	"screenshot-generator",
+	"set-option",
 ]
