@@ -167,6 +167,6 @@ impl MaimaiVersion {
         })
     }
     pub fn latest() -> Self {
-        Self::Prism
+        Self::PrismPlus
     }
 }
