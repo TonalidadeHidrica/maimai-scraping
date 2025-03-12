@@ -16,6 +16,7 @@ use hashbrown::{hash_map::Entry as HEntry, HashMap, HashSet};
 use itertools::{chain, EitherOrBoth, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
+use log::warn;
 use maimai_scraping::maimai::{
     rating::{InternalScoreLevel, ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
@@ -23,6 +24,7 @@ use maimai_scraping::maimai::{
         database::SongDatabase,
         in_lv::{self, Song as InLvSong, SongRaw},
         official::{self, ScoreDetails},
+        song_score::SongScoreList,
         OrdinaryScore, OrdinaryScores, RemoveState, Song, SongAbbreviation, UtageIdentifier,
     },
     version::MaimaiVersion,
@@ -50,6 +52,9 @@ struct Opts {
 
     #[arg(long)]
     skip_official_song_verification: bool,
+
+    #[arg(long)]
+    song_score_list: Option<PathBuf>,
 }
 
 type InLvSongMask = InLvSong<in_lv::kind::Bitmask>;
@@ -81,6 +86,8 @@ struct Resources {
     in_lv_override: InLvCorrectionMap,
     in_lv_bitmask_override: InLvCorrectionMap<in_lv::kind::Bitmask>,
     in_lv_data_override: InLvDataCorrectionMap,
+
+    song_score_list: Option<SongScoreList>,
 }
 impl Resources {
     fn load(opts: &Opts) -> anyhow::Result<Self> {
@@ -234,6 +241,10 @@ impl Resources {
             anyhow::Ok((icon, map))
         })
         .collect::<Result<_, _>>()?;
+
+        if let Some(path) = &opts.song_score_list {
+            ret.song_score_list = Some(read_json(path)?);
+        }
 
         Ok(ret)
     }
@@ -416,6 +427,100 @@ impl Results {
             })()
             .with_context(|| format!("While incorporating {data:?} into {song:?}"))?;
         }
+        Ok(())
+    }
+
+    fn read_song_score_list(&mut self, song_score: &SongScoreList) -> anyhow::Result<()> {
+        let version = MaimaiVersion::latest();
+
+        for entries in song_score.entries.values() {
+            for entry in entries {
+                let song = if let Some(icon) = song_score.idx_to_icon_map.get(entry.idx()) {
+                    let &index = self
+                        .icon_to_song
+                        .get(icon)
+                        .context("Disambiguated song must exist")?;
+                    self.songs.get_mut(index)
+                } else {
+                    match self.name_to_song.entry(entry.song_name().clone()) {
+                        HEntry::Occupied(e) => {
+                            let indices = e.get();
+                            if indices.len() != 1 {
+                                bail!("Song is not unique: {entry:?}");
+                            }
+                            let &index = indices.iter().next().unwrap();
+                            self.songs.get_mut(index)
+                        }
+                        // New song from this version!
+                        HEntry::Vacant(e) => {
+                            warn!("New song was found: {entry:?}");
+                            let (index, song) = self.songs.create_new();
+                            e.insert(HashSet::from_iter([index]));
+                            song
+                        }
+                    }
+                };
+
+                // Register song name
+                merge_options(&mut song.name[version], Some(entry.song_name()))?;
+
+                let scores = song.scores[entry.metadata().generation()].get_or_insert_with(|| {
+                    warn!("New score was added: {entry:?}");
+                    OrdinaryScores {
+                        easy: None,
+                        basic: Default::default(),
+                        advanced: Default::default(),
+                        expert: Default::default(),
+                        master: Default::default(),
+                        re_master: None,
+                        version: Some(version),
+                    }
+                });
+                let score = match entry.metadata().difficulty() {
+                    ScoreDifficulty::Basic => &mut scores.basic,
+                    ScoreDifficulty::Advanced => &mut scores.advanced,
+                    ScoreDifficulty::Expert => &mut scores.expert,
+                    ScoreDifficulty::Master => &mut scores.master,
+                    ScoreDifficulty::ReMaster => scores.re_master.get_or_insert_with(|| {
+                        warn!("Inserting Re:Master: {entry:?}");
+                        Default::default()
+                    }),
+                    ScoreDifficulty::Utage => bail!("Found utage score: {entry:?}"),
+                };
+                merge_levels(
+                    &mut score.levels[version],
+                    InternalScoreLevel::unknown(version, entry.level()),
+                    version,
+                )?;
+            }
+        }
+
+        // All unremoved songs should have levels associated
+        for song in &self.songs.0 {
+            if song.removed() {
+                continue;
+            }
+            for (generation, scores) in &song.scores {
+                let Some(scores) = scores else { continue };
+                let check = |difficulty: ScoreDifficulty,
+                             score: &OrdinaryScore|
+                 -> anyhow::Result<()> {
+                    if score.levels[version].is_none() {
+                        bail!("Score level for the current version is missing ({generation:?} {difficulty:?}): {song:?}");
+                    }
+                    Ok(())
+                };
+                use ScoreDifficulty::*;
+                check(Basic, &scores.basic)?;
+                check(Advanced, &scores.advanced)?;
+                check(Expert, &scores.expert)?;
+                check(Master, &scores.master)?;
+                if let Some(score) = &scores.re_master {
+                    check(ReMaster, score)?;
+                }
+            }
+        }
+
         Ok(())
     }
 }
@@ -1282,6 +1387,9 @@ fn main() -> anyhow::Result<()> {
         results.read_in_lv_data(version, in_lv_data, &resources.in_lv_data_override)?;
     }
     results.read_version_supplental(&resources.version_supplemental)?;
+    if let Some(song_score) = &resources.song_score_list {
+        results.read_song_score_list(song_score)?;
+    }
 
     if !opts.skip_official_song_verification {
         results.verify_latest_official_songs(
