@@ -72,7 +72,11 @@ async fn main() -> Result<()> {
         map.into_values().filter(|x| x.len() >= 2).flatten()
     });
 
-    for idx in duplicate_idx {
+    let link_idx = result.entries.values().flatten().filter_map(|entry| {
+        (AsRef::<str>::as_ref(entry.song_name()) == "Link").then_some(entry.idx())
+    });
+
+    for idx in duplicate_idx.chain(link_idx) {
         info!("Fetching {idx:?}");
         let icon = get_icon_for_idx(&mut client, idx).await?;
         result.idx_to_icon_map.insert(idx.clone(), icon);
