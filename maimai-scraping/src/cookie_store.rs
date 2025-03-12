@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use derive_more::{AsRef, Display, From};
+use derive_more::{AsRef, Display, From, Into};
 use fs_err::File;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
@@ -37,7 +37,7 @@ pub struct UserIdentifier {
 #[derive(Clone, PartialEq, Eq, Debug, From, AsRef, Display, Serialize, Deserialize)]
 pub struct FriendCode(String);
 
-#[derive(Clone, PartialEq, Eq, Debug, From, Display, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, From, Into, Display, Serialize, Deserialize)]
 pub struct PlayerName(String);
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug, From, Display, Serialize, Deserialize)]
