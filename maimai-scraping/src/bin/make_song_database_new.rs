@@ -94,6 +94,7 @@ struct SongScoreListConfig {
     list_path: PathBuf,
     allow_missing_level: Vec<SongIcon>,
     song_name_override: HashMap<SongName, SongName>,
+    icon_supplemental: HashMap<SongName, SongIcon>,
 }
 
 impl Resources {
@@ -467,18 +468,21 @@ impl Results {
                             self.songs.get_mut(index)
                         }
                         // New song from this version!
-                        HEntry::Vacant(_e) => {
-                            warn!("New song was found: {entry:?}.  Skipping for now");
-                            // let (index, song) = self.songs.create_new();
-                            // e.insert(HashSet::from_iter([index]));
-                            // song
-                            continue;
+                        HEntry::Vacant(e) => {
+                            warn!("New song was found: {entry:?}");
+                            let (index, song) = self.songs.create_new();
+                            e.insert(HashSet::from_iter([index]));
+                            song
                         }
                     }
                 };
 
                 // Register song name
                 merge_options(&mut song.name[version], Some(entry.song_name()))?;
+                // Register icon
+                if let Some(icon) = config.icon_supplemental.get(entry.song_name()) {
+                    merge_options(&mut song.icon, Some(icon))?;
+                }
 
                 let scores = song.scores[entry.metadata().generation()].get_or_insert_with(|| {
                     warn!("New score was added: {entry:?}");
