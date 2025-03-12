@@ -16,7 +16,6 @@ use hashbrown::{hash_map::Entry as HEntry, HashMap, HashSet};
 use itertools::{chain, EitherOrBoth, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
-use log::info;
 use maimai_scraping::maimai::{
     rating::{InternalScoreLevel, ScoreConstant, ScoreLevel},
     schema::latest::{ScoreDifficulty, ScoreGeneration, SongIcon, SongName},
@@ -43,11 +42,11 @@ struct Opts {
     official_song_list_paths: Vec<PathBuf>,
 
     #[arg(long)]
-    skip_latest_in_lv: bool,
+    in_lv_until: Option<MaimaiVersion>,
     #[arg(long)]
-    skip_latest_in_lv_bitmask: bool,
+    in_lv_bitmask_until: Option<MaimaiVersion>,
     #[arg(long)]
-    skip_latest_in_lv_data: bool,
+    in_lv_data_until: Option<MaimaiVersion>,
 }
 
 type InLvSongMask = InLvSong<in_lv::kind::Bitmask>;
@@ -85,31 +84,31 @@ impl Resources {
         let mut ret = Resources::default();
 
         // Read in_lv
-        for version in successors(Some(MaimaiVersion::Festival), MaimaiVersion::next) {
-            if version == MaimaiVersion::latest() && opts.skip_latest_in_lv {
-                continue;
-            }
+        for version in successors(Some(MaimaiVersion::Festival), MaimaiVersion::next)
+            .take_while(|&version| opts.in_lv_until.is_none_or(|until| version <= until))
+        {
             let path = format!("{}.json", i8::from(version));
             let levels = in_lv::load(opts.in_lv_dir.join(path))?;
             assert!(ret.in_lv.insert(version, levels).is_none());
         }
 
         // Read in_lv_bitmask
-        for version in successors(Some(MaimaiVersion::Prism), MaimaiVersion::next) {
-            if version == MaimaiVersion::latest() && opts.skip_latest_in_lv_bitmask {
-                continue;
-            }
+        for version in successors(Some(MaimaiVersion::Prism), MaimaiVersion::next)
+            //
+            .take_while(|&version| {
+                opts.in_lv_bitmask_until
+                    .is_none_or(|until| version <= until)
+            })
+        {
             let path = format!("{}.json", i8::from(version));
             let levels = in_lv::load_mask(opts.in_lv_bitmask_dir.join(path))?;
             assert!(ret.in_lv_bitmask.insert(version, levels).is_none());
         }
 
         // Read in_lv_data
-        for version in successors(Some(MaimaiVersion::SplashPlus), MaimaiVersion::next) {
-            if version == MaimaiVersion::latest() && opts.skip_latest_in_lv_data {
-                continue;
-            }
-            info!("Processing {version:?}");
+        for version in successors(Some(MaimaiVersion::SplashPlus), MaimaiVersion::next)
+            .take_while(|&version| opts.in_lv_data_until.is_none_or(|until| version <= until))
+        {
             let path = format!("{}.json", i8::from(version));
             let data: InLvData = read_json(opts.in_lv_data_dir.join(path))?;
             assert!(ret.in_lv_data.insert(version, data).is_none());

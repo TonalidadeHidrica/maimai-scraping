@@ -1,5 +1,6 @@
 use anyhow::{bail, Context};
 use derive_more::{Display, From};
+use getset::{CopyGetters, Getters};
 use itertools::Itertools;
 use maimai_scraping_utils::selector;
 use scraper::ElementRef;
@@ -228,17 +229,21 @@ pub fn find_and_parse_score_idx(e: ElementRef) -> anyhow::Result<ScoreIdx> {
     ))
 }
 
-#[allow(unused)]
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Getters, CopyGetters)]
 pub struct ScoreEntry {
+    #[getset(get = "pub")]
     metadata: ScoreMetadata,
+    #[getset(get = "pub")]
     song_name: SongName,
+    #[getset(get_copy = "pub")]
     level: ScoreLevel,
+    #[getset(get = "pub")]
     result: Option<ScoreResult>,
+    #[getset(get = "pub")]
     idx: ScoreIdx,
 }
-#[allow(unused)]
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, CopyGetters)]
+#[getset(get_copy = "pub")]
 pub struct ScoreResult {
     achievement: AchievementValue,
     rank: AchievementRank,

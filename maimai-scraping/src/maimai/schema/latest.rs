@@ -277,7 +277,7 @@ impl ScoreGeneration {
 }
 
 #[derive(
-    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize, EnumIter,
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize, EnumIter, Enum,
 )]
 pub enum ScoreDifficulty {
     Basic,

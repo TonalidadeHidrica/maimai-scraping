@@ -1,11 +1,12 @@
 use anyhow::Context;
+use derive_more::Into;
 use getset::Getters;
 use maimai_scraping_utils::selector;
 use scraper::Html;
 
 use crate::maimai::schema::latest::SongIcon;
 
-#[derive(Getters)]
+#[derive(Getters, Into)]
 #[getset(get = "pub")]
 pub struct MusicDetails {
     icon: SongIcon,

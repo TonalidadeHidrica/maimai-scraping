@@ -18,6 +18,7 @@ use super::{
 pub mod database;
 pub mod in_lv;
 pub mod official;
+pub mod song_score;
 
 pub mod optional_enum_map {
     use std::fmt::Debug;
