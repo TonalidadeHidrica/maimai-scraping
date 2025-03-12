@@ -47,6 +47,9 @@ struct Opts {
     in_lv_bitmask_until: Option<MaimaiVersion>,
     #[arg(long)]
     in_lv_data_until: Option<MaimaiVersion>,
+
+    #[arg(long)]
+    skip_official_song_verification: bool,
 }
 
 type InLvSongMask = InLvSong<in_lv::kind::Bitmask>;
@@ -1280,12 +1283,14 @@ fn main() -> anyhow::Result<()> {
     }
     results.read_version_supplental(&resources.version_supplemental)?;
 
-    results.verify_latest_official_songs(
-        resources
-            .official_song_lists
-            .last()
-            .context("There should be at least one official song")?,
-    )?;
+    if !opts.skip_official_song_verification {
+        results.verify_latest_official_songs(
+            resources
+                .official_song_lists
+                .last()
+                .context("There should be at least one official song")?,
+        )?;
+    }
 
     // Verify if database can be constructed correctly.
     // Also run `verify_songs` in the same module.
@@ -1502,7 +1507,9 @@ impl RemovedSongsWiki {
                 "^|^|^|bgcolor(#00ced1):''&color(gray){Ea}''|bgcolor(#98fb98):''Ba''|bgcolor(#ffa500):''Ad''|bgcolor(#fa8080):''Ex''|bgcolor(#ee82ee):''Ma''|bgcolor(#ffceff):''Re:''|^|",
                 "^|^|^|bgcolor(#00ced1):''Ea''|bgcolor(#98fb98):''Ba''|bgcolor(#ffa500):''Ad''|bgcolor(#fa8080):''Ex''|bgcolor(#ee82ee):''Ma''|bgcolor(#ffceff):''Re:''|^|^|",
                 "center:|center:|center:|center:bgcolor(#87ceee)|bgcolor(#c0ff20):center|bgcolor(#ffe080):center|bgcolor(#ffa0c0):center|bgcolor(#e2a9f3):center|bgcolor(#ffdeff):center|c",
-                "center:|center:|center:|center:bgcolor(#87ceee)|bgcolor(#c0ff20):center|bgcolor(#ffe080):center|bgcolor(#ffa0c0):center|bgcolor(#E2A9F3):center|bgcolor(#ffdeff):center|center:|center:|c"
+                "center:|center:|center:|center:bgcolor(#87ceee)|bgcolor(#c0ff20):center|bgcolor(#ffe080):center|bgcolor(#ffa0c0):center|bgcolor(#E2A9F3):center|bgcolor(#ffdeff):center|center:|center:|c",
+                "bgcolor(#ffa07a):CENTER:|CENTER:|CENTER:|bgcolor(#ffa07a):CENTER:|bgcolor(#ffa07a):CENTER:||||bgcolor(#ffa07a):CENTER:|c",
+                "''宴''|"
             ];
             if skip.iter().any(|&s| s == line) {
                 continue;
@@ -1534,6 +1541,7 @@ impl RemovedSongsWiki {
                 if row.len() == 2
                     || current_genre == Some("宴")
                     || row[3] == "bgcolor(#ffa07a):''星''"
+                    || row[8].ends_with('?')
                 {
                     continue;
                 }
