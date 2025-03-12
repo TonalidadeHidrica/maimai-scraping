@@ -467,11 +467,12 @@ impl Results {
                             self.songs.get_mut(index)
                         }
                         // New song from this version!
-                        HEntry::Vacant(e) => {
-                            warn!("New song was found: {entry:?}");
-                            let (index, song) = self.songs.create_new();
-                            e.insert(HashSet::from_iter([index]));
-                            song
+                        HEntry::Vacant(_e) => {
+                            warn!("New song was found: {entry:?}.  Skipping for now");
+                            // let (index, song) = self.songs.create_new();
+                            // e.insert(HashSet::from_iter([index]));
+                            // song
+                            continue;
                         }
                     }
                 };
@@ -528,7 +529,7 @@ impl Results {
                              score: &OrdinaryScore|
                  -> anyhow::Result<()> {
                     if score.levels[version].is_none() {
-                        bail!("Score level for the current version is missing ({generation:?} {difficulty:?}): {song:?}");
+                        bail!("Score level for the current version is missing ({generation:?} {difficulty:?}): {song:#?}");
                     }
                     Ok(())
                 };
