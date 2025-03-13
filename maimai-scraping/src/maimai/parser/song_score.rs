@@ -10,24 +10,23 @@ use crate::maimai::{
     parser::play_record::{parse_achievement_txt, parse_deluxscore},
     rating::ScoreLevel,
     schema::latest::{
-        AchievementRank, AchievementValue, FullComboKind, FullSyncKind, ScoreDifficulty,
-        ScoreGeneration, ScoreMetadata, SongName, ValueWithMax,
+        AchievementRank, AchievementValue, FullComboKind, FullSyncKind, ScoreGeneration,
+        ScoreMetadata, SongName, ValueWithMax,
     },
 };
 
-pub fn parse(html: &scraper::Html, difficulty: ScoreDifficulty) -> anyhow::Result<Vec<ScoreEntry>> {
+use super::play_record::parse_playlog_diff;
+
+pub fn parse(html: &scraper::Html) -> anyhow::Result<Vec<ScoreEntry>> {
     html.select(selector!(
         "form[action='https://maimaidx.jp/maimai-mobile/record/musicDetail/']"
     ))
-    .map(move |e| parse_entry_form(e, difficulty))
+    .map(move |e| parse_entry_form(e))
     .collect()
 }
 
-fn parse_entry_form(
-    entry_form: ElementRef,
-    difficulty: ScoreDifficulty,
-) -> anyhow::Result<ScoreEntry> {
-    let metadata = parse_score_metadata(entry_form, difficulty)?;
+fn parse_entry_form(entry_form: ElementRef) -> anyhow::Result<ScoreEntry> {
+    let metadata = parse_score_metadata(entry_form)?;
     let level = find_and_parse_score_level(entry_form)?;
     let song_name = find_and_parse_song_name(entry_form)?;
     let result = parse_score_result(entry_form)?;
@@ -58,11 +57,15 @@ pub fn find_and_parse_song_name(e: ElementRef) -> anyhow::Result<SongName> {
         .into())
 }
 
-fn parse_score_metadata(
-    entry_form: ElementRef,
-    difficulty: ScoreDifficulty,
-) -> anyhow::Result<ScoreMetadata> {
-    let generation = entry_form
+fn parse_score_metadata(entry_form: ElementRef) -> anyhow::Result<ScoreMetadata> {
+    let difficulty = parse_playlog_diff(
+        entry_form
+            .select(selector!("img.h_20"))
+            .next()
+            .context("Difficulty img not found")?,
+    )?;
+
+    let generation_outside = entry_form
         .parent()
         .and_then(ElementRef::wrap)
         .context("No parent of entry form")?
@@ -70,8 +73,14 @@ fn parse_score_metadata(
         .find_map(ElementRef::wrap)
         .context("No sibling of entry form wrapper div")?
         .value()
-        .attr("src")
-        .context("No src attribute for img")?;
+        .attr("src");
+    let generation_inside = entry_form
+        .select(selector!("img.music_kind_icon"))
+        .next()
+        .and_then(|x| x.attr("src"));
+    let generation = generation_inside
+        .xor(generation_outside)
+        .context("Generation img is not found or both exist")?;
     let generation = if generation.ends_with("music_standard.png") {
         ScoreGeneration::Standard
     } else if generation.ends_with("music_dx.png") {
@@ -120,7 +129,7 @@ fn parse_score_result(entry_form: ElementRef) -> anyhow::Result<Option<ScoreResu
 }
 
 pub fn find_and_parse_achievement_value(e: ElementRef) -> anyhow::Result<Option<AchievementValue>> {
-    e.select(selector!("div.music_score_block.w_150"))
+    e.select(selector!("div.music_score_block.w_112"))
         .next()
         .map(parse_achievement_txt)
         .transpose()

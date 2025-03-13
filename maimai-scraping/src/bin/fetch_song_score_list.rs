@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
                 .text()
                 .await?,
         );
-        result.entries[difficulty] = song_score::parse(&html, difficulty)?;
+        result.entries[difficulty] = song_score::parse(&html)?;
         sleep(Duration::from_secs(1)).await;
     }
 
