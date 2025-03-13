@@ -711,8 +711,9 @@ where
             // for ((s, res), next) in
             //     (scores.iter().zip_eq(&res)).zip(scores.iter().skip(1).map(Some).chain([None]))
             // {
-            //     let res = res.iter().map(|x| x.1 .0).join(" ");
-            //     println!("  - {} {:?} => {}", s.score, s.order, res);
+            //     let res_str = res.iter().map(|x| x.1 .0).join(" ");
+            //     let c = if res.len() == 1 { '-' } else { '+' };
+            //     println!("  {c} {} {:?} => {res_str}", s.score, s.order);
             //     if let Some(next) = next {
             //         if s.order > next.order {
             //             println!("   ===================");
