@@ -22,6 +22,9 @@ pub struct PlayRecord {
     song_metadata: SongMetadata,
     #[getset(get_copy = "pub")]
     score_metadata: ScoreMetadata,
+    #[getset(get_copy = "pub")]
+    #[serde(default)]
+    score_level: Option<ScoreLevel>,
     #[getset(get = "pub")]
     utage_metadata: Option<UtageMetadata>,
     #[getset(get_copy = "pub")]
@@ -335,6 +338,8 @@ pub struct AchievementResult {
     new_record: bool,
     rank: AchievementRank,
 }
+
+use crate::maimai::rating::ScoreLevel;
 
 pub use super::ver_20210316_2338::AchievementValue;
 

@@ -4,12 +4,13 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Context};
 use chrono::NaiveDateTime;
 use itertools::Itertools;
 use maimai_scraping_utils::{regex, selector};
 use scraper::{ElementRef, Html};
 
+use crate::maimai::rating::ScoreLevel;
 use crate::maimai::schema::latest::*;
 
 pub type RecordIndexData = (PlayTime, Idx);
@@ -60,6 +61,7 @@ pub fn parse(html: &Html, idx: Idx, place_expected: bool) -> anyhow::Result<Play
         .ok_or_else(|| anyhow!("Next sibling was not found."))?;
     let (
         song_metadata,
+        score_level,
         cleared,
         generation,
         achievement_result,
@@ -151,6 +153,7 @@ pub fn parse(html: &Html, idx: Idx, place_expected: bool) -> anyhow::Result<Play
         .played_at(played_at)
         .song_metadata(song_metadata)
         .score_metadata(score_metadata)
+        .score_level(Some(score_level))
         .utage_metadata(utage_metadata)
         .cleared(cleared)
         .achievement_result(achievement_result)
@@ -323,6 +326,7 @@ fn parse_playlog_main_container(
     playlog_main_container: ElementRef,
 ) -> anyhow::Result<(
     SongMetadata,
+    ScoreLevel,
     bool,
     Option<ScoreGeneration>,
     AchievementResult,
@@ -336,7 +340,8 @@ fn parse_playlog_main_container(
         .select(selector!(".basic_block"))
         .next()
         .ok_or_else(|| anyhow!("No basic_block was found"))?;
-    let song_title = basic_block.text().collect::<String>().into();
+    // let song_title = basic_block.text().collect::<String>().into();
+    let (song_title, score_level) = parse_title_line(basic_block)?;
 
     let cleared = match basic_block
         .select(selector!("img"))
@@ -384,6 +389,7 @@ fn parse_playlog_main_container(
 
     Ok((
         song_metadata,
+        score_level,
         cleared,
         generation,
         achievement_result,
@@ -393,6 +399,34 @@ fn parse_playlog_main_container(
         matching_rank,
         life_result,
     ))
+}
+
+fn parse_title_line(basic_block: ElementRef) -> anyhow::Result<(SongName, ScoreLevel)> {
+    let level_div = basic_block
+        .select(selector!("div"))
+        .next()
+        .context("No div inside basic block")?;
+    let scraper::Node::Text(next_text) =
+        level_div.next_sibling().context("No next sibling")?.value()
+    else {
+        bail!("Next block is not text");
+    };
+    let title = next_text
+        .deref()
+        .strip_prefix("\n\t\t\t")
+        .context("Invalid prefix")?
+        .strip_suffix("\n\t\t")
+        .context("Invalid suffix")?
+        .to_owned()
+        .into();
+    let level = level_div
+        .select(selector!("div.music_lv_back"))
+        .next()
+        .context("No music_lv_back found")?
+        .text()
+        .collect::<String>()
+        .parse()?;
+    Ok((title, level))
 }
 
 fn parse_playlog_result_block(
@@ -1061,7 +1095,7 @@ fn parse_chara_container(chara_container: ElementRef) -> anyhow::Result<Option<T
 
     let star = parse_chara_star_block(
         chara_container
-            .select(selector!("div.playlog_chara_star_block"))
+            .select(selector!("span.collection_chara_awakening_block_txt"))
             .next()
             .ok_or_else(|| anyhow!("No chara star block found"))?,
     )?;
@@ -1084,7 +1118,7 @@ fn parse_chara_container(chara_container: ElementRef) -> anyhow::Result<Option<T
 
 fn parse_chara_star_block(chara_star_block: ElementRef) -> anyhow::Result<u32> {
     let text = chara_star_block.text().collect::<String>();
-    regex!(r"^×([0-9]+)$")
+    regex!(r"^([0-9]+)$")
         .captures(&text)
         .ok_or_else(|| anyhow!("Unexpected format of chara stars"))?
         .get(1)
