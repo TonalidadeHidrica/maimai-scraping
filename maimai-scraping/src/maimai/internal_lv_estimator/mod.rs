@@ -707,13 +707,19 @@ where
                     },
                     0,
                 );
+            // let previous_counts = entries
+            //     .iter()
+            //     .map(|x| x.candidates.candidates.candidates.count_candidates())
+            //     .collect_vec();
             // println!("- Lv.{level}");
-            // for ((s, res), next) in
-            //     (scores.iter().zip_eq(&res)).zip(scores.iter().skip(1).map(Some).chain([None]))
+            // for (((s, res), previous_count), next) in (scores.iter().zip_eq(&res))
+            //     .zip_eq(previous_counts)
+            //     .zip(scores.iter().skip(1).map(Some).chain([None]))
             // {
             //     let res_str = res.iter().map(|x| x.1 .0).join(" ");
             //     let c = if res.len() == 1 { '-' } else { '+' };
-            //     println!("  {c} {} {:?} => {res_str}", s.score, s.order);
+            //     let p = if previous_count == 1 { "  ★" } else { "" };
+            //     println!("  {c} {} {:?} => {res_str}{p}", s.score, s.order);
             //     if let Some(next) = next {
             //         if s.order > next.order {
             //             println!("   ===================");
