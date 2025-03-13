@@ -717,6 +717,9 @@ where
                     if s.order > next.order {
                         println!("   ===================");
                     }
+                    if s.score.scores() == next.score.scores() {
+                        println!("   ???????????????????");
+                    }
                 }
             }
             for (s, res) in scores.iter().zip_eq(&res) {

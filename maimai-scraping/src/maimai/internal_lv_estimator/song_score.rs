@@ -1,15 +1,15 @@
-use std::{cmp::Reverse, collections::BTreeMap};
+use std::collections::BTreeMap;
 
 use anyhow::{bail, Context, Result};
 use hashbrown::HashMap;
-use itertools::Itertools;
+use itertools::{izip, Itertools};
 
 use crate::maimai::{
     parser::song_score::ScoreEntry,
     rating::ScoreLevel,
     schema::latest::ScoreDifficulty,
     song_list::{
-        database::{OrdinaryScoreRef, SongDatabase},
+        database::{OrdinaryScoreRef, OrdinaryScoresRef, SongDatabase},
         song_score::SongScoreList,
     },
     version::MaimaiVersion,
@@ -24,9 +24,8 @@ pub struct ScoreAndOrder<'s> {
 }
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct ScoreOrder {
-    genre_index: usize,
-    difficulty: Reverse<ScoreDifficulty>,
-    score_index_in_genre: usize,
+    scores_index: usize,
+    // difficulty: ScoreDifficulty,
 }
 
 impl<'s> AssociatedSongScoreList<'s> {
@@ -58,21 +57,87 @@ impl<'s> AssociatedSongScoreList<'s> {
             anyhow::Ok(score)
         };
 
-        let mut score_to_order = HashMap::new();
-        for (difficulty, groups) in &list.by_difficulty {
-            for (genre_index, group) in groups.iter().enumerate() {
-                for (score_index_in_genre, entry) in group.entries.iter().enumerate() {
-                    score_to_order.insert(
-                        entry_to_score(entry)?,
-                        ScoreOrder {
-                            genre_index,
-                            difficulty: Reverse(difficulty),
-                            score_index_in_genre,
-                        },
-                    );
+        let scores_to_index = {
+            use ScoreDifficulty::*;
+
+            let mut song_to_order = HashMap::<OrdinaryScoresRef, _>::new();
+            let baem = || {
+                let d = |difficulty| {
+                    list.by_difficulty[difficulty]
+                        .iter()
+                        .flat_map(|x| &x.entries)
+                };
+                [d(Basic), d(Advanced), d(Expert), d(Master)]
+            };
+
+            // Check that the lengths are equal
+            if !baem().into_iter().map(|x| x.count()).all_equal() {
+                bail!("Scores for Basic, Advanced, Expert, and Master do not have the same length");
+            }
+
+            // Construct song to order list
+            let [b, a, e, m] = baem();
+            for (i, (b, a, e, m)) in izip!(b, a, e, m).enumerate() {
+                let baem @ [b, a, e, m] = [
+                    entry_to_score(b)?,
+                    entry_to_score(a)?,
+                    entry_to_score(e)?,
+                    entry_to_score(m)?,
+                ];
+                // Make sure that the songs are in the same order
+                if !baem.iter().map(|x| x.scores()).all_equal() {
+                    bail!("Refferring to different songs:\n  {b}\n  {a}\n  {e}\n  {m}");
+                }
+                if song_to_order.insert(b.scores(), i).is_some() {
+                    bail!("Duplicate scores: {:?}", b.scores());
                 }
             }
-        }
+
+            // Make sure that ReMaster songs are in the same order
+            {
+                let mut bef = None;
+                for entry in list.by_difficulty[ReMaster].iter().flat_map(|x| &x.entries) {
+                    let score = entry_to_score(entry)?;
+                    let order = song_to_order
+                        .get(&score.scores())
+                        .with_context(|| format!("Score not found: {score}"))?;
+                    if let Some((bef_order, bef_score)) = bef {
+                        if bef_order >= order {
+                            bail!("Re:Master not in order: {bef_score} = {bef_order}, {score} = {order}");
+                        }
+                    }
+                    bef = Some((order, score));
+                }
+            }
+
+            song_to_order
+        };
+
+        // let mut score_to_order = HashMap::new();
+        // for (difficulty, groups) in &list.by_difficulty {
+        //     for group in groups {
+        //         use Category::*;
+        //         let category: Category = group.label.parse()?;
+        //         let genre_index = match category {
+        //             GamesVariety => 3,
+        //             PopsAnime => 0,
+        //             MaimaiOriginal => 4,
+        //             NiconicoVocaloid => 1,
+        //             OngekiChunithm => 5,
+        //             TouhouProject => 2,
+        //         };
+        //         for (score_index_in_genre, entry) in group.entries.iter().enumerate() {
+        //             score_to_order.insert(
+        //                 entry_to_score(entry)?,
+        //                 ScoreOrder {
+        //                     genre_index,
+        //                     difficulty: Reverse(difficulty),
+        //                     score_index_in_genre,
+        //                 },
+        //             );
+        //         }
+        //     }
+        // }
 
         let scores_by_level = (list.by_level.iter())
             .map(|&(level, ref groups)| {
@@ -85,9 +150,13 @@ impl<'s> AssociatedSongScoreList<'s> {
                     .iter()
                     .map(|entry| {
                         let score = entry_to_score(entry)?;
-                        let &order = score_to_order
-                            .get(&score)
+                        let &scores_index = scores_to_index
+                            .get(&score.scores())
                             .with_context(|| format!("Score missing: {entry:?}"))?;
+                        let order = ScoreOrder {
+                            scores_index,
+                            // difficulty: entry.metadata().difficulty(),
+                        };
                         // println!("    - {score} => {order:?}");
                         anyhow::Ok(ScoreAndOrder { score, order })
                     })
