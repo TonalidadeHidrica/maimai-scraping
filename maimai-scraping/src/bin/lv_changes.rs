@@ -1,9 +1,10 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use clap::Parser;
 use enum_iterator::Sequence;
 use lazy_format::lazy_format;
+use log::warn;
 use maimai_scraping::maimai::{
     internal_lv_estimator::{multi_user, Estimator},
     rating::ScoreLevel,
@@ -17,6 +18,9 @@ struct Opts {
     database_path: PathBuf,
     estimator_config: PathBuf,
     level: ScoreLevel,
+
+    #[clap(long)]
+    allow_unknown: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -60,9 +64,17 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
 
-        let current = current
-            .get_if_unique()
-            .with_context(|| format!("Current level not unique: {score}"))?;
+        let current = match current.get_if_unique() {
+            Some(lv) => lv,
+            None => {
+                if opts.allow_unknown {
+                    warn!("Current level not unique: {score}");
+                    continue;
+                } else {
+                    bail!("Current level not unique: {score}")
+                }
+            }
+        };
         let previous = previous
             .get_if_unique()
             .with_context(|| format!("Previous level not unique: {score}"))?;
