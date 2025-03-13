@@ -5,6 +5,8 @@
 
 pub mod multi_user;
 
+mod song_score;
+
 use std::{collections::BTreeSet, fmt::Debug, ops::Range};
 
 use anyhow::{bail, Context};
@@ -16,6 +18,7 @@ use itertools::{repeat_n, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::trace;
+use song_score::AssociatedSongScoreList;
 
 use crate::algorithm::possibilties_from_sum_and_ordering;
 
@@ -25,7 +28,6 @@ use super::{
     schema::latest::{AchievementValue, PlayTime, RatingValue},
     song_list::{
         database::{OrdinaryScoreForVersionRef, OrdinaryScoreRef, SongDatabase},
-        song_score::SongScoreList,
         RemoveState,
     },
     version::MaimaiVersion,
@@ -665,7 +667,7 @@ where
     //     Ok(())
     // }
 
-    pub fn guess_by_sort_order(&self, _data: &SongScoreList) -> anyhow::Result<()> {
+    pub fn guess_by_sort_order(&self, _data: &AssociatedSongScoreList) -> anyhow::Result<()> {
         Ok(())
     }
 }

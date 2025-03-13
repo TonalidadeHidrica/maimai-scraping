@@ -18,10 +18,14 @@ use crate::maimai::{
         database::{OrdinaryScoreRef, SongDatabase},
         song_score::SongScoreList,
     },
+    version::MaimaiVersion,
     MaimaiUserData,
 };
 
-use super::{Estimator, NewOrOld, RatingTargetEntryLike, RatingTargetListLike, RecordLike};
+use super::{
+    song_score::AssociatedSongScoreList, Estimator, NewOrOld, RatingTargetEntryLike,
+    RatingTargetListLike, RecordLike,
+};
 
 pub type MultiUserEstimator<'s, 'n> = Estimator<'s, RecordLabel<'n>, RatingTargetLabel<'n>>;
 
@@ -29,6 +33,14 @@ pub type MultiUserEstimator<'s, 'n> = Estimator<'s, RecordLabel<'n>, RatingTarge
 pub struct Config {
     #[getset(get = "pub")]
     users: Vec<UserConfig>,
+    #[serde(default)]
+    song_score_list: Option<SongScoreListConfig>,
+}
+// FIXME: The association should have been associated to the database instead!
+#[derive(Deserialize)]
+struct SongScoreListConfig {
+    version: MaimaiVersion,
+    path: PathBuf,
 }
 
 #[derive(Deserialize, Getters, CopyGetters)]
@@ -59,11 +71,11 @@ pub type DataPair<'c> = (&'c UserConfig, MaimaiUserData);
 
 pub struct EstimatorDataSource<'c> {
     pub data_pairs: Vec<DataPair<'c>>,
-    pub song_score_list: Option<SongScoreList>,
+    pub song_score_list: Option<(MaimaiVersion, SongScoreList)>,
 }
-pub struct EstimatorDataSourceAssociated<'ds, 'c, 'd, 's> {
+pub struct EstimatorDataSourceAssociated<'c, 'd, 's> {
     pub data_pairs: Vec<AssociatedDataPair<'c, 'd, 's>>,
-    pub song_score_list: Option<&'ds SongScoreList>,
+    pub song_score_list: Option<AssociatedSongScoreList<'s>>,
 }
 
 impl Config {
@@ -71,9 +83,15 @@ impl Config {
         let data_pairs = (self.users.iter())
             .map(|config| anyhow::Ok((config, read_json::<_, MaimaiUserData>(config.data_path())?)))
             .collect::<anyhow::Result<Vec<_>>>()?;
+        let song_score_list = (self.song_score_list.as_ref())
+            .map(|config| {
+                let data = read_json(&config.path)?;
+                anyhow::Ok((config.version, data))
+            })
+            .transpose()?;
         Ok(EstimatorDataSource {
             data_pairs,
-            song_score_list: None, // TODO
+            song_score_list,
         })
     }
 }
@@ -177,7 +195,7 @@ pub type AssociatedDataPair<'c, 'd, 's> = (&'c UserConfig, UserDataOrdinaryAssoc
 pub fn associate_all<'d, 's, 'c>(
     database: &SongDatabase<'s>,
     datas: &'d EstimatorDataSource<'c>,
-) -> anyhow::Result<EstimatorDataSourceAssociated<'d, 'c, 'd, 's>> {
+) -> anyhow::Result<EstimatorDataSourceAssociated<'c, 'd, 's>> {
     let data_pairs = datas
         .data_pairs
         .iter()
@@ -187,9 +205,14 @@ pub fn associate_all<'d, 's, 'c>(
             anyhow::Ok((config, data))
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
+    let song_score_list = (datas.song_score_list.as_ref())
+        .map(|&(version, ref song_score_list)| {
+            AssociatedSongScoreList::from_song_score_list(database, version, song_score_list)
+        })
+        .transpose()?;
     Ok(EstimatorDataSourceAssociated {
         data_pairs,
-        song_score_list: datas.song_score_list.as_ref(),
+        song_score_list,
     })
 }
 
@@ -203,7 +226,7 @@ pub fn update_all<'s, 'c>(
 }
 
 pub fn estimate_all<'s, 'c>(
-    datas: &EstimatorDataSourceAssociated<'_, 'c, '_, 's>,
+    datas: &EstimatorDataSourceAssociated<'c, '_, 's>,
     estimator: &mut MultiUserEstimator<'s, 'c>,
 ) -> anyhow::Result<()> {
     // It never happens that once "determine by delta" fails,
