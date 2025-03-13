@@ -18,13 +18,13 @@ use itertools::{repeat_n, Itertools};
 use joinery::JoinableIterator;
 use lazy_format::lazy_format;
 use log::trace;
-use song_score::AssociatedSongScoreList;
+use song_score::{AssociatedSongScoreList, ScoreOrder};
 
 use crate::algorithm::possibilties_from_sum_and_ordering;
 
 use super::{
     associated_user_data,
-    rating::{rank_coef, single_song_rating, InternalScoreLevel, ScoreConstant},
+    rating::{rank_coef, single_song_rating, InternalScoreLevel, ScoreConstant, ScoreLevel},
     schema::latest::{AchievementValue, PlayTime, RatingValue},
     song_list::{
         database::{OrdinaryScoreForVersionRef, OrdinaryScoreRef, SongDatabase},
@@ -122,6 +122,8 @@ pub enum Reason<LD, LL> {
     Delta(AchievementValue, i16, LD),
     #[display("by the rating target list (source: {_0})")]
     List(LL),
+    #[display("by the song score list (Lv.{_0})")]
+    SongScoreList(ScoreLevel),
     #[display("by assumption")]
     Assumption,
 }
@@ -667,7 +669,65 @@ where
     //     Ok(())
     // }
 
-    pub fn guess_by_sort_order(&self, _data: &AssociatedSongScoreList) -> anyhow::Result<()> {
+    pub fn guess_by_sort_order(
+        &mut self,
+        data: &AssociatedSongScoreList<'s>,
+    ) -> anyhow::Result<()> {
+        for (&level, scores) in &data.scores_by_level {
+            struct Entry<C> {
+                order: ScoreOrder,
+                candidates: C,
+            }
+            let entries = scores
+                .iter()
+                .map(|score| {
+                    let candidates = self
+                        .get(score.score)
+                        .with_context(|| format!("Candidates entry missing for {}", score.score))?;
+                    anyhow::Ok(Entry {
+                        order: score.order,
+                        candidates,
+                    })
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            let res =
+                possibilties_from_sum_and_ordering::solve::<(ScoreConstant, ScoreOrder), _, _, _>(
+                    scores.len(),
+                    |i| {
+                        let entry = &entries[i];
+                        entry
+                            .candidates
+                            .candidates
+                            .candidates
+                            .candidates()
+                            .map(|inner_lv| (0, (inner_lv, entry.order)))
+                    },
+                    |(_x_score, x_innerlv_order), (_y_score, y_innerlv_order)| {
+                        x_innerlv_order.cmp(y_innerlv_order)
+                    },
+                    0,
+                );
+            println!("- Lv.{level}");
+            for ((s, res), next) in
+                (scores.iter().zip_eq(&res)).zip(scores.iter().skip(1).map(Some).chain([None]))
+            {
+                let res = res.iter().map(|x| x.1 .0).join(" ");
+                println!("  - {} {:?} => {}", s.score, s.order, res);
+                if let Some(next) = next {
+                    if s.order > next.order {
+                        println!("   ===================");
+                    }
+                }
+            }
+            for (s, res) in scores.iter().zip_eq(&res) {
+                let res = res.iter().map(|x| x.1 .0).collect::<BTreeSet<_>>();
+                self.set(
+                    s.score,
+                    |lv| res.contains(&lv),
+                    Reason::SongScoreList(level),
+                )?;
+            }
+        }
         Ok(())
     }
 }

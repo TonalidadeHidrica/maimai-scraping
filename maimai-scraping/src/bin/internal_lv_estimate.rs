@@ -112,6 +112,9 @@ fn main() -> anyhow::Result<()> {
                                 x.timestamp(),
                                 x.iteration() + 1,
                             ),
+                            Reason::SongScoreList(lv) => (
+                                "maimai.net のレベル順楽曲一覧 (Lv.{lv}) より"
+                            ),
                             Reason::Assumption => "追加データより"
                         });
                         lazy_format!(
