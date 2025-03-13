@@ -120,7 +120,7 @@ fn parse_score_result(entry_form: ElementRef) -> anyhow::Result<Option<ScoreResu
 }
 
 pub fn find_and_parse_achievement_value(e: ElementRef) -> anyhow::Result<Option<AchievementValue>> {
-    e.select(selector!("div.music_score_block.w_112"))
+    e.select(selector!("div.music_score_block.w_150"))
         .next()
         .map(parse_achievement_txt)
         .transpose()
