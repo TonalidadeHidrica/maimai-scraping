@@ -20,10 +20,7 @@ fn main() -> Result<()> {
     let songs: Vec<Song> = read_json(opts.database_path)?;
     let database = SongDatabase::new(&songs)?;
 
-    let level_to_idx: BTreeMap<_, _> =
-        ScoreLevel::range_inclusive("1".parse().unwrap(), "15".parse().unwrap())
-            .zip(0i8..)
-            .collect();
+    let level_to_idx: BTreeMap<_, _> = ScoreLevel::all().zip(0i8..).collect();
 
     let mut changed = BTreeMap::<_, BTreeMap<_, Vec<_>>>::new();
     let mut no_current = vec![];

@@ -2,20 +2,19 @@ use std::{path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use clap::Parser;
-use hashbrown::HashMap;
+use hashbrown::HashSet;
 use log::info;
 use maimai_scraping::{
     api::{SegaClient, SegaClientInitializer},
     cookie_store::UserIdentifier,
     maimai::{
-        data_collector::get_icon_for_idx, parser::song_score, schema::latest::ScoreDifficulty,
-        song_list::song_score::SongScoreList, Maimai,
+        data_collector::get_icon_for_idx, parser::song_score, rating::ScoreLevel,
+        schema::latest::ScoreDifficulty, song_list::song_score::SongScoreList, Maimai,
     },
 };
 use maimai_scraping_utils::fs_json_util::write_json;
 use scraper::Html;
 use tokio::time::sleep;
-use url::Url;
 
 #[derive(Parser)]
 struct Opts {
@@ -47,36 +46,33 @@ async fn main() -> Result<()> {
     let difficulties = [Basic, Advanced, Expert, Master, ReMaster];
     for (i, &difficulty) in difficulties.iter().enumerate() {
         info!("Fetching {difficulty:?}");
-        let html = Html::parse_document(
-            // TODO international ver
-            &client
-                .fetch_authenticated(Url::parse(&format!(
-                    "https://maimaidx.jp/maimai-mobile/record/musicGenre/search/?genre=99&diff={i}"
-                ))?)
-                .await?
-                .0
-                .text()
-                .await?,
+        let url = format!(
+            "https://maimaidx.jp/maimai-mobile/record/musicGenre/search/?genre=99&diff={i}"
         );
-        result.entries[difficulty] = song_score::parse(&html)?;
+        let html = Html::parse_document(&client.fetch_authenticated(url).await?.0.text().await?);
+        result.by_difficulty[difficulty] = song_score::parse(&html)?;
         sleep(Duration::from_secs(1)).await;
     }
 
-    let duplicate_idx = difficulties.iter().flat_map(|&d| {
-        let mut map = HashMap::<_, Vec<_>>::new();
-        for entry in &result.entries[d] {
-            map.entry((entry.song_name(), entry.metadata().generation()))
-                .or_default()
-                .push(entry.idx());
-        }
-        map.into_values().filter(|x| x.len() >= 2).flatten()
-    });
+    for (level, i) in ScoreLevel::all().zip(1..) {
+        info!("Fetching {level:?}");
+        let url = format!("https://maimaidx.jp/maimai-mobile/record/musicLevel/search/?level={i}");
+        let html = Html::parse_document(&client.fetch_authenticated(url).await?.0.text().await?);
+        result.by_level.push((level, song_score::parse(&html)?));
+        sleep(Duration::from_secs(1)).await;
+    }
 
-    let link_idx = result.entries.values().flatten().filter_map(|entry| {
+    let idxs = result
+        .by_difficulty
+        .values()
+        .chain(result.by_level.iter().map(|x| &x.1))
+        .flatten();
+    let link_idx = idxs.filter_map(|entry| {
         (AsRef::<str>::as_ref(entry.song_name()) == "Link").then_some(entry.idx())
     });
+    let idx_list = link_idx.collect::<HashSet<_>>();
 
-    for idx in duplicate_idx.chain(link_idx) {
+    for idx in idx_list {
         info!("Fetching {idx:?}");
         let icon = get_icon_for_idx(&mut client, idx).await?;
         result.idx_to_icon_map.insert(idx.clone(), icon);

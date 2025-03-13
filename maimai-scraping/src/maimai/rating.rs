@@ -162,6 +162,10 @@ impl ScoreLevel {
         })
         .filter(move |&x| x <= y)
     }
+
+    pub fn all() -> impl Iterator<Item = Self> {
+        Self::range_inclusive("1".parse().unwrap(), "15".parse().unwrap())
+    }
 }
 
 impl FromStr for ScoreLevel {
