@@ -449,8 +449,8 @@ impl Results {
     ) -> anyhow::Result<()> {
         let version = MaimaiVersion::latest();
 
-        for entries in song_score.by_difficulty.values() {
-            for entry in entries {
+        for groups in song_score.by_difficulty.values() {
+            for entry in groups.iter().flat_map(|x| &x.entries) {
                 let song = if let Some(icon) = song_score.idx_to_icon_map.get(entry.idx()) {
                     let &index = self
                         .icon_to_song

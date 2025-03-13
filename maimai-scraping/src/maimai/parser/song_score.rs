@@ -13,16 +13,28 @@ use crate::maimai::{
         AchievementRank, AchievementValue, FullComboKind, FullSyncKind, ScoreGeneration,
         ScoreMetadata, SongName, ValueWithMax,
     },
+    song_list::song_score::{self, EntryGroup},
 };
 
 use super::play_record::parse_playlog_diff;
 
-pub fn parse(html: &scraper::Html) -> anyhow::Result<Vec<ScoreEntry>> {
-    html.select(selector!(
-        "form[action='https://maimaidx.jp/maimai-mobile/record/musicDetail/']"
-    ))
-    .map(move |e| parse_entry_form(e))
-    .collect()
+pub fn parse(html: &scraper::Html) -> anyhow::Result<Vec<song_score::EntryGroup>> {
+    html.select(selector!("div.screw_block"))
+        .map(|div| {
+            let label = div.text().collect();
+            let selector =
+                selector!("form[action='https://maimaidx.jp/maimai-mobile/record/musicDetail/']");
+            let entries = div
+                .next_siblings()
+                .filter_map(ElementRef::wrap)
+                .map(|x| x.select(selector).next())
+                .take_while(|x| x.is_some())
+                .flatten()
+                .map(parse_entry_form)
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            anyhow::Ok(EntryGroup { label, entries })
+        })
+        .collect()
 }
 
 fn parse_entry_form(entry_form: ElementRef) -> anyhow::Result<ScoreEntry> {

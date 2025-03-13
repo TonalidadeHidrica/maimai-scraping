@@ -62,11 +62,10 @@ async fn main() -> Result<()> {
         sleep(Duration::from_secs(1)).await;
     }
 
-    let idxs = result
-        .by_difficulty
-        .values()
+    let idxs = (result.by_difficulty.values())
         .chain(result.by_level.iter().map(|x| &x.1))
-        .flatten();
+        .flatten()
+        .flat_map(|x| &x.entries);
     let link_idx = idxs.filter_map(|entry| {
         (AsRef::<str>::as_ref(entry.song_name()) == "Link").then_some(entry.idx())
     });

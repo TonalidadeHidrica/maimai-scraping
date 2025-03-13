@@ -6,9 +6,15 @@ use crate::maimai::{
     IdxToIconMap,
 };
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct SongScoreList {
-    pub by_difficulty: EnumMap<ScoreDifficulty, Vec<ScoreEntry>>,
-    pub by_level: Vec<(ScoreLevel, Vec<ScoreEntry>)>,
+    pub by_difficulty: EnumMap<ScoreDifficulty, Vec<EntryGroup>>,
+    pub by_level: Vec<(ScoreLevel, Vec<EntryGroup>)>,
     pub idx_to_icon_map: IdxToIconMap,
+}
+
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct EntryGroup {
+    pub label: String,
+    pub entries: Vec<ScoreEntry>,
 }
