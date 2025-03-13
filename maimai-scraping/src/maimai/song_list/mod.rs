@@ -75,7 +75,7 @@ pub struct Song {
     pub name: OptionalEnumMap<MaimaiVersion, SongName>,
     pub category: OptionalEnumMap<MaimaiVersion, Category>,
     pub artist: OptionalEnumMap<MaimaiVersion, ArtistName>,
-    pub pronunciation: Option<SongKana>,
+    pub pronunciation: OptionalEnumMap<MaimaiVersion, SongKana>,
     pub abbreviation: OptionalEnumMap<MaimaiVersion, SongAbbreviation>,
     pub scores: OptionalEnumMap<ScoreGeneration, OrdinaryScores>,
     pub utage_scores: Vec<UtageScore>,
@@ -91,6 +91,10 @@ impl Song {
 
     pub fn latest_song_name(&self) -> Option<&SongName> {
         self.name.values().flatten().last()
+    }
+    
+    pub fn latest_pronunciation(&self) -> Option<&SongKana> {
+        self.pronunciation.values().flatten().last()
     }
 }
 

@@ -334,7 +334,7 @@ impl Results {
                     .insert(index);
 
                 // Song kana
-                merge_options(&mut song.pronunciation, Some(data.title_kana()))?;
+                merge_options(&mut song.pronunciation[version], Some(data.title_kana()))?;
                 // Artist
                 merge_options(&mut song.artist[version], Some(data.artist()))?;
                 // Icon
@@ -1204,7 +1204,7 @@ impl Results {
                             "song name",
                         ),
                         (
-                            collected.pronunciation.as_ref() == Some(song.title_kana()),
+                            collected.pronunciation[version].as_ref() == Some(song.title_kana()),
                             "song kana",
                         ),
                         (
@@ -1287,7 +1287,7 @@ impl Results {
                             "song name",
                         ),
                         (
-                            collected.pronunciation.as_ref() == Some(song.title_kana()),
+                            collected.pronunciation[version].as_ref() == Some(song.title_kana()),
                             "song kana",
                         ),
                         (

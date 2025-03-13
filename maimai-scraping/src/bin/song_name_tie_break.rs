@@ -19,7 +19,7 @@ fn main() -> anyhow::Result<()> {
         .songs()
         .iter()
         .filter(|song| !song.song().removed())
-        .filter_map(|song| Some((song, song.song().pronunciation.as_ref()?)))
+        .filter_map(|song| Some((song, song.song().latest_pronunciation()?)))
         .sorted_by_key(|x| x.1)
         .tuple_windows()
         .filter_map(|(x, y)| {

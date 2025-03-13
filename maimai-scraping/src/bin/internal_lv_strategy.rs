@@ -459,8 +459,7 @@ fn get_matching_scores<'s, 'e, 'n>(
                     .scores()
                     .song()
                     .song()
-                    .pronunciation
-                    .as_ref(),
+                    .latest_pronunciation(),
             });
         }
     }
