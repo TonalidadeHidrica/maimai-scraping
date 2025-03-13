@@ -14,7 +14,10 @@ use crate::maimai::{
         RatingTargetListAssociated, UserDataOrdinaryAssociated,
     },
     schema::latest::{AchievementValue, PlayTime, RatingValue},
-    song_list::database::{OrdinaryScoreRef, SongDatabase},
+    song_list::{
+        database::{OrdinaryScoreRef, SongDatabase},
+        song_score::SongScoreList,
+    },
     MaimaiUserData,
 };
 
@@ -54,11 +57,24 @@ pub struct UserName(String);
 
 pub type DataPair<'c> = (&'c UserConfig, MaimaiUserData);
 
+pub struct EstimatorDataSource<'c> {
+    pub data_pairs: Vec<DataPair<'c>>,
+    pub song_score_list: Option<SongScoreList>,
+}
+pub struct EstimatorDataSourceAssociated<'ds, 'c, 'd, 's> {
+    pub data_pairs: Vec<AssociatedDataPair<'c, 'd, 's>>,
+    pub song_score_list: Option<&'ds SongScoreList>,
+}
+
 impl Config {
-    pub fn read_all(&self) -> anyhow::Result<Vec<DataPair>> {
-        (self.users.iter())
+    pub fn read_all(&self) -> anyhow::Result<EstimatorDataSource> {
+        let data_pairs = (self.users.iter())
             .map(|config| anyhow::Ok((config, read_json::<_, MaimaiUserData>(config.data_path())?)))
-            .collect()
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        Ok(EstimatorDataSource {
+            data_pairs,
+            song_score_list: None, // TODO
+        })
     }
 }
 
@@ -160,21 +176,26 @@ pub type AssociatedDataPair<'c, 'd, 's> = (&'c UserConfig, UserDataOrdinaryAssoc
 
 pub fn associate_all<'d, 's, 'c>(
     database: &SongDatabase<'s>,
-    datas: &'d [DataPair<'c>],
-) -> anyhow::Result<Vec<AssociatedDataPair<'c, 'd, 's>>> {
-    datas
+    datas: &'d EstimatorDataSource<'c>,
+) -> anyhow::Result<EstimatorDataSourceAssociated<'d, 'c, 'd, 's>> {
+    let data_pairs = datas
+        .data_pairs
         .iter()
         .map(|&(config, ref data)| {
             let data = associated_user_data::UserData::annotate(database, data)?;
             let data = data.ordinary_data_associated()?;
             anyhow::Ok((config, data))
         })
-        .collect()
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    Ok(EstimatorDataSourceAssociated {
+        data_pairs,
+        song_score_list: datas.song_score_list.as_ref(),
+    })
 }
 
 pub fn update_all<'s, 'c>(
     database: &SongDatabase<'s>,
-    datas: &[DataPair<'c>],
+    datas: &EstimatorDataSource<'c>,
     estimator: &mut MultiUserEstimator<'s, 'c>,
 ) -> anyhow::Result<()> {
     let datas = associate_all(database, datas)?;
@@ -182,12 +203,12 @@ pub fn update_all<'s, 'c>(
 }
 
 pub fn estimate_all<'s, 'c>(
-    datas: &[AssociatedDataPair<'c, '_, 's>],
+    datas: &EstimatorDataSourceAssociated<'_, 'c, '_, 's>,
     estimator: &mut MultiUserEstimator<'s, 'c>,
 ) -> anyhow::Result<()> {
     // It never happens that once "determine by delta" fails,
     // but succeeds afterwards due to additionally determined internal levels.
-    for &(config, ref data) in datas {
+    for &(config, ref data) in &datas.data_pairs {
         let ordinary_records = data.ordinary_records();
         if config.estimator_config.new_songs_are_complete {
             estimator
@@ -201,7 +222,10 @@ pub fn estimate_all<'s, 'c>(
 
     for i in 0.. {
         let before_len = estimator.event_len();
-        for &(config, ref data) in datas {
+        if let Some(data) = &datas.song_score_list {
+            estimator.guess_by_sort_order(data)?;
+        }
+        for &(config, ref data) in &datas.data_pairs {
             let rating_targets = data.rating_target();
             estimator.guess_from_rating_target_order(
                 rating_targets

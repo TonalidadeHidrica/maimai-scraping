@@ -95,7 +95,7 @@ fn main() -> anyhow::Result<()> {
                 "{} songs has been determined so far",
                 estimator.num_determined_scores() - count_initial
             );
-            for (user, data) in &datas {
+            for (user, data) in &datas.data_pairs {
                 let (mut got, mut all) = (0, 0);
                 for score in covered_scores(data) {
                     if opts.no_dx_master && is_dx_master(score) {
@@ -316,12 +316,15 @@ fn is_dx_master(score: OrdinaryScoreRef<'_>) -> bool {
 }
 
 fn get_optimal_song<'s>(
-    datas: &'s [multi_user::AssociatedDataPair],
+    datas: &'s multi_user::EstimatorDataSourceAssociated,
     estimator: &MultiUserEstimator<'s, '_>,
     level_update_factor: f64,
     no_dx_master: bool,
 ) -> Result<Vec<OptimalSongEntry<'s>>, anyhow::Error> {
-    let covered_scores = datas.iter().flat_map(|(_, data)| covered_scores(data));
+    let covered_scores = datas
+        .data_pairs
+        .iter()
+        .flat_map(|(_, data)| covered_scores(data));
     let mut res = vec![];
     for score in covered_scores {
         if no_dx_master && is_dx_master(score) {

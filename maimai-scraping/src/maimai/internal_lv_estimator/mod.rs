@@ -25,6 +25,7 @@ use super::{
     schema::latest::{AchievementValue, PlayTime, RatingValue},
     song_list::{
         database::{OrdinaryScoreForVersionRef, OrdinaryScoreRef, SongDatabase},
+        song_score::SongScoreList,
         RemoveState,
     },
     version::MaimaiVersion,
@@ -663,6 +664,10 @@ where
 
     //     Ok(())
     // }
+
+    pub fn guess_by_sort_order(&self, _data: &SongScoreList) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 pub trait RecordLike<'s, L> {
