@@ -707,21 +707,21 @@ where
                     },
                     0,
                 );
-            println!("- Lv.{level}");
-            for ((s, res), next) in
-                (scores.iter().zip_eq(&res)).zip(scores.iter().skip(1).map(Some).chain([None]))
-            {
-                let res = res.iter().map(|x| x.1 .0).join(" ");
-                println!("  - {} {:?} => {}", s.score, s.order, res);
-                if let Some(next) = next {
-                    if s.order > next.order {
-                        println!("   ===================");
-                    }
-                    if s.score.scores() == next.score.scores() {
-                        println!("   ???????????????????");
-                    }
-                }
-            }
+            // println!("- Lv.{level}");
+            // for ((s, res), next) in
+            //     (scores.iter().zip_eq(&res)).zip(scores.iter().skip(1).map(Some).chain([None]))
+            // {
+            //     let res = res.iter().map(|x| x.1 .0).join(" ");
+            //     println!("  - {} {:?} => {}", s.score, s.order, res);
+            //     if let Some(next) = next {
+            //         if s.order > next.order {
+            //             println!("   ===================");
+            //         }
+            //         if s.score.scores() == next.score.scores() {
+            //             println!("   ???????????????????");
+            //         }
+            //     }
+            // }
             for (s, res) in scores.iter().zip_eq(&res) {
                 let res = res.iter().map(|x| x.1 .0).collect::<BTreeSet<_>>();
                 self.set(

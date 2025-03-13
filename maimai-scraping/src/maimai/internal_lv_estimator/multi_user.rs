@@ -243,11 +243,12 @@ pub fn estimate_all<'s, 'c>(
         }
     }
 
+    if let Some(data) = &datas.song_score_list {
+        estimator.guess_by_sort_order(data)?;
+    }
+
     for i in 0.. {
         let before_len = estimator.event_len();
-        if let Some(data) = &datas.song_score_list {
-            estimator.guess_by_sort_order(data)?;
-        }
         for &(config, ref data) in &datas.data_pairs {
             let rating_targets = data.rating_target();
             estimator.guess_from_rating_target_order(
@@ -255,6 +256,9 @@ pub fn estimate_all<'s, 'c>(
                     .iter()
                     .map(|&(time, ref list)| (config, time, list, i)),
             )?;
+        }
+        if let Some(data) = &datas.song_score_list {
+            estimator.guess_by_sort_order(data)?;
         }
         if before_len == estimator.event_len() {
             return Ok(());
