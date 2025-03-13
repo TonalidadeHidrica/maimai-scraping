@@ -295,7 +295,7 @@ impl<'d, 's> RatingTargetEntry<'d, 's> {
         idx_map: &IdxToIconMap,
     ) -> anyhow::Result<Self> {
         let score = (|| {
-            let song = match database.song_from_name(data.song_name()).collect_vec()[..] {
+            let song = match database.song_from_name_in_version(data.song_name(), version).collect_vec()[..] {
                 [song] => song,
                 ref songs => match idx_map
                     .get(data.idx())

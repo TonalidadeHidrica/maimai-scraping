@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use anyhow::{bail, Context};
 use derive_by_key::DeriveByKey;
+use enum_map::EnumMap;
 use getset::{CopyGetters, Getters};
 use hashbrown::HashMap;
 use itertools::Itertools;
@@ -21,6 +22,7 @@ pub struct SongDatabase<'s> {
     songs: Vec<SongRef<'s>>,
     icon_map: HashMap<&'s SongIcon, SongRef<'s>>,
     name_map: HashMap<&'s SongName, Vec<SongRef<'s>>>,
+    name_map_per_version: EnumMap<MaimaiVersion, HashMap<&'s SongName, Vec<SongRef<'s>>>>,
 }
 impl<'s> SongDatabase<'s> {
     pub fn new(songs: &'s [Song]) -> anyhow::Result<Self> {
@@ -51,10 +53,24 @@ impl<'s> SongDatabase<'s> {
             name_map.entry(name).or_default().push(song);
         }
 
+        // Make song name map per version.
+        let mut name_map_per_version = EnumMap::<_, HashMap<_, Vec<_>>>::default();
+        for &song in &songs {
+            for (version, name) in &song.song.name {
+                if let Some(name) = name {
+                    name_map_per_version[version]
+                        .entry(name)
+                        .or_default()
+                        .push(song);
+                }
+            }
+        }
+
         Ok(Self {
             songs,
             icon_map,
             name_map,
+            name_map_per_version,
         })
     }
 
@@ -70,6 +86,18 @@ impl<'s> SongDatabase<'s> {
         song_name: &SongName,
     ) -> impl Iterator<Item = SongRef<'s>> + 'me {
         self.name_map.get(song_name).into_iter().flatten().copied()
+    }
+
+    pub fn song_from_name_in_version<'me>(
+        &'me self,
+        song_name: &SongName,
+        version: MaimaiVersion,
+    ) -> impl Iterator<Item = SongRef<'s>> + 'me {
+        self.name_map_per_version[version]
+            .get(song_name)
+            .into_iter()
+            .flatten()
+            .copied()
     }
 
     pub fn all_scores_for_version<'me>(
