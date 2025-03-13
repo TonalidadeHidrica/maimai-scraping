@@ -95,6 +95,8 @@ struct SongScoreListConfig {
     allow_missing_level: Vec<SongIcon>,
     song_name_override: HashMap<SongName, SongName>,
     icon_supplemental: HashMap<SongName, SongIcon>,
+    level_supplemental:
+        HashMap<SongIcon, BTreeMap<ScoreGeneration, BTreeMap<ScoreDifficulty, String>>>,
 }
 
 impl Resources {
@@ -512,6 +514,35 @@ impl Results {
                     InternalScoreLevel::unknown(version, entry.level()),
                     version,
                 )?;
+            }
+        }
+
+        for (icon, map) in &config.level_supplemental {
+            let song = self.songs.get_mut(
+                *self
+                    .icon_to_song
+                    .get(icon)
+                    .with_context(|| format!("Invalid icon for level_supplemental: {icon:?}"))?,
+            );
+            for (&generation, map) in map {
+                let scores = song.scores[generation].as_mut().with_context(|| {
+                    format!("Invalid generation for level_supplemental: {icon:?}")
+                })?;
+                for (difficulty, level) in map {
+                    use ScoreDifficulty::*;
+                    let score = match difficulty {
+                        Basic => &mut scores.basic,
+                        Advanced => &mut scores.advanced,
+                        Expert => &mut scores.expert,
+                        Master => &mut scores.master,
+                        ReMaster => scores.re_master.as_mut().with_context(|| {
+                            format!("No ReMaster score for {icon:?} {generation:?}")
+                        })?,
+                        Utage => bail!("Utage is not allowed here"),
+                    };
+                    let level = InternalScoreLevel::unknown(version, ScoreLevel::from_str(level)?);
+                    merge_levels(&mut score.levels[version], level, version)?;
+                }
             }
         }
 
