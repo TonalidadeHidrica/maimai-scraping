@@ -6,8 +6,15 @@ use maimai_scraping::{
     data_collector::load_or_create_user_data,
     maimai::{
         associated_user_data,
-        internal_lv_estimator::{multi_user, Estimator},
-        song_list::{database::SongDatabase, Song},
+        internal_lv_estimator::{
+            multi_user::{self, MultiUserEstimator},
+            Estimator,
+        },
+        rating::InternalScoreLevel,
+        song_list::{
+            database::{ScoreForVersionRef, SongDatabase},
+            Song,
+        },
         version::MaimaiVersion,
         Maimai,
     },
@@ -57,11 +64,14 @@ pub async fn recent(
 
     let message = match associated {
         Some(records) => (records.records().values().rev().take(count).rev())
-            .map(|record| make_message(record.record(), Some(record)))
+            .map(|record| {
+                let level = try_get_level(estimator.as_ref(), Some(record));
+                make_message(record.record(), Some(record), level)
+            })
             .join_with("\n")
             .to_string(),
         None => (data.records.values().rev().take(count).rev())
-            .map(|record| make_message(record, None))
+            .map(|record| make_message(record, None, None))
             .join_with("\n")
             .to_string(),
     };
@@ -73,4 +83,15 @@ pub async fn recent(
     )
     .await;
     Ok(())
+}
+
+pub fn try_get_level<'s, 'e: 's, 'n>(
+    estimator: Option<&'e MultiUserEstimator<'s, 'n>>,
+    associated: Option<&associated_user_data::PlayRecord<'_, 's>>,
+) -> Option<InternalScoreLevel> {
+    let score = match associated?.score().ok()? {
+        ScoreForVersionRef::Ordinary(score) => score,
+        ScoreForVersionRef::Utage(_) => return None,
+    };
+    Some(estimator?.get(score.score())?.candidates())
 }

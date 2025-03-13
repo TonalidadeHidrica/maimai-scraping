@@ -45,7 +45,7 @@ use tokio::{
 };
 use url::Url;
 
-use crate::{describe_record::make_message, slack::webhook_send};
+use crate::{describe_record::make_message, misc::try_get_level, slack::webhook_send};
 
 // TODO use netype instead of alias!
 // #[derive(Clone, PartialEq, Eq, Hash, Deserialize)]
@@ -434,11 +434,12 @@ impl<'c> Runner<'c, '_, '_, '_> {
         for time in inserted_records {
             let record = &self.data.records[&time];
             let associated = associated.as_ref().and_then(|x| x.records().get(&time));
+            let level = try_get_level(self.estimator.as_ref(), associated);
             webhook_send(
                 client.reqwest(),
                 &config.slack_post_webhook,
                 &config.user_id,
-                make_message(record, associated).to_string(),
+                make_message(record, associated, level).to_string(),
             )
             .await;
         }

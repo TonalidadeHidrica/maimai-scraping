@@ -4,7 +4,7 @@ use either::Either;
 use lazy_format::lazy_format;
 use maimai_scraping::maimai::{
     associated_user_data,
-    rating::{rank_coef, single_song_rating_precise},
+    rating::{rank_coef, single_song_rating_precise, InternalScoreLevel},
     schema::{
         latest::{
             JudgeCount, JudgeCountWithoutCP, JudgeResult, LifeResult, PlayRecord,
@@ -19,22 +19,30 @@ use maimai_scraping::maimai::{
 pub fn make_message<'a>(
     record: &'a PlayRecord,
     associated: Option<&associated_user_data::PlayRecord>,
+    level_supplied: Option<InternalScoreLevel>,
 ) -> impl Display + Send + 'a {
     use maimai_scraping::maimai::schema::latest::{AchievementRank::*, FullComboKind::*};
     let time = (record.played_at().idx().timestamp_jst()).unwrap_or(record.played_at().time());
     let score_kind = describe_score_kind(record.score_metadata());
-    let level = associated
-        .and_then(|x| x.score().ok())
-        .and_then(|x| match x {
-            ScoreForVersionRef::Ordinary(score) => {
-                let level = score.level()?;
-                Some(match level.get_if_unique() {
-                    Some(x) => Either::Left(x),
-                    None => Either::Right(level.into_level(MaimaiVersion::latest())),
-                })
-            }
-            ScoreForVersionRef::Utage(score) => Some(Either::Right(score.score().level())),
-        });
+    let level = match level_supplied {
+        Some(x) => Some(Either::Left(x)),
+        None => associated
+            .and_then(|x| x.score().ok())
+            .and_then(|x| match x {
+                ScoreForVersionRef::Ordinary(score) => {
+                    let level = score.level()?;
+                    Some(Either::Left(level))
+                }
+                ScoreForVersionRef::Utage(score) => Some(Either::Right(score.score().level())),
+            }),
+    };
+    let level = level.map(|level| match level {
+        Either::Left(level) => match level.get_if_unique() {
+            Some(x) => Either::Left(x),
+            None => Either::Right(level.into_level(MaimaiVersion::latest())),
+        },
+        Either::Right(level) => Either::Right(level),
+    });
     let lv = lazy_format!(match (level) {
         None => "?",
         Some(x) => "{x}",
