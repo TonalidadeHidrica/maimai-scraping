@@ -424,8 +424,8 @@ fn parse_title_line(basic_block: ElementRef) -> anyhow::Result<(SongName, ScoreL
         .next()
         .context("No music_lv_back found")?
         .text()
-        .collect::<String>()
-        .parse()?;
+        .collect::<String>();
+    let level = level.strip_suffix('?').unwrap_or(&level).parse()?;
     Ok((title, level))
 }
 
