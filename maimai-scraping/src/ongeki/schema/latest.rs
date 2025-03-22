@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use deranged::RangedU8;
 use derive_more::{AsRef, Display, From, FromStr, Into};
 use getset::{CopyGetters, Getters};
@@ -51,6 +51,13 @@ impl TryFrom<u8> for Idx {
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, From, Into, Display, Serialize, Deserialize,
 )]
 pub struct PlayTime(NaiveDateTime);
+
+impl PlayTime {
+    /// Converts the play time to "natural" date (where the date switches at 05:00 on the next day).
+    pub fn to_natural_date(self) -> NaiveDate {
+        (self.0 - chrono::Duration::hours(5)).date()
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, Debug, From, AsRef, Display, Serialize, Deserialize)]
 #[as_ref(forward)]

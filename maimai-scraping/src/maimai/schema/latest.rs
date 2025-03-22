@@ -3,6 +3,7 @@ use std::{convert::TryFrom, hash::Hash, num::ParseIntError};
 use anyhow::bail;
 use chrono::naive::NaiveDateTime;
 use chrono::FixedOffset;
+use chrono::NaiveDate;
 use derive_more::{AsRef, Display, From, FromStr, Into};
 use enum_map::Enum;
 use getset::{CopyGetters, Getters};
@@ -149,6 +150,11 @@ impl PlayTime {
             .with_timezone(&FixedOffset::east_opt(9 * 60 * 60).unwrap())
             .naive_local()
             .into()
+    }
+
+    /// Converts the play time to "natural" date (where the date switches at 05:00 on the next day).
+    pub fn to_natural_date(self) -> NaiveDate {
+        (self.0 - chrono::Duration::hours(5)).date()
     }
 }
 

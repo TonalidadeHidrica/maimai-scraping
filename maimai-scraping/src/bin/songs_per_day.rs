@@ -3,7 +3,6 @@ use std::{
     path::PathBuf,
 };
 
-use chrono::Duration;
 use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping::maimai::MaimaiUserData;
@@ -22,7 +21,7 @@ fn main() -> anyhow::Result<()> {
     let mut count = BTreeMap::<_, (usize, BTreeSet<_>)>::new();
     for record in data.records.values() {
         let time = record.played_at().time();
-        let date = (time.get() - Duration::hours(5)).date();
+        let date = time.to_natural_date();
         // println!("{time} {date}");
         let (count, players) = count.entry(date).or_default();
         *count += 1;
