@@ -12,7 +12,7 @@ members = [
 	"maimai-scraping",
 	"maimai-scraping-utils",
 	"maimai-watcher",
-	"rating-target-viewer",
+	"rating-target-viewer", "score-level-matrix",
 	"screenshot-generator",
 	"set-option",
 ]

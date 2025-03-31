@@ -1,0 +1,12 @@
+[package]
+name = "score-level-matrix"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.97"
+clap = { version = "4.5.34", features = ["derive"] }
+google-sheets4 = "6.0.0"
+maimai-scraping = { version = "0.1.0", path = "../maimai-scraping" }
+maimai-scraping-utils = { version = "0.1.0", path = "../maimai-scraping-utils" }
+tokio = { version = "1.44.1", features = ["macros", "rt", "rt-multi-thread"] }
