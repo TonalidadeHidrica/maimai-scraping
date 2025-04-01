@@ -228,6 +228,17 @@ impl<'s> OrdinaryScoresRef<'s> {
     }
 }
 
+impl Display for OrdinaryScoresRef<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} ({})",
+            self.song.latest_song_name(),
+            self.generation.abbrev(),
+        )
+    }
+}
+
 /// A reference to an ordinary for a specific version.
 #[derive(Clone, Copy, Debug, CopyGetters, DeriveByKey)]
 #[derive_by_key(key = "key", PartialEq, Eq, PartialOrd, Ord, Hash)]
