@@ -1040,6 +1040,10 @@ impl Results {
                     let entry = entry.parse()?;
                     let missing_song =
                         || format!("Missing song: {:?} (on version {:?})", entry, version);
+                    if regex!(r"^Lv([1-6]|7\+?)表記の全譜面").is_match(entry.song_nickname.as_ref())
+                    {
+                        continue;
+                    }
 
                     let song = self.songs.get_mut(
                         *self
