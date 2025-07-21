@@ -146,6 +146,18 @@ pub fn parse(html: &Html, idx: Idx, place_expected: bool) -> anyhow::Result<Play
                 .build()
                 .into()
         }
+        (FullSyncKind::Nothing, None, Some(other_players), None) if max_combo.max() == 0 => {
+            // HACK: We regard this as a special result for Kaleidxscope.
+            // (Ordinary plays cannot have a max combo of 0.)
+            // We substitute this with an "empty" (all-zero) counts instead.
+            MatchingResult::builder()
+                .full_sync_kind(FullSyncKind::Nothing)
+                .max_sync(ValueWithMax::new(0, 0).unwrap())
+                .other_players(other_players)
+                .rank(MatchingRank::try_from(1).unwrap())
+                .build()
+                .into()
+        }
         otherwise => return Err(anyhow!("Inconsistent matching result: {:?}", otherwise)),
     };
 
@@ -1031,25 +1043,7 @@ fn parse_center_gray_block(
     let hold = get_count("hold")?;
     let slide = get_count("slide")?;
     let touch = get_count("touch")?;
-    let break_ = match get_count("break")? {
-        JudgeCount::JudgeCountWithCP(count) => count,
-        e => {
-            return Err(anyhow!(
-                "Count for break does not have critical perfect count: {:?}",
-                e
-            ))
-        }
-    };
-
-    let judge_count = JudgeResult::builder()
-        .fast(fast)
-        .late(late)
-        .tap(tap)
-        .hold(hold)
-        .slide(slide)
-        .touch(touch)
-        .break_(break_)
-        .build();
+    let break_ = get_count("break")?;
 
     let rating_result = parse_rating_deatil_block(
         gray_block
@@ -1068,6 +1062,41 @@ fn parse_center_gray_block(
         .next()
         .ok_or_else(|| anyhow!("Max sync block was not found"))?;
     let max_sync = parse_max_combo_sync_div(max_sync_div)?;
+
+    let break_ = match break_ {
+        JudgeCount::JudgeCountWithCP(count) => count,
+        JudgeCount::Nothing if max_combo.max() == 0 => {
+            // HACK: We regard this as a special result for Kaleidxscope.
+            // (Ordinary plays cannot have a max combo of 0.)
+            // We substitute this with an "empty" (all-zero) counts instead.
+            JudgeCountWithCP::builder()
+                .critical_perfect(0)
+                .others(
+                    JudgeCountWithoutCP::builder()
+                        .perfect(0)
+                        .great(0)
+                        .good(0)
+                        .miss(0)
+                        .build(),
+                )
+                .build()
+        }
+        e => {
+            return Err(anyhow!(
+                "Count for break does not have critical perfect count: {:?}",
+                e
+            ))
+        }
+    };
+    let judge_count = JudgeResult::builder()
+        .fast(fast)
+        .late(late)
+        .tap(tap)
+        .hold(hold)
+        .slide(slide)
+        .touch(touch)
+        .break_(break_)
+        .build();
 
     Ok((
         tour_members,
