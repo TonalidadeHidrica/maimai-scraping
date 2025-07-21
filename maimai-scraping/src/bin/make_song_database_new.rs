@@ -77,12 +77,20 @@ struct Resources {
     in_lv: BTreeMap<MaimaiVersion, Vec<InLvSong>>,
     in_lv_bitmask: BTreeMap<MaimaiVersion, Vec<InLvSongMask>>,
     in_lv_data: BTreeMap<MaimaiVersion, InLvData>,
+
+    in_lv_supplemental: Vec<(MaimaiVersion, InLvSong)>,
+
     removed_songs_wiki: RemovedSongsWiki,
     removed_songs_supplemental: Vec<RemovedSongSupplemental>,
+
     official_song_lists: Vec<OfficialSongList>,
+
     additional_abbrevs: Vec<(SongAbbreviation, SongName)>,
+
     utage_identifier_merge: UtageIdentifierMergeMap,
+
     version_supplemental: Vec<VersionSupplemental>,
+
     in_lv_override: InLvCorrectionMap,
     in_lv_bitmask_override: InLvCorrectionMap<in_lv::kind::Bitmask>,
     in_lv_data_override: InLvDataCorrectionMap,
@@ -133,6 +141,15 @@ impl Resources {
             let data: InLvData = read_json(opts.in_lv_data_dir.join(path))?;
             assert!(ret.in_lv_data.insert(version, data).is_none());
         }
+
+        ret.in_lv_supplemental = {
+            let songs: Vec<(MaimaiVersion, SongRaw)> =
+                read_json(opts.database_dir.join("in_lv_supplemental.json"))?;
+            songs
+                .into_iter()
+                .map(|(version, song)| anyhow::Ok((version, song.try_into()?)))
+                .try_collect()?
+        };
 
         // Read removed song list from wiki source
         ret.removed_songs_wiki =
@@ -1452,6 +1469,9 @@ fn main() -> anyhow::Result<()> {
     }
     for (&version, in_lv) in &resources.in_lv {
         results.read_in_lv(version, in_lv, Some(&resources.in_lv_override))?;
+    }
+    for &(version, ref song) in &resources.in_lv_supplemental {
+        results.read_in_lv(version, std::slice::from_ref(song), None)?;
     }
     for (&version, in_lv_bitmask) in &resources.in_lv_bitmask {
         results.read_in_lv(
