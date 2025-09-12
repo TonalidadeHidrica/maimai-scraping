@@ -679,6 +679,21 @@ fn parse_achievement_rank(achievement_rank: ElementRef) -> anyhow::Result<Achiev
         "https://maimaidx.jp/maimai-mobile/img/playlog/b.png?ver=1.55" => B,
         "https://maimaidx.jp/maimai-mobile/img/playlog/c.png?ver=1.55" => C,
         "https://maimaidx.jp/maimai-mobile/img/playlog/d.png?ver=1.55" => D,
+        // Ver 1.59
+        "https://maimaidx.jp/maimai-mobile/img/playlog/sssplus.png?ver=1.59" => SSSPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/sss.png?ver=1.59" => SSS,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/ssplus.png?ver=1.59" => SSPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/ss.png?ver=1.59" => SS,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/splus.png?ver=1.59" => SPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/s.png?ver=1.59" => S,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/aaa.png?ver=1.59" => AAA,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/aa.png?ver=1.59" => AA,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/a.png?ver=1.59" => A,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/bbb.png?ver=1.59" => BBB,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/bb.png?ver=1.59" => BB,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/b.png?ver=1.59" => B,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/c.png?ver=1.59" => C,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/d.png?ver=1.59" => D,
         // International
         // Ver 1.35
         "https://maimaidx-eng.com/maimai-mobile/img/playlog/sssplus.png?ver=1.35" => SSSPlus,
@@ -867,6 +882,12 @@ fn parse_full_combo_img(full_combo_img: ElementRef) -> anyhow::Result<FullComboK
         "https://maimaidx.jp/maimai-mobile/img/playlog/fcplus.png?ver=1.55" => FullComboPlus,
         "https://maimaidx.jp/maimai-mobile/img/playlog/ap.png?ver=1.55" => AllPerfect,
         "https://maimaidx.jp/maimai-mobile/img/playlog/applus.png?ver=1.55" => AllPerfectPlus,
+        // Ver 1.59
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fc_dummy.png?ver=1.59" => Nothing,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fc.png?ver=1.59" => FullCombo,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fcplus.png?ver=1.59" => FullComboPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/ap.png?ver=1.59" => AllPerfect,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/applus.png?ver=1.59" => AllPerfectPlus,
         // International
         // Ver 1.35
         "https://maimaidx-eng.com/maimai-mobile/img/playlog/fc_dummy.png?ver=1.35" => Nothing,
@@ -950,6 +971,13 @@ fn parse_full_sync_img(full_sync_img: ElementRef) -> anyhow::Result<FullSyncKind
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsplus.png?ver=1.55" => FullSyncPlus,
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsd.png?ver=1.55" => FullSyncDx,
         "https://maimaidx.jp/maimai-mobile/img/playlog/fsdplus.png?ver=1.55" => FullSyncDxPlus,
+        // Ver 1.59
+        "https://maimaidx.jp/maimai-mobile/img/playlog/sync_dummy.png?ver=1.59" => Nothing,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/sync.png?ver=1.59" => SyncPlay,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fs.png?ver=1.59" => FullSync,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fsplus.png?ver=1.59" => FullSyncPlus,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fsd.png?ver=1.59" => FullSyncDx,
+        "https://maimaidx.jp/maimai-mobile/img/playlog/fsdplus.png?ver=1.59" => FullSyncDxPlus,
         // International
         // Ver 1.35
         "https://maimaidx-eng.com/maimai-mobile/img/playlog/sync_dummy.png?ver=1.35" => Nothing,
@@ -1414,6 +1442,18 @@ fn parse_rating_color(img: ElementRef) -> anyhow::Result<RatingBorderColor> {
         "https://maimaidx.jp/maimai-mobile/img/rating_base_gold.png?ver=1.55" => Gold,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_platinum.png?ver=1.55" => Platinum,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow.png?ver=1.55" => Rainbow,
+        // Ver 1.59
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_normal.png?ver=1.59" => Normal,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_blue.png?ver=1.59" => Blue,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_green.png?ver=1.59" => Green,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_orange.png?ver=1.59" => Orange,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_red.png?ver=1.59" => Red,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_purple.png?ver=1.59" => Purple,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_bronze.png?ver=1.59" => Bronze,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_silver.png?ver=1.59" => Silver,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_gold.png?ver=1.59" => Gold,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_platinum.png?ver=1.59" => Platinum,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow.png?ver=1.59" => Rainbow,
         // International
         // Ver 1.35
         "https://maimaidx-eng.com/maimai-mobile/img/rating_base_normal.png?ver=1.35" => Normal,
