@@ -1724,7 +1724,7 @@ impl RemovedSongsWiki {
             }
 
             let p = regex!(
-                r"^(>\|){9,10}LEFT:''(【(?<version>.*) アップデート】 )?(?<date>\d+/\d+/\d+) - \d+曲\d+譜面(\(内.*\))?''\|$"
+                r"^(>\|){9,10}LEFT:''\s*(【(?<version>.*) アップデート】\s*)?(?<date>\d+/\d+/\d+) - (\d+曲|宴会場)\d+譜面(\(内.*\))?''\|$"
             );
             if let Some(captures) = p.captures(line) {
                 let _version = captures.name("version").map(|p| p.as_str());
