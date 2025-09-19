@@ -67,7 +67,8 @@ async fn main() -> Result<()> {
         .flatten()
         .flat_map(|x| &x.entries);
     let link_idx = idxs.filter_map(|entry| {
-        (AsRef::<str>::as_ref(entry.song_name()) == "Link").then_some(entry.idx())
+        let name: &str = entry.song_name().as_ref();
+        (name == "Link" || name.starts_with("Help me, ERINNNNNN!!")).then_some(entry.idx())
     });
     let idx_list = link_idx.collect::<HashSet<_>>();
 
