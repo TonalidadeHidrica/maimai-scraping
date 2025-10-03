@@ -62,14 +62,16 @@ pub fn parse(html: &Html, idx: Idx) -> anyhow::Result<PlayRecord> {
     )
     .context("Failed to parse score details block")?;
 
-    let mission_result = parse_playlog_event_name(
-        root_div_children
-            .next()
-            .context("Playlog event name not found")?,
-    )
-    .context("Failed to parse playlog event name block")?;
+    let root_div_children_next = root_div_children.next();
+    let mission_result =
+        parse_playlog_event_name(root_div_children_next.context("Playlog event name not found")?)
+            .context("Failed to parse playlog event name block")?;
 
-    let play_place = parse_place_name(root_div_children.next().context("Place name not found")?)
+    let root_div_children_next = match mission_result {
+        None => root_div_children_next,
+        Some(_) => root_div_children.next(),
+    };
+    let play_place = parse_place_name(root_div_children_next.context("Place name not found")?)
         .context("Failed to parse place name name block")?;
 
     let other_players_list = html
@@ -521,11 +523,10 @@ fn parse_percentage(element: &ElementRef) -> anyhow::Result<Option<AchievementPe
     }
 }
 
-fn parse_playlog_event_name(div: ElementRef) -> anyhow::Result<MissionResult> {
-    let span = div
-        .select(&MAIN_COLOR_SELECTOR)
-        .next()
-        .context("Main span not found")?;
+fn parse_playlog_event_name(div: ElementRef) -> anyhow::Result<Option<MissionResult>> {
+    let Some(span) = div.select(&MAIN_COLOR_SELECTOR).next() else {
+        return Ok(None);
+    };
     let text: String = span.text().collect();
     let score = text.trim_matches(&[' ', '+'][..]).parse()?;
     let name = span
@@ -536,7 +537,9 @@ fn parse_playlog_event_name(div: ElementRef) -> anyhow::Result<MissionResult> {
         .context("Previous sibling is not a text")?
         .to_string()
         .into();
-    Ok(MissionResult::builder().name(name).score(score).build())
+    Ok(Some(
+        MissionResult::builder().name(name).score(score).build(),
+    ))
 }
 
 fn parse_place_name(div: ElementRef) -> anyhow::Result<PlayPlace> {

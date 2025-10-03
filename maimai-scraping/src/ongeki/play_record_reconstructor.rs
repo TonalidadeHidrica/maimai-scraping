@@ -24,7 +24,7 @@ pub fn reconstruct(record: &PlayRecord) -> Box<div<String>> {
                 </div>
                 <div class="clearfix"></div>
             </div>
-            {construct_playlog_event_name(record.mission_result())}
+            {record.mission_result().as_ref().map(construct_playlog_event_name)}
             {construct_place_name(record.played_at().place())}
             {record.matching_result().as_ref().map(construct_matching_block)}
             {construct_record_link_block(record)}
@@ -42,10 +42,12 @@ fn construct_first_div(record: &PlayRecord) -> Box<div<String>> {
                 NaiveDateTime::from(record.played_at().time()).format("%Y/%m/%d %H:%M")
             )}</span>
             <div class="m_5 l_h_10 break">
-                {record.matching_result().as_ref().map(|_| html!(
+                {record.matching_result().is_some().then(|| html!(
                     <img src="https://ongeki-net.com/ongeki-mobile/img/icon_matching.png" class="f_r h_21" />
                 ))}
-                <img src="https://ongeki-net.com/ongeki-mobile/img/icon_event.png" class="f_r h_21" />
+                {record.mission_result().is_some().then(|| html!(
+                    <img src="https://ongeki-net.com/ongeki-mobile/img/icon_event.png" class="f_r h_21" />
+                ))}
                 {text!("{}", record.song_metadata().name())}
             </div>
             <img src=(record.song_metadata().cover_art().to_string()) class="m_5 f_l"/>

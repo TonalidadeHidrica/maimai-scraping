@@ -21,7 +21,7 @@ pub struct PlayRecord {
     damage_count: DamageCount,
     achievement_per_note_kind: AchievementPerNoteKindResult,
     battle_participants: BattleParticipants,
-    mission_result: MissionResult,
+    mission_result: Option<MissionResult>,
     matching_result: Option<MatchingResult>,
 }
 
