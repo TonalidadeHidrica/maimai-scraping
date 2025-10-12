@@ -5,6 +5,7 @@ use chrono::NaiveDateTime;
 use clap::Args;
 use derive_more::{Display, From};
 use getset::{CopyGetters, Getters};
+use log::warn;
 use maimai_scraping_utils::fs_json_util::read_json;
 use serde::Deserialize;
 
@@ -23,8 +24,8 @@ use crate::maimai::{
 };
 
 use super::{
-    song_score::AssociatedSongScoreList, Estimator, NewOrOld, RatingTargetEntryLike,
-    RatingTargetListLike, RecordLike,
+    song_score::AssociatedSongScoreList, Estimator, RatingTargetEntryLike, RatingTargetListLike,
+    RecordLike,
 };
 
 pub type MultiUserEstimator<'s, 'n> = Estimator<'s, RecordLabel<'n>, RatingTargetLabel<'n>>;
@@ -231,15 +232,18 @@ pub fn estimate_all<'s, 'c>(
 ) -> anyhow::Result<()> {
     // It never happens that once "determine by delta" fails,
     // but succeeds afterwards due to additionally determined internal levels.
+    #[allow(unused)]
     for &(config, ref data) in &datas.data_pairs {
         let ordinary_records = data.ordinary_records();
         if config.estimator_config.new_songs_are_complete {
-            estimator
-                .determine_by_delta(ordinary_records.iter().map(|&r| (config, r)), NewOrOld::New)?;
+            warn!("This operation is no-op!");
+            // estimator
+            //     .determine_by_delta(ordinary_records.iter().map(|&r| (config, r)), NewOrOld::New)?;
         }
         if config.estimator_config.old_songs_are_complete {
-            estimator
-                .determine_by_delta(ordinary_records.iter().map(|&r| (config, r)), NewOrOld::Old)?;
+            warn!("This operation is no-op!");
+            // estimator
+            //     .determine_by_delta(ordinary_records.iter().map(|&r| (config, r)), NewOrOld::Old)?;
         }
     }
 

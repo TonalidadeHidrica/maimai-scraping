@@ -12,6 +12,7 @@ use std::{collections::BTreeSet, fmt::Debug, ops::Range};
 use anyhow::{bail, Context};
 use chrono::{NaiveDateTime, NaiveTime};
 use derive_more::Display;
+use enum_iterator::Sequence;
 use getset::{CopyGetters, Getters};
 use hashbrown::HashMap;
 use itertools::{repeat_n, Itertools};
@@ -20,7 +21,7 @@ use lazy_format::lazy_format;
 use log::trace;
 use song_score::{AssociatedSongScoreList, ScoreOrder};
 
-use crate::algorithm::possibilties_from_sum_and_ordering;
+use crate::{algorithm::possibilties_from_sum_and_ordering};
 
 use super::{
     associated_user_data,
@@ -232,7 +233,7 @@ impl<'s, LD, LL> Estimator<'s, LD, LL> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum NewOrOld {
     New,
     Old,
@@ -244,6 +245,17 @@ where
     /// It is allowed for `records` to contain target list
     /// that is recorded outside the specified version.
     /// Such records are omitted internally.
+    ///
+    /// Seems that with the updates in Circle, it is now harder to track rating values by delta.
+    /// If the list originally contained a set of songs, the values of single-song ratings for the
+    /// existing song should be known.
+    /// In case that we assume we don't know the new score constants after the updates, this is
+    /// hard.
+    /// For new song addition, this routine might be still useful,
+    /// but now that the song score list reveals all score constants, it hardly makes sense to
+    /// maintain this further.
+    /// Therefore, we simply mark this routine deprecated.
+    #[deprecated]
     pub fn determine_by_delta<R>(
         &mut self,
         records: impl IntoIterator<Item = R>,
@@ -261,15 +273,25 @@ where
             NewOrOld::Old => 35,
         };
 
+        let new_song_threshold = if self.version >= MaimaiVersion::Circle {
+            // From Circle and later, the scores from the last two versions are considered new.
+            self.version
+                .previous()
+                .expect("If self.version is Circle or later, there is always a previous version")
+        } else {
+            self.version
+        };
+        let score_applicable = |score_version: MaimaiVersion| {
+            // XOR parity check: If new expected and score is new => applicable
+            (new_or_old == NewOrOld::New) ^ (score_version >= new_song_threshold)
+        };
+
+        // v Turns out that this concern is correct!  => Difficult to fix!
         // TODO: Does it really work fine when `new_or_old == Old` (analyzing old songs)?
         // We should update `r2s` and `s2r` based on the records *before* the version starts,
         // but there is no such process!
 
         for record in records {
-            if !record.played_within(start_time..end_time) {
-                continue;
-            }
-
             let score = record.score();
             // TODO: I wish this property is guaranteed at the database level.
             let score_version = score
@@ -299,9 +321,7 @@ where
             // };
 
             let delta = record.rating_delta();
-            if !((matches!(new_or_old, NewOrOld::Old) ^ (score_version == self.version))
-                && delta > 0)
-            {
+            if delta == 0 || !score_applicable(score_version) {
                 continue;
             }
 
@@ -334,7 +354,19 @@ where
                 }
             };
 
-            self.register_single_song_rating(score, record.achievement(), rating, record.label())?;
+            // println!("Current entry");
+            // for (value, score) in &r2s {
+            //     println!("{value}: {score}");
+            // }
+
+            if record.played_within(start_time..end_time) {
+                self.register_single_song_rating(
+                    score,
+                    record.achievement(),
+                    rating,
+                    record.label(),
+                )?;
+            }
         }
 
         Ok(())
