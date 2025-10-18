@@ -500,8 +500,7 @@ fn parse_playlog_result_block(
     ))
 }
 
-pub fn parse_achievement_txt(achievement_txt: ElementRef) -> anyhow::Result<AchievementValue> {
-    let text = achievement_txt.text().collect::<String>();
+pub fn parse_achievement_as_num(text: &str) -> anyhow::Result<u32> {
     let captures = regex!(r"^\s*([0-9]{1,3})\.([0-9]{4})%\s*$")
         .captures(&text)
         .ok_or_else(|| anyhow!("Unexpected format of achievement"))?;
@@ -517,8 +516,14 @@ pub fn parse_achievement_txt(achievement_txt: ElementRef) -> anyhow::Result<Achi
         .as_str()
         .parse()
         .expect("Pattern is always integral");
-    let value = AchievementValue::try_from(integral * 10000 + fractional)
-        .map_err(|e| anyhow!("Out of bounds: {}", e))?;
+    Ok(integral * 10000 + fractional)
+}
+
+pub fn parse_achievement_txt(achievement_txt: ElementRef) -> anyhow::Result<AchievementValue> {
+    let value = AchievementValue::try_from(parse_achievement_as_num(
+        &achievement_txt.text().collect::<String>(),
+    )?)
+    .map_err(|e| anyhow!("Out of bounds: {}", e))?;
     Ok(value)
 }
 

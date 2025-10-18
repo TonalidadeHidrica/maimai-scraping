@@ -21,7 +21,7 @@ use lazy_format::lazy_format;
 use log::trace;
 use song_score::{AssociatedSongScoreList, ScoreOrder};
 
-use crate::{algorithm::possibilties_from_sum_and_ordering};
+use crate::algorithm::possibilties_from_sum_and_ordering;
 
 use super::{
     associated_user_data,
