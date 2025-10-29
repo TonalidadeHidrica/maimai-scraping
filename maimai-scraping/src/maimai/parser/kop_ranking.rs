@@ -35,11 +35,11 @@ pub struct Ranking {
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Entry {
-    rank: u32,
-    player_name: UserName,
-    play_time: NaiveDateTime,
-    achievement: AchievementSum,
-    deluxscore: u32,
+    pub rank: u32,
+    pub player_name: UserName,
+    pub play_time: NaiveDateTime,
+    pub achievement: AchievementSum,
+    pub deluxscore: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize)]
