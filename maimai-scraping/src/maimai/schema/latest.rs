@@ -570,7 +570,7 @@ pub struct OtherPlayer {
     user_name: UserName,
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, From, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, From, Display, Serialize, Deserialize)]
 pub struct UserName(String);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
