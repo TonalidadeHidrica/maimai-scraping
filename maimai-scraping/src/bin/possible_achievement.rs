@@ -46,6 +46,37 @@ impl FromStr for Profile {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+enum ReasonKind {
+    TapGreat,
+    TapGood,
+    TapMiss,
+    BreakPerfectClose,
+    #[allow(unused)]
+    BreakPerfectFar,
+    BreakGreatClose,
+    BreakGreatMid,
+    BreakGreatFar,
+    BreakGood,
+    BreakMiss,
+}
+use ReasonKind::*;
+
+#[derive(Clone, Copy)]
+struct Reason(ReasonKind, u64);
+impl Display for Reason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let x = self.1;
+        match self.0 {
+            TapGreat => write!(f, "{x:2}グレ"),
+            TapGood => write!(f, "{x:2}グド"),
+            TapMiss => write!(f, "{x:2}抜け"),
+            BreakPerfectClose => write!(f, "{x:2}落ち"),
+            k => write!(f, "{k:?} x{x}"),
+        }
+    }
+}
+
 fn main() -> Result<()> {
     let opts = Opts::parse();
     let mut together: Vec<(u64, Vec<_>)> = vec![(0, vec![])];
@@ -55,16 +86,16 @@ fn main() -> Result<()> {
         let break_count = p.break_;
         let break_sum = break_count * 20;
         let deductions = [
-            ("tap great", V::new(2, 0), false),
-            ("tap good", V::new(5, 0), false),
-            ("tap miss", V::new(10, 0), false),
-            ("break perfect close", V::new(0, 5), true),
-            // ("break perfect far", V::new(0, 10), true),
-            ("break great close", V::new(2 * 5, 12), true),
-            ("break great mid", V::new(4 * 5, 12), true),
-            ("break great far", V::new(5 * 5, 12), true),
-            ("break great far", V::new(6 * 5, 14), true),
-            ("break miss", V::new(10 * 5, 20), true),
+            (TapGreat, V::new(2, 0), false),
+            (TapGood, V::new(5, 0), false),
+            (TapMiss, V::new(10, 0), false),
+            (BreakPerfectClose, V::new(0, 5), true),
+            // (BreakPerfectFar, V::new(0, 10), true),
+            (BreakGreatClose, V::new(2 * 5, 12), true),
+            (BreakGreatMid, V::new(4 * 5, 12), true),
+            (BreakGreatFar, V::new(5 * 5, 12), true),
+            (BreakGood, V::new(6 * 5, 14), true),
+            (BreakMiss, V::new(10 * 5, 20), true),
         ];
         let mut mistakes = Vec::new();
         let mut results = Vec::new();
@@ -95,20 +126,28 @@ fn main() -> Result<()> {
         together = new;
     }
 
+    let mut previous = None;
     for (achievement, reasons) in together {
-        println!("{} {reasons:?}", show_achievement(achievement));
+        let reasons = reasons
+            .iter()
+            .map(|(title, reasons)| format!("{title} {}", reasons.iter().join(" ")))
+            .join(" ");
+        let changed = previous.replace(achievement) != Some(achievement);
+        let achievement =
+            lazy_format!(if changed => ("{}", show_achievement(achievement)) else => "         ");
+        println!("{achievement} {reasons}");
     }
     Ok(())
 }
 
-fn dfs<'s>(
-    deductions: &[(&'s str, V<u64>, bool)],
+fn dfs(
+    deductions: &[(ReasonKind, V<u64>, bool)],
     cutoff: u64,
     sum: V<u64>,
     remaining_score: V<u64>,
     remaining_count: V<u64>,
-    mistakes: &mut Vec<(&'s str, u64)>,
-    results: &mut Vec<(u64, Vec<(&'s str, u64)>)>,
+    mistakes: &mut Vec<Reason>,
+    results: &mut Vec<(u64, Vec<Reason>)>,
 ) {
     if let Some((&(kind, deduction, is_break), deductions)) = deductions.split_first() {
         let count_delta = if is_break { V::new(0, 1) } else { V::new(1, 0) };
@@ -125,7 +164,7 @@ fn dfs<'s>(
                 break;
             }
             if i > 0 {
-                mistakes.push((kind, i));
+                mistakes.push(Reason(kind, i));
             }
             dfs(deductions, cutoff, sum, score, count, mistakes, results);
             if i > 0 {
