@@ -12,8 +12,9 @@ struct Opts {
     #[arg(long, default_value = "10000")]
     cutoff: u64,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Profile {
+    title: String,
     tap: u64,
     hold: u64,
     slide: u64,
@@ -23,12 +24,16 @@ struct Profile {
 impl FromStr for Profile {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self> {
+        let (title, s) = s
+            .split_once(":")
+            .with_context(|| format!("Should contain a colon, found {s:?}"))?;
         if let Some((tap, touch, hold, slide, break_)) = s
             .split_whitespace()
             .map(|x| x.parse().with_context(|| format!("Invalid value: {x:?}")))
             .collect_tuple()
         {
             Ok(Profile {
+                title: title.to_owned(),
                 tap: tap?,
                 touch: touch?,
                 hold: hold?,
@@ -43,7 +48,8 @@ impl FromStr for Profile {
 
 fn main() -> Result<()> {
     let opts = Opts::parse();
-    for p in &opts.profiles {
+    let mut together: Vec<(u64, Vec<_>)> = vec![(0, vec![])];
+    for (i, p) in opts.profiles.iter().enumerate() {
         let note_count = p.tap + p.hold * 2 + p.slide * 3 + p.touch + p.break_ * 5;
         let note_sum = note_count * 10;
         let break_count = p.break_;
@@ -72,9 +78,25 @@ fn main() -> Result<()> {
             &mut results,
         );
         results.sort_by_key(|x| Reverse(x.0));
-        for result in results {
-            println!("{}: {:?}", show_achievement(result.0), result.1);
+        let mut new = vec![];
+        for (old_achievement, old_reasons) in together {
+            for (achievement, reasons) in &results {
+                let new_achievement = old_achievement + achievement;
+                if 101_0000 * (i + 1) as u64 - new_achievement <= opts.cutoff {
+                    let mut new_reasons = old_reasons.clone();
+                    if !reasons.is_empty() {
+                        new_reasons.push((&p.title, reasons.clone()));
+                    }
+                    new.push((new_achievement, new_reasons));
+                }
+            }
         }
+        new.sort_by_key(|x| Reverse(x.0));
+        together = new;
+    }
+
+    for (achievement, reasons) in together {
+        println!("{} {reasons:?}", show_achievement(achievement));
     }
     Ok(())
 }
