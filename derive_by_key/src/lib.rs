@@ -62,7 +62,7 @@ pub fn derive_by_key(input: TokenStream) -> TokenStream {
                 impl #impl_generics ::std::cmp::#trait_name
                 for #struct_name #type_generics #where_clause {
                     fn #method(&self, other: &Self) -> #return_type {
-                        self.#key_fn().#method(&other.#key_fn())
+                        ::std::cmp::#trait_name::#method(&self.#key_fn(), &other.#key_fn())
                     }
                 }
             }
