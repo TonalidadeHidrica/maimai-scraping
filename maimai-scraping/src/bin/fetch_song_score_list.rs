@@ -9,7 +9,8 @@ use maimai_scraping::{
     cookie_store::UserIdentifier,
     maimai::{
         data_collector::get_icon_for_idx, parser::song_score, rating::ScoreLevel,
-        schema::latest::ScoreDifficulty, song_list::song_score::SongScoreList, Maimai,
+        schema::latest::ScoreDifficulty, song_list::song_score::SongScoreList,
+        version::MaimaiVersion, Maimai,
     },
 };
 use maimai_scraping_utils::fs_json_util::write_json;
@@ -21,6 +22,9 @@ struct Opts {
     credentials_path: PathBuf,
     cookie_store_path: PathBuf,
     output_json: PathBuf,
+
+    #[clap(long)]
+    fetch_icons_for_version: Option<MaimaiVersion>,
 
     #[clap(flatten)]
     user_identifier: UserIdentifier,
@@ -61,7 +65,6 @@ async fn main() -> Result<()> {
         result.by_level.push((level, song_score::parse(&html)?));
         sleep(Duration::from_secs(1)).await;
     }
-
     let idxs = (result.by_difficulty.values())
         .chain(result.by_level.iter().map(|x| &x.1))
         .flatten()
@@ -77,6 +80,23 @@ async fn main() -> Result<()> {
         let icon = get_icon_for_idx(&mut client, idx).await?;
         result.idx_to_icon_map.insert(idx.clone(), icon);
         sleep(Duration::from_secs(1)).await;
+    }
+
+    if let Some(version) = opts.fetch_icons_for_version {
+        info!("Fetching mapping for version {version:?}");
+        let url = format!(
+            "https://maimaidx.jp/maimai-mobile/record/musicVersion/search/?version={}&diff=3",
+            i8::from(version)
+        );
+        let html = Html::parse_document(&client.fetch_authenticated(url).await?.0.text().await?);
+        for entry in song_score::parse(&html)?.iter().flat_map(|x| &x.entries) {
+            info!("Fething {}", entry.song_name());
+            result.song_name_to_icon_hint.push((
+                entry.song_name().clone(),
+                get_icon_for_idx(&mut client, entry.idx()).await?,
+            ));
+            sleep(Duration::from_secs(1)).await;
+        }
     }
 
     write_json(&opts.output_json, &result)?;

@@ -55,6 +55,8 @@ struct Opts {
 
     #[arg(long)]
     song_score_list_config: Option<PathBuf>,
+    #[arg(long)]
+    use_hint_in_song_score_list: bool,
 }
 
 type InLvSongMask = InLvSong<in_lv::kind::Bitmask>;
@@ -270,9 +272,17 @@ impl Resources {
         .collect::<Result<_, _>>()?;
 
         if let Some(path) = &opts.song_score_list_config {
-            let config: SongScoreListConfig = read_toml(path)?;
-            let data = read_json(&config.list_path)?;
+            let mut config: SongScoreListConfig = read_toml(path)?;
+            let mut data: SongScoreList = read_json(&config.list_path)?;
+            if opts.use_hint_in_song_score_list {
+                config
+                    .icon_supplemental
+                    .extend(data.song_name_to_icon_hint.drain(..));
+            }
+            println!("{data:#?}");
             ret.song_score_list = Some((config, data));
+        } else if opts.use_hint_in_song_score_list {
+            bail!("--use-hint-in-song-score-list must be used only when using --song-score-list-config");
         }
 
         Ok(ret)
