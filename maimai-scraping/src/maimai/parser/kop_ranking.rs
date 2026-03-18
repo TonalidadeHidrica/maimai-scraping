@@ -101,7 +101,9 @@ fn parse_entry(div: ElementRef) -> Result<Entry> {
         .into();
 
     let play_time_div = div
-        .select(selector!("div.ranking_music_date_1day, div.ranking_music_date_7day, div.ranking_music_date"))
+        .select(selector!(
+            "div.ranking_music_date_1day, div.ranking_music_date_7day, div.ranking_music_date"
+        ))
         .next()
         .context("Play time div not found")?;
     let play_time = parse_date_time(&play_time_div.text().collect::<String>())?;
