@@ -48,6 +48,7 @@ pub enum MaimaiVersion {
     Prism,
     PrismPlus,
     Circle,
+    CirclePlus,
 }
 impl TryFrom<i8> for MaimaiVersion {
     type Error = anyhow::Error;
@@ -80,6 +81,7 @@ impl TryFrom<i8> for MaimaiVersion {
             23 => Prism,
             24 => PrismPlus,
             25 => Circle,
+            26 => CirclePlus,
             _ => bail!("Unexpected version: {v}"),
         })
     }
@@ -114,6 +116,7 @@ impl From<MaimaiVersion> for i8 {
             Prism => 23,
             PrismPlus => 24,
             Circle => 25,
+            CirclePlus => 26,
         }
     }
 }
@@ -147,6 +150,7 @@ impl MaimaiVersion {
             Prism => NaiveDate::from_ymd_opt(2024, 9, 12).unwrap(),
             PrismPlus => NaiveDate::from_ymd_opt(2025, 3, 13).unwrap(),
             Circle => NaiveDate::from_ymd_opt(2025, 9, 18).unwrap(),
+            CirclePlus => NaiveDate::from_ymd_opt(2026, 3, 19).unwrap(),
         }
     }
     pub fn start_time(self) -> NaiveDateTime {
@@ -171,6 +175,6 @@ impl MaimaiVersion {
         })
     }
     pub fn latest() -> Self {
-        Self::Circle
+        Self::CirclePlus
     }
 }
