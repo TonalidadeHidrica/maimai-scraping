@@ -1539,6 +1539,7 @@ fn parse_rating_color(img: ElementRef) -> anyhow::Result<RatingBorderColor> {
         "https://maimaidx.jp/maimai-mobile/img/rating_base_gold.png?ver=1.65" => Gold,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_platinum.png?ver=1.65" => Platinum,
         "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow.png?ver=1.65" => Rainbow,
+        "https://maimaidx.jp/maimai-mobile/img/rating_base_rainbow_kiwami.png?ver=1.65" => RainbowKiwami,
         // International
         // Ver 1.35
         "https://maimaidx-eng.com/maimai-mobile/img/rating_base_normal.png?ver=1.35" => Normal,
@@ -1571,7 +1572,7 @@ fn parse_delta_sign(img: ElementRef) -> anyhow::Result<RatingDeltaSign> {
         "https://maimaidx-eng.com/maimai-mobile/img/playlog/rating_up.png" => Up,
         "https://maimaidx-eng.com/maimai-mobile/img/playlog/rating_keep.png" => Keep,
         "https://maimaidx-eng.com/maimai-mobile/img/playlog/rating_down.png" => Down,
-        src => return Err(anyhow!("Unexpected border color: {}", src)),
+        src => return Err(anyhow!("Unexpected rating up-down color: {}", src)),
     };
     Ok(res)
 }

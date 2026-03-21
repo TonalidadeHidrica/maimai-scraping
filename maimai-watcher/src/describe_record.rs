@@ -109,6 +109,7 @@ pub fn make_message<'a>(
         let old = RatingValue::from((new.get() as i16 - delta) as u16);
         use RatingBorderColor::*;
         let old_color = match old.get() {
+            16000.. => RainbowKiwami,
             15000.. => Rainbow,
             14500.. => Platinum,
             14000.. => Gold,

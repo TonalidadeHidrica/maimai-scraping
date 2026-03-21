@@ -441,6 +441,8 @@ pub enum RatingBorderColor {
     /// Added as of DELUXE Splash PLUS, started on 2021/3/18
     Platinum,
     Rainbow,
+    /// Added as of DELUXE CiRCLE PLUS, started on 2026/3/19
+    RainbowKiwami,
 }
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
