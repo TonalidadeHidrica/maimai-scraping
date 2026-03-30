@@ -279,7 +279,6 @@ impl Resources {
                     .icon_supplemental
                     .extend(data.song_name_to_icon_hint.drain(..));
             }
-            println!("{data:#?}");
             ret.song_score_list = Some((config, data));
         } else if opts.use_hint_in_song_score_list {
             bail!("--use-hint-in-song-score-list must be used only when using --song-score-list-config");
