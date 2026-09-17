@@ -236,6 +236,7 @@ impl FromStr for Version {
             "255" => PrismPlus,
             "260" => Circle,
             "265" => CirclePlus,
+            "270" => Magical,
             _ => bail!("Unexpected version: {value:?}"),
         };
         let suffix = y.parse()?; // Guaranteed to be in [0, 100)
