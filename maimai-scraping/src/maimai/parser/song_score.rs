@@ -246,6 +246,21 @@ fn parse_achievement_rank(achievement_rank: ElementRef) -> anyhow::Result<Achiev
         "https://maimaidx.jp/maimai-mobile/img/music_icon_b.png?ver=1.65" => B,
         "https://maimaidx.jp/maimai-mobile/img/music_icon_c.png?ver=1.65" => C,
         "https://maimaidx.jp/maimai-mobile/img/music_icon_d.png?ver=1.65" => D,
+        // Ver 1.70
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_sssp.png?ver=1.70" => SSSPlus,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_sss.png?ver=1.70" => SSS,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_ssp.png?ver=1.70" => SSPlus,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_ss.png?ver=1.70" => SS,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_sp.png?ver=1.70" => SPlus,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_s.png?ver=1.70" => S,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_aaa.png?ver=1.70" => AAA,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_aa.png?ver=1.70" => AA,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_a.png?ver=1.70" => A,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_bbb.png?ver=1.70" => BBB,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_bb.png?ver=1.70" => BB,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_b.png?ver=1.70" => B,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_c.png?ver=1.70" => C,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_d.png?ver=1.70" => D,
         src => bail!("Unknown src for achievement rank: {src:?}"),
     };
     Ok(res)
@@ -294,6 +309,12 @@ fn parse_full_combo_img(full_combo_img: ElementRef) -> anyhow::Result<FullComboK
         "https://maimaidx.jp/maimai-mobile/img/music_icon_fcp.png?ver=1.65" => FullComboPlus,
         "https://maimaidx.jp/maimai-mobile/img/music_icon_ap.png?ver=1.65" => AllPerfect,
         "https://maimaidx.jp/maimai-mobile/img/music_icon_app.png?ver=1.65" => AllPerfectPlus,
+        // Ver 1.70
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_back.png?ver=1.70" => Nothing,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_fc.png?ver=1.70" => FullCombo,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_fcp.png?ver=1.70" => FullComboPlus,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_ap.png?ver=1.70" => AllPerfect,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_app.png?ver=1.70" => AllPerfectPlus,
         src => bail!("Unknown src for full combo img: {src:?}"),
     };
     Ok(res)
@@ -347,6 +368,13 @@ fn parse_full_sync_img(full_sync_img: ElementRef) -> anyhow::Result<FullSyncKind
         "https://maimaidx.jp/maimai-mobile/img/music_icon_fsp.png?ver=1.65" => FullSyncPlus,
         "https://maimaidx.jp/maimai-mobile/img/music_icon_fdx.png?ver=1.65" => FullSyncDx,
         "https://maimaidx.jp/maimai-mobile/img/music_icon_fdxp.png?ver=1.65" => FullSyncDxPlus,
+        // Ver 1.70
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_back.png?ver=1.70" => Nothing,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_sync.png?ver=1.70" => SyncPlay,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_fs.png?ver=1.70" => FullSync,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_fsp.png?ver=1.70" => FullSyncPlus,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_fdx.png?ver=1.70" => FullSyncDx,
+        "https://maimaidx.jp/maimai-mobile/img/music_icon_fdxp.png?ver=1.70" => FullSyncDxPlus,
         src => bail!("Unknown src for full sync img: {src:?}"),
     };
     Ok(res)
