@@ -502,7 +502,7 @@ fn parse_playlog_result_block(
 
 pub fn parse_achievement_as_num(text: &str) -> anyhow::Result<u32> {
     let captures = regex!(r"^\s*([0-9]{1,3})\.([0-9]{4})%\s*$")
-        .captures(&text)
+        .captures(text)
         .ok_or_else(|| anyhow!("Unexpected format of achievement"))?;
     let integral: u32 = captures
         .get(1)
