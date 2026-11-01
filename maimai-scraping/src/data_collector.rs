@@ -40,9 +40,9 @@ where
     }
 }
 
-pub async fn update_records<'m, T>(
+pub async fn update_records<T>(
     client: &mut SegaClient<'_, T>,
-    records: &'m mut RecordMap<T>,
+    records: &mut RecordMap<T>,
     index: Vec<(PlayTime<T>, Idx<T>)>,
 ) -> anyhow::Result<Vec<PlayTime<T>>>
 where
