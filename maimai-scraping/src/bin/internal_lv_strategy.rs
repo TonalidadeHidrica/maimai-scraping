@@ -176,7 +176,7 @@ impl<'s> RangeElement<'s> {
         }
     }
 }
-fn parse_range(s: &str) -> impl Iterator<Item = RangeElement> {
+fn parse_range(s: &str) -> impl Iterator<Item = RangeElement<'_>> {
     s.split(',').map(|s| match s.split_once('-') {
         Some((x, y)) => RangeElement::Range([x, y]),
         _ => RangeElement::Single(s),

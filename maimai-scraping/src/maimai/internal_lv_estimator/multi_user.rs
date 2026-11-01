@@ -80,7 +80,7 @@ pub struct EstimatorDataSourceAssociated<'c, 'd, 's> {
 }
 
 impl Config {
-    pub fn read_all(&self) -> anyhow::Result<EstimatorDataSource> {
+    pub fn read_all(&self) -> anyhow::Result<EstimatorDataSource<'_>> {
         let data_pairs = (self.users.iter())
             .map(|config| anyhow::Ok((config, read_json::<_, MaimaiUserData>(config.data_path())?)))
             .collect::<anyhow::Result<Vec<_>>>()?;

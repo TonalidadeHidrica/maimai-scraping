@@ -47,7 +47,7 @@ pub struct GenreName(#[allow(unused)] String);
 pub struct Idx(String);
 
 fn parse_category(
-    element: ElementRef,
+    element: ElementRef<'_>,
 ) -> anyhow::Result<impl Iterator<Item = anyhow::Result<Song>> + '_> {
     let category = element
         .prev_siblings()

@@ -430,7 +430,7 @@ fn get_last_modified(request: RequestPausedEvent) -> Option<DateTime<FixedOffset
         return None;
     }
     let mut headers = request.params.response_headers.iter().flatten();
-    let header = headers.find(|header| (header.name.to_lowercase() == "last-modified"))?;
+    let header = headers.find(|header| header.name.to_lowercase() == "last-modified")?;
     let time = NaiveDateTime::parse_from_str(&header.value, "%a, %d %b %Y %H:%M:%S GMT").ok()?;
     let timezone = FixedOffset::east_opt(9 * 60 * 60).unwrap();
     Some(time.and_utc().with_timezone(&timezone))

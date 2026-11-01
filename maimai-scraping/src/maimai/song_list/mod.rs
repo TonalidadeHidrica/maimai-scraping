@@ -207,7 +207,7 @@ impl<'a> UtageIdentifier<'a> {
 impl UtageScore {
     /// For now, we assume that this uniquely specifies an utage score in a song.
     /// Otherwise, how on earth can we determine the score???
-    pub fn identifier(&self) -> UtageIdentifier {
+    pub fn identifier(&self) -> UtageIdentifier<'_> {
         UtageIdentifier(Cow::Borrowed(&self.kanji), self.level)
     }
 

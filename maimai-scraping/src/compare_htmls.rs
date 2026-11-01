@@ -30,7 +30,7 @@ pub fn elements_are_equivalent(
     Ok(())
 }
 
-fn to_show(element: ElementRef) -> impl Iterator<Item = (bool, &Node)> + '_ {
+fn to_show(element: ElementRef<'_>) -> impl Iterator<Item = (bool, &Node)> + '_ {
     element
         .traverse()
         .map(|x| match x {

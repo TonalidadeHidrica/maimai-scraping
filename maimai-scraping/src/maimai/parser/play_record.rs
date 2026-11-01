@@ -181,7 +181,7 @@ pub fn parse(html: &Html, idx: Idx, place_expected: bool) -> anyhow::Result<Play
     Ok(res)
 }
 
-fn iterate_playlot_top_containers(html: &Html) -> impl Iterator<Item = ElementRef> {
+fn iterate_playlot_top_containers(html: &Html) -> impl Iterator<Item = ElementRef<'_>> {
     html.select(selector!(".playlog_top_container"))
 }
 

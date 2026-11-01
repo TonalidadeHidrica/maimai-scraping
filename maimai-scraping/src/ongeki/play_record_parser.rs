@@ -180,7 +180,7 @@ fn parse_play_date(span: ElementRef) -> anyhow::Result<PlayTime> {
     Ok(NaiveDateTime::parse_from_str(&span.text().collect::<String>(), "%Y/%m/%d %H:%M")?.into())
 }
 
-fn src_attr(element: ElementRef) -> anyhow::Result<&str> {
+fn src_attr(element: ElementRef<'_>) -> anyhow::Result<&str> {
     element
         .value()
         .attr("src")
