@@ -58,8 +58,7 @@ fn main() -> anyhow::Result<()> {
             previous.into_level(previous_version),
             current.into_level(version),
         ]
-        .iter()
-        .any(|&x| x == opts.level)
+        .contains(&opts.level)
         {
             continue;
         }

@@ -132,16 +132,12 @@ pub struct OrdinaryScore {
     pub levels: OptionalEnumMap<MaimaiVersion, InternalScoreLevel>,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Default)]
 pub enum RemoveState {
+    #[default]
     Present,
     Removed(NaiveDate),
     Revived(NaiveDate, NaiveDate),
-}
-impl Default for RemoveState {
-    fn default() -> Self {
-        Self::Present
-    }
 }
 impl RemoveState {
     pub fn exist_for_version(self, version: MaimaiVersion) -> bool {

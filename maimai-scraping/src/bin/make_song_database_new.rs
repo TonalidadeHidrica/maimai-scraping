@@ -1728,7 +1728,7 @@ impl RemovedSongsWiki {
                 "bgcolor(#ffa07a):CENTER:|CENTER:|CENTER:|bgcolor(#ffa07a):CENTER:|bgcolor(#ffa07a):CENTER:||||bgcolor(#ffa07a):CENTER:|c",
                 "''宴''|"
             ];
-            if skip.iter().any(|&s| s == line) {
+            if skip.contains(&line) {
                 continue;
             }
 
@@ -1741,7 +1741,7 @@ impl RemovedSongsWiki {
                 current_date = Some(date);
             } else {
                 let row = line.split('|').collect_vec();
-                if ![2, 11, 12].iter().any(|&x| x == row.len()) {
+                if ![2, 11, 12].contains(&row.len()) {
                     bail!("Unexpected number of rows: {row:?}");
                 }
                 if row[0] != "^" {

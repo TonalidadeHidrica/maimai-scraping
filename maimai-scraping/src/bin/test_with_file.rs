@@ -16,7 +16,7 @@ fn main() -> anyhow::Result<()> {
     let result = maimai_scraping::maimai::parser::play_record::parse(&html, Idx::default(), true)?;
     dbg!(&result);
     let serialized = serde_json::to_string_pretty(&result)?;
-    println!("{}", &serialized);
+    println!("{}", serialized);
     let deserialized: PlayRecord = serde_json::from_str(&serialized)?;
     dbg!(&deserialized);
 
