@@ -1,19 +1,109 @@
+use std::{fmt::Display, path::PathBuf};
+
+use anyhow::Result;
+use clap::Parser;
+use itertools::Itertools;
+use maimai_scraping_utils::fs_json_util::read_json;
+
 use crate::score_solver::{solve, Costs};
 
-fn main() {
+#[derive(Parser)]
+struct Opts {
+    json_path: PathBuf,
+    target_score: i64,
+    #[arg(default_value = "100")]
+    show_count: usize,
+}
+
+fn main() -> Result<()> {
+    let opts = Opts::parse();
+    let songs: Vec<serde_json::Map<String, serde_json::Value>> = read_json(&opts.json_path)?;
+
+    let mut scores = vec![];
+    for song in &songs {
+        let title = song.get("title").unwrap().as_str().unwrap();
+        let artist = song.get("artist").unwrap().as_str().unwrap();
+
+        for dx in [false, true] {
+            for diff in ["bas", "adv", "exp", "mas", "remas"] {
+                let dx_prefix = if dx { "dx_" } else { "" };
+                let count = ["tap", "hold", "slide", "touch", "break"].map(|kind| {
+                    song.get(&format!("{dx_prefix}lev_{diff}_notes_{kind}"))
+                        .and_then(|x| x.as_str())
+                        .and_then(|x| x.parse().ok())
+                });
+                if count.iter().all(|x| x.is_none()) {
+                    continue;
+                }
+                if (0..5).all(|i| count[i].is_some() == !(!dx || i == 3)) {
+                    println!("Invalid data: {title}");
+                    continue;
+                }
+
+                scores.push(Score {
+                    title,
+                    artist,
+                    dx,
+                    diff,
+                    notes: count.map(|x| x.unwrap_or_default()),
+                });
+            }
+        }
+    }
+
     let c = Costs::default();
-    let a = [2000, 100, 50, 50, 300];
-    let target_score = 969_999;
 
-    let result = solve(c, target_score, a).unwrap();
+    let mut results = vec![];
+    for score in &scores {
+        results.push((score, solve(c, opts.target_score, score.notes).unwrap()));
+    }
+    let mut candidates = vec![];
+    for (score, result) in &results {
+        for candidate in &result.candidates {
+            candidates.push((score, result, candidate));
+        }
+    }
+    candidates.sort_by_key(|x| x.2.cost);
 
-    println!("Feasibility: {:?}", result.feasibility);
-    println!("Optimality proven: {}", result.optimality_proven);
+    for (score, _result, solution) in candidates {
+        println!("Score: {score}");
+        println!("Cost : {}", solution.cost);
+        println!("    PERFECT GREAT GOOD MISS");
+        for (kind, count) in ["Tap", "Hold", "Slide", "Touch"].iter().zip_eq(solution.first_four) {
+            println!("{kind:5}: {count:3?}");
+        }
+        println!("   CRITICAL ┌PERFECT┐  ┌┈┈ GREAT ┈┈┐ GOOD MISS");
+        println!("Break: {:3?}", solution.fifth);
+        println!();
+    }
+    // for solution in result.candidates {
+    //     println!("Cost: {}", solution.cost);
+    //     println!("First four rows: {:?}", solution.first_four);
+    //     println!("Fifth row: {:?}", solution.fifth);
+    // }
 
-    for solution in result.candidates {
-        println!("Cost: {}", solution.cost);
-        println!("First four rows: {:?}", solution.first_four);
-        println!("Fifth row: {:?}", solution.fifth);
+    // println!("Feasibility: {:?}", result.feasibility);
+    // println!("Optimality proven: {}", result.optimality_proven);
+
+    Ok(())
+}
+
+struct Score<'a> {
+    title: &'a str,
+    artist: &'a str,
+    dx: bool,
+    diff: &'static str,
+    notes: [u16; 5],
+}
+impl Display for Score<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.title)?;
+        if self.title == "Link" {
+            write!(f, " ({})", self.artist)?;
+        }
+        write!(f, " ({} {})", if self.dx { "dx" } else { "std" }, self.diff)?;
+        write!(f, " {:?}", self.notes)?;
+        Ok(())
     }
 }
 
