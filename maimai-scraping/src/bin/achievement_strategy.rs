@@ -106,7 +106,7 @@ fn main() -> Result<()> {
     }
     candidates.sort_by_key(|x| x.2.cost + opts.level_coefficient * x.0.level);
 
-    for (score, _result, solution) in candidates {
+    for (score, _result, solution) in candidates.iter().take(opts.show_count) {
         println!(
             "Song : {score} (Lv. {}.{})",
             score.level / 10,
