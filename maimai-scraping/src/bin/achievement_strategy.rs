@@ -3,9 +3,10 @@ use std::{fmt::Display, path::PathBuf};
 use anyhow::Result;
 use clap::Parser;
 use itertools::Itertools;
-use maimai_scraping_utils::fs_json_util::read_json;
+use maimai_scraping::maimai::rating::ScoreLevel;
+use maimai_scraping_utils::{fs_json_util::read_json, regex};
 
-use crate::score_solver::{Costs, exact_score, solve};
+use crate::score_solver::{solve, Costs};
 
 #[derive(Parser)]
 struct Opts {
@@ -15,6 +16,12 @@ struct Opts {
     show_count: usize,
     #[arg(long, default_value = "4")]
     digits: u32,
+    #[arg(long, default_value = "500")]
+    level_coefficient: u64,
+    #[arg(long, default_value = "0")]
+    min_level: u64,
+    #[arg(long, default_value = "150")]
+    max_level: u64,
 }
 
 fn main() -> Result<()> {
@@ -41,14 +48,38 @@ fn main() -> Result<()> {
                     println!("Invalid data: {title}");
                     continue;
                 }
+                let Some(level) = song
+                    .get(&format!("{dx_prefix}lev_{diff}_i"))
+                    .and_then(|x| x.as_str())
+                    .and_then(|x| regex!(r"([1-9]|1[0-5]).([0-9])").captures(x))
+                    .map(|level| {
+                        level[1].parse::<u64>().unwrap() * 10 + level[2].parse::<u64>().unwrap()
+                    })
+                    .or_else(|| {
+                        Some(u8::from(
+                            song.get(&format!("{dx_prefix}lev_{diff}"))?
+                                .as_str()?
+                                .parse::<ScoreLevel>()
+                                .ok()?
+                                .score_constant_candidates()
+                                .next()?,
+                        ) as u64)
+                    })
+                else {
+                    println!("Invalid level: {title} {dx} {diff}");
+                    continue;
+                };
 
-                scores.push(Score {
-                    title,
-                    artist,
-                    dx,
-                    diff,
-                    notes: count.map(|x| x.unwrap_or_default()),
-                });
+                if (opts.min_level..=opts.max_level).contains(&level) {
+                    scores.push(Score {
+                        title,
+                        artist,
+                        level,
+                        dx,
+                        diff,
+                        notes: count.map(|x| x.unwrap_or_default()),
+                    });
+                }
             }
         }
     }
@@ -65,10 +96,14 @@ fn main() -> Result<()> {
             candidates.push((score, result, candidate));
         }
     }
-    candidates.sort_by_key(|x| x.2.cost);
+    candidates.sort_by_key(|x| x.2.cost + opts.level_coefficient * x.0.level);
 
     for (score, _result, solution) in candidates {
-        println!("Song : {score}");
+        println!(
+            "Song : {score} (Lv. {}.{})",
+            score.level / 10,
+            score.level % 10
+        );
         println!("Cost : {}", solution.cost);
         println!("    PERFECT GREAT GOOD MISS");
         for (kind, count) in ["Tap", "Hold", "Slide", "Touch"]
@@ -108,7 +143,10 @@ fn main() -> Result<()> {
             (res, res / ten, res % ten)
         };
         let (_, x, y) = conv(opts.digits);
-        println!("Score: {x}.{y:0$}% ({note_score}/{note_sum} + {bonus_score}/{bonus_sum})", opts.digits as usize);
+        println!(
+            "Score: {x}.{y:0$}% ({note_score}/{note_sum} + {bonus_score}/{bonus_sum})",
+            opts.digits as usize
+        );
         assert_eq!(conv(4).0 as i64, opts.target_score);
 
         println!();
@@ -128,6 +166,7 @@ fn main() -> Result<()> {
 struct Score<'a> {
     title: &'a str,
     artist: &'a str,
+    level: u64,
     dx: bool,
     diff: &'static str,
     notes: [u16; 5],
