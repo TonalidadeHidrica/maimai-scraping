@@ -15,7 +15,7 @@ struct Opts {
 fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let data: MaimaiUserData = read_json(opts.data_path)?;
-    for record in data.records.values() {
+    'record: for record in data.records.values() {
         let judges = record.judge_result();
         if record.utage_metadata().as_ref().is_some_and(|u| u.buddy()) {
             continue;
@@ -76,6 +76,13 @@ fn main() -> anyhow::Result<()> {
                     // (score / note_sum * 100 + bonus / bonus_sum) * 10000
                     let num = (score * 100 * bonus_sum + bonus * note_sum) * 10000;
                     let den = note_sum * bonus_sum;
+                    if den == 0 {
+                        println!(
+                            "Skipping (denominator is zero): {}",
+                            record.song_metadata().name(),
+                        );
+                        continue 'record;
+                    }
                     let a: AchievementValue = u32::try_from(num / den).unwrap().try_into().unwrap();
                     if a == record.achievement_result().value() {
                         println!(
