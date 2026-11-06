@@ -22,6 +22,8 @@ struct Opts {
     min_level: u64,
     #[arg(long, default_value = "150")]
     max_level: u64,
+    #[arg(long)]
+    costs: Option<Costs>,
 }
 
 fn main() -> Result<()> {
@@ -84,11 +86,17 @@ fn main() -> Result<()> {
         }
     }
 
-    let c = Costs::default();
-
     let mut results = vec![];
     for score in &scores {
-        results.push((score, solve(c, opts.target_score, score.notes).unwrap()));
+        results.push((
+            score,
+            solve(
+                opts.costs.unwrap_or_default(),
+                opts.target_score,
+                score.notes,
+            )
+            .unwrap(),
+        ));
     }
     let mut candidates = vec![];
     for (score, result) in &results {
@@ -197,6 +205,10 @@ mod score_solver {
 
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;
+    use std::str::FromStr;
+
+    use anyhow::{bail, Result};
+    use itertools::Itertools;
 
     const ROW_WEIGHT: [i64; 4] = [1, 2, 3, 1];
     const T: [i64; 4] = [10, 8, 5, 0];
@@ -215,6 +227,31 @@ mod score_solver {
                 first_four: [[0, 20, 20, 0], [0, 20, 5, 0], [0, 20, 5, 0], [0, 20, 20, 0]],
                 fifth: [10, 50, 50, 100, 100, 100, 50, 0],
             }
+        }
+    }
+
+    impl FromStr for Costs {
+        type Err = anyhow::Error;
+        fn from_str(s: &str) -> Result<Self> {
+            let scores: Vec<Vec<u32>> = (s.split(";"))
+                .map(|x| x.split(",").map(|x| x.trim().parse()).try_collect())
+                .try_collect()?;
+            if scores.iter().map(|x| x.len()).collect_vec() != [4, 4, 4, 4, 8] {
+                bail!("Invalid length: {scores:?}");
+            }
+            let mut ret = Self::default();
+            #[allow(clippy::needless_range_loop)]
+            for i in 0..4 {
+                #[allow(clippy::needless_range_loop)]
+                for j in 0..4 {
+                    ret.first_four[i][j] = scores[i][j];
+                }
+            }
+            #[allow(clippy::needless_range_loop)]
+            for j in 0..8 {
+                ret.fifth[j] = scores[4][j];
+            }
+            Ok(ret)
         }
     }
 
