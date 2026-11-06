@@ -5,14 +5,16 @@ use clap::Parser;
 use itertools::Itertools;
 use maimai_scraping_utils::fs_json_util::read_json;
 
-use crate::score_solver::{solve, Costs};
+use crate::score_solver::{Costs, exact_score, solve};
 
 #[derive(Parser)]
 struct Opts {
     json_path: PathBuf,
     target_score: i64,
-    #[arg(default_value = "100")]
+    #[arg(long, default_value = "100")]
     show_count: usize,
+    #[arg(long, default_value = "4")]
+    digits: u32,
 }
 
 fn main() -> Result<()> {
@@ -66,14 +68,49 @@ fn main() -> Result<()> {
     candidates.sort_by_key(|x| x.2.cost);
 
     for (score, _result, solution) in candidates {
-        println!("Score: {score}");
+        println!("Song : {score}");
         println!("Cost : {}", solution.cost);
         println!("    PERFECT GREAT GOOD MISS");
-        for (kind, count) in ["Tap", "Hold", "Slide", "Touch"].iter().zip_eq(solution.first_four) {
+        for (kind, count) in ["Tap", "Hold", "Slide", "Touch"]
+            .iter()
+            .zip_eq(solution.first_four)
+        {
             println!("{kind:5}: {count:3?}");
         }
         println!("   CRITICAL ┌PERFECT┐  ┌┈┈ GREAT ┈┈┐ GOOD MISS");
         println!("Break: {:3?}", solution.fifth);
+
+        type U = u128;
+        let mut note_score = 0;
+        let mut note_sum = 0;
+        let mut bonus_score = 0;
+        let mut bonus_sum = 0;
+        for i in 0..4 {
+            let weight = [1, 2, 3, 1][i];
+            let [p, g, o, m] = solution.first_four[i].map(|x| x as U);
+            note_score += weight * (10 * p + 8 * g + 5 * o);
+            note_sum += weight * 10 * (p + g + o + m);
+        }
+        {
+            let [cp, p1, p2, g1, g2, g3, o, m] = solution.fifth.map(|x| x as U);
+            let count = cp + p1 + p2 + g1 + g2 + g3 + o + m;
+            note_score += 50 * (cp + p1 + p2) + 40 * g1 + 30 * g2 + 25 * g3 + 20 * o;
+            note_sum += 50 * count;
+            bonus_score += 20 * cp + 15 * p1 + 10 * p2 + 8 * (g1 + g2 + g3) + 6 * o;
+            bonus_sum += 20 * count;
+        }
+        // (note_score / note_sum * 100 + bonus_score / bonus_sum)
+        let num = note_score * 100 * bonus_sum + bonus_score * note_sum;
+        let den = note_sum * bonus_sum;
+        let conv = |d| {
+            let ten = (10 as U).pow(d);
+            let res = ten.checked_mul(num).unwrap() / den;
+            (res, res / ten, res % ten)
+        };
+        let (_, x, y) = conv(opts.digits);
+        println!("Score: {x}.{y:0$}% ({note_score}/{note_sum} + {bonus_score}/{bonus_sum})", opts.digits as usize);
+        assert_eq!(conv(4).0 as i64, opts.target_score);
+
         println!();
     }
     // for solution in result.candidates {
